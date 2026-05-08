@@ -83,6 +83,12 @@ This file is the single source of truth for DistrictLens architectural decisions
 - **Rationale:** Billing, organization placement, and any prior IAM grants on `civicsync-440613` are reusable, which avoids a billing-account re-link and a fresh org-policy review. Creating a new project would have meant re-doing those steps for no functional gain. GCP project IDs cannot be renamed; only the display name is mutable, so we get a clean console label without losing the existing project's history.
 - **Affects:** `gcloud config set project` value, Terraform `project_id` variable, GitHub repo var `GCP_PROJECT_ID`, README quickstart, BUILD_PLAN Phase A1, all `--project=` flags in build/deploy scripts.
 
+### 2.9 Gemini auth: Vertex AI via ADC, location=global
+- **Decision (2026-05-08):** Authenticate to Gemini through Vertex AI using Application Default Credentials, not the AI Studio API key path. Set `GOOGLE_GENAI_USE_VERTEXAI=True`, `GOOGLE_CLOUD_PROJECT=civicsync-440613`, `GOOGLE_CLOUD_LOCATION=global` in `agent/app/.env`. In Cloud Run production, the runtime service account auto-authenticates via the metadata server — no secrets to manage.
+- **Rationale:** ADC piggybacks on the gcloud auth we already did for Phase A1, removes the need to create, store, rotate, and Secret-Manager-mount a `GEMINI_API_KEY`, and gives Cloud Run zero-config auth in production. AI Studio API key was considered for its free tier but loses the auto-auth benefit and adds a real secret to manage.
+- **Why `location=global` and not `us-central1`:** Gemini 3.x preview models on Vertex AI (`gemini-3.1-pro-preview`, `gemini-3-flash-preview`, `gemini-3.1-flash-lite-preview`) are exposed only on the global endpoint `aiplatform.googleapis.com`. Regional endpoints like `us-central1-aiplatform.googleapis.com` return 404 for these IDs. The `us-central1` region lock from §2.7 still applies to where the Cloud Run services and Atlas cluster live; only the Vertex API call routing is global. Verified end-to-end with a live `gemini-3.1-pro-preview` call returning "PONG" through `google-genai` from the agent venv on 2026-05-08.
+- **Affects:** `agent/app/.env` (three vars instead of `GOOGLE_API_KEY`), `agent/app/agent.py` (no code change required; ADK reads env), Cloud Run runtime service account needs `roles/aiplatform.user` on the project (Phase A5 Terraform), GitHub Actions does not need a Gemini secret.
+
 ---
 
 ## 3. Data & Models
