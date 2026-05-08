@@ -73,6 +73,11 @@ This file is the single source of truth for DistrictLens architectural decisions
 - **Decision:** Build phase: Atlas M0 + Cloud Run min-instances=0. Demo week: Atlas M10 + min-instances=1 on both services (~$40–50 one-time). Drop back after.
 - **Rationale:** Buys reliable demo without sustained spend.
 
+### 2.7 GCP region: us-central1 (Iowa)
+- **Decision (2026-05-08):** All Cloud Run services, the Atlas M0/M10 cluster, and Vertex AI calls deploy to `us-central1`. Terraform `region` variable defaults to `us-central1`.
+- **Rationale:** Vertex AI and Gemini features land in `us-central1` first and reach feature parity faster than other regions; it sits at the geographic center of US users and is Google's de facto default. `us-east1` was considered for marginal cost savings but trades AI feature parity for it, which is the wrong trade for a Gemini-throughout submission.
+- **Affects:** `agent/deployment/terraform/cicd/` variables, GitHub repo vars, README quickstart, BUILD_PLAN Phase A1.
+
 ---
 
 ## 3. Data & Models
@@ -156,6 +161,11 @@ This file is the single source of truth for DistrictLens architectural decisions
 ### 5.6 Observability: Cloud Run logs + Cloud Trace, no SaaS APM
 - **Decision:** ADK exports OTLP to Cloud Trace; Cloud Run logs auto-collect. No Sentry, Datadog, LangSmith, etc.
 - **Rationale:** Free, sufficient, and one fewer key surface.
+
+### 5.7 Demo URL: Cloud Run default (no custom domain for hackathon)
+- **Decision (2026-05-08):** Use the auto-generated Cloud Run URL (e.g., `districtlens-web-<hash>-uc.a.run.app`) for the hosted demo and Devpost submission. No custom domain mapping for the hackathon window.
+- **Rationale:** Zero setup, no DNS verification step, judges grade on functionality and not URL aesthetics. Custom domain mapping remains a clean post-hackathon add: the README and demo video can be updated without touching deployment infra.
+- **Affects:** README quickstart, `docs/DEMO_VIDEO_SHOTLIST.md`, BUILD_PLAN Phase L.
 
 ---
 

@@ -49,11 +49,15 @@ Phases ordered by dependency. Each task carries an ID, an acceptance criterion, 
 ### Phase A: Foundation infrastructure (mostly manual, parallel-safe)
 
 > **Quality gates:** Eng review — skip (manual setup, no architecture decisions). Refactor pass — skip (no code being written).
+>
+> **Region (locked):** `us-central1` per DECISIONS_LOG §2.7. All Phase A resources land here: Cloud Run services, Atlas cluster, Artifact Registry, Vertex AI calls. Same-region Atlas keeps cluster latency to single-digit ms.
+>
+> **Demo URL (locked):** Auto-generated Cloud Run `*.run.app` URL per DECISIONS_LOG §5.7. No custom domain mapping during the hackathon. Phase L uses whatever URL Cloud Run hands back.
 
 | ID | Task | Acceptance | Ref | Depends |
 |---|---|---|---|---|
 | A1 | Create / select GCP project for DistrictLens | `gcloud projects describe <id>` succeeds; billing linked | §2.5 | — |
-| A2 | Create MongoDB Atlas M0 free cluster | Connection string in hand; `mongosh` connects | §2.6 | — |
+| A2 | Create MongoDB Atlas M0 free cluster in `us-central1` | Connection string in hand; `mongosh` connects; cluster region matches `us-central1` | §2.6, §2.7 | — |
 | A3 | Obtain Geocod.io API key | Key stored locally; pay-as-you-go tier confirmed (2,500 free/day) | §3.5 | — |
 | A4 | Obtain Gemini API key (or set up Vertex AI ADC) | `GEMINI_API_KEY` set OR `gcloud auth application-default login` complete | §3.3 | A1 |
 | A5 | Run agent/deployment/terraform/cicd to bootstrap WIF + service accounts + Artifact Registry | `terraform apply` clean; outputs printed | §2.5 | A1 |
@@ -403,12 +407,14 @@ These are recorded in `docs/DECISIONS_LOG.md` as intentionally deferred. Do not 
 6. When a decision in this plan and `docs/DECISIONS_LOG.md` disagree, update one of them — don't let drift accumulate.
 7. Before ending a session, run `/checkpoint` to save where you stopped. Next session, run `/checkpoint resume` to continue.
 
-## Open questions to resolve before Phase A
+## Resolved decisions (2026-05-08)
 
-- GCP region: us-east1 (scaffold default) or us-central1 (closer to most U.S. users)?
-- Atlas region: same-region as Cloud Run for lowest latency
-- Domain: hosted URL on Cloud Run default domain, or custom domain (e.g., districtlens.app)?
-- Whether to implement Phase E (full Congress.gov bulk for all 535) or limit to incumbents in demo races for the hackathon and run the full bulk later
+The four pre-Phase-A open questions are now locked. Cross-references:
+
+- **GCP region:** `us-central1` — DECISIONS_LOG §2.7
+- **Atlas region:** `us-central1` (same-region as Cloud Run) — DECISIONS_LOG §2.7
+- **Demo URL:** Cloud Run default `*.run.app` URL (no custom domain for hackathon) — DECISIONS_LOG §5.7
+- **Phase E scope:** Full bulk for all 535 current Congress members (~6–7 hr overnight at 5k req/hr) — DECISIONS_LOG §3.2; reflected in this plan's Phase E task list
 
 ---
 
