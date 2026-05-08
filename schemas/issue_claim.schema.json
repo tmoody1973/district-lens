@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DistrictLensIssueClaim",
+  "type": "object",
+  "required": [
+    "claim_id",
+    "candidate_id",
+    "race_key",
+    "issue_area",
+    "stance",
+    "claim_text",
+    "source_id",
+    "confidence",
+    "needs_review"
+  ],
+  "properties": {
+    "claim_id": {
+      "type": "string"
+    },
+    "candidate_id": {
+      "type": "string"
+    },
+    "race_key": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[HS]-[A-Z]{2}-([0-9]{2}|UNK)$"
+    },
+    "issue_area": {
+      "type": "string",
+      "enum": [
+        "economy_jobs",
+        "taxes_budget",
+        "healthcare",
+        "immigration_border",
+        "climate_energy",
+        "housing_affordability",
+        "education",
+        "public_safety_justice",
+        "democracy_elections",
+        "foreign_policy_defense",
+        "technology_ai",
+        "agriculture_rural",
+        "other"
+      ]
+    },
+    "specific_policy": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "stance": {
+      "type": "string",
+      "enum": [
+        "supports",
+        "opposes",
+        "mixed",
+        "unclear",
+        "no_direct_statement",
+        "context_only"
+      ]
+    },
+    "claim_text": {
+      "type": "string"
+    },
+    "evidence_quote": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_id": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uri"
+    },
+    "source_title": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_type": {
+      "type": "string",
+      "enum": [
+        "campaign_site",
+        "candidate_questionnaire",
+        "congress_vote",
+        "bill_sponsorship",
+        "bill_cosponsorship",
+        "debate",
+        "official_social",
+        "press_release",
+        "news_quote",
+        "interest_group_rating",
+        "finance_context",
+        "other"
+      ]
+    },
+    "source_date": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date"
+    },
+    "extraction_method": {
+      "type": "string",
+      "enum": [
+        "structured_api",
+        "html_extract",
+        "manual_seed",
+        "llm_extraction",
+        "human_reviewed"
+      ]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "confidence_label": {
+      "type": "string",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "needs_review": {
+      "type": "boolean"
+    },
+    "conflict_status": {
+      "type": "string",
+      "enum": [
+        "none",
+        "possible_conflict",
+        "conflicting_sources",
+        "outdated"
+      ]
+    },
+    "last_checked_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    }
+  }
+}

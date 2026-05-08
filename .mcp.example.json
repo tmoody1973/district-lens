@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "mongodb": {
+      "note": "Keep the actual MongoDB MCP configuration from your local setup or hackathon partner docs."
+    },
+    "heroui-pro": {
+      "type": "http",
+      "url": "https://mcp.heroui.pro/mcp",
+      "headers": {
+        "x-heroui-personal-token": "HEROUI_PERSONAL_TOKEN"
+      }
+    },
+    "heroui": {
+      "command": "npx",
+      "args": ["-y", "@heroui/mcp"]
+    }
+  }
+}

@@ -1,0 +1,818 @@
+{
+  "database": "districtlens",
+  "collections": {
+    "district_lookups": {
+      "description": "Cached Geocod.io district lookup responses for addresses, ZIP codes, and coordinate pairs.",
+      "key_fields": [
+        "lookup_id",
+        "lookup_hash",
+        "query_type",
+        "normalized_query",
+        "fields",
+        "cycle",
+        "districts",
+        "raw_response",
+        "retrieved_at"
+      ],
+      "indexes": [
+        {
+          "lookup_hash": 1,
+          "fields": 1,
+          "cycle": 1
+        },
+        {
+          "race_key_candidates": 1
+        },
+        {
+          "retrieved_at": -1
+        }
+      ]
+    },
+    "races": {
+      "description": "One document per congressional race.",
+      "key_fields": [
+        "race_key",
+        "cycle",
+        "office",
+        "state",
+        "district",
+        "source_system",
+        "source_url",
+        "source_record_id",
+        "import_batch_id",
+        "ingested_at",
+        "source_updated_at",
+        "last_checked_at",
+        "stale_after",
+        "freshness_status",
+        "checksum"
+      ],
+      "indexes": [
+        {
+          "race_key": 1
+        },
+        {
+          "cycle": 1,
+          "office": 1,
+          "state": 1,
+          "district": 1
+        },
+        {
+          "freshness_status": 1
+        },
+        {
+          "last_checked_at": -1
+        }
+      ]
+    },
+    "candidates": {
+      "description": "Normalized candidate entities anchored by FEC candidate ID when available.",
+      "key_fields": [
+        "candidate_id",
+        "race_key",
+        "name",
+        "party",
+        "incumbent_challenge_status",
+        "source_system",
+        "source_url",
+        "source_record_id",
+        "import_batch_id",
+        "ingested_at",
+        "source_updated_at",
+        "last_checked_at",
+        "stale_after",
+        "freshness_status",
+        "checksum"
+      ],
+      "indexes": [
+        {
+          "candidate_id": 1
+        },
+        {
+          "race_key": 1
+        },
+        {
+          "name": "text"
+        },
+        {
+          "freshness_status": 1
+        },
+        {
+          "last_checked_at": -1
+        }
+      ]
+    },
+    "committees": {
+      "description": "FEC committees associated with candidates.",
+      "key_fields": [
+        "committee_id",
+        "candidate_id",
+        "name",
+        "designation",
+        "committee_type",
+        "source_system",
+        "source_url",
+        "source_record_id",
+        "import_batch_id",
+        "ingested_at",
+        "source_updated_at",
+        "last_checked_at",
+        "stale_after",
+        "freshness_status",
+        "checksum"
+      ],
+      "indexes": [
+        {
+          "committee_id": 1
+        },
+        {
+          "candidate_id": 1
+        },
+        {
+          "freshness_status": 1
+        },
+        {
+          "last_checked_at": -1
+        }
+      ]
+    },
+    "finance_summaries": {
+      "description": "Cached FEC financial summaries by candidate and cycle.",
+      "key_fields": [
+        "candidate_id",
+        "cycle",
+        "receipts",
+        "disbursements",
+        "cash_on_hand",
+        "debts",
+        "retrieved_at",
+        "source_system",
+        "source_url",
+        "source_record_id",
+        "import_batch_id",
+        "ingested_at",
+        "source_updated_at",
+        "last_checked_at",
+        "stale_after",
+        "freshness_status",
+        "checksum"
+      ],
+      "indexes": [
+        {
+          "candidate_id": 1,
+          "cycle": 1
+        },
+        {
+          "race_key": 1
+        },
+        {
+          "freshness_status": 1
+        },
+        {
+          "last_checked_at": -1
+        }
+      ]
+    },
+    "candidate_sources": {
+      "description": "Discovered and seeded source URLs for candidate issue evidence.",
+      "key_fields": [
+        "source_id",
+        "candidate_id",
+        "race_key",
+        "source_url",
+        "source_type",
+        "is_official",
+        "status"
+      ],
+      "indexes": [
+        {
+          "candidate_id": 1
+        },
+        {
+          "race_key": 1
+        },
+        {
+          "source_url": 1
+        }
+      ]
+    },
+    "source_documents": {
+      "description": "Fetched source text and metadata.",
+      "key_fields": [
+        "document_id",
+        "source_id",
+        "candidate_id",
+        "race_key",
+        "content_hash",
+        "retrieved_text",
+        "retrieved_at"
+      ],
+      "indexes": [
+        {
+          "source_id": 1
+        },
+        {
+          "candidate_id": 1
+        },
+        {
+          "race_key": 1
+        },
+        {
+          "content_hash": 1
+        }
+      ]
+    },
+    "issue_claims": {
+      "description": "Evidence-backed candidate position claims.",
+      "key_fields": [
+        "claim_id",
+        "candidate_id",
+        "race_key",
+        "issue_area",
+        "stance",
+        "evidence_quote",
+        "source_id",
+        "confidence"
+      ],
+      "indexes": [
+        {
+          "candidate_id": 1
+        },
+        {
+          "race_key": 1,
+          "issue_area": 1
+        },
+        {
+          "issue_area": 1,
+          "stance": 1
+        }
+      ]
+    },
+    "legislative_actions": {
+      "description": "Congress.gov records for incumbents.",
+      "key_fields": [
+        "bioguide_id",
+        "bill_id",
+        "action_type",
+        "bill_subjects",
+        "summary",
+        "vote_position",
+        "source_url",
+        "source_system",
+        "source_record_id",
+        "import_batch_id",
+        "ingested_at",
+        "source_updated_at",
+        "last_checked_at",
+        "stale_after",
+        "freshness_status",
+        "checksum"
+      ],
+      "indexes": [
+        {
+          "bioguide_id": 1
+        },
+        {
+          "candidate_id": 1
+        },
+        {
+          "race_key": 1
+        },
+        {
+          "bill_id": 1
+        },
+        {
+          "freshness_status": 1
+        },
+        {
+          "last_checked_at": -1
+        }
+      ]
+    },
+    "agent_briefs": {
+      "description": "Cached agent answers and citation bundles.",
+      "key_fields": [
+        "brief_id",
+        "question",
+        "race_key",
+        "candidate_id",
+        "answer",
+        "claim_ids",
+        "source_ids",
+        "generated_at"
+      ],
+      "indexes": [
+        {
+          "race_key": 1
+        },
+        {
+          "candidate_id": 1
+        },
+        {
+          "generated_at": -1
+        }
+      ]
+    },
+    "election_events": {
+      "description": "Election event records for federal, state, local, and ballot-measure coverage from BallotReady/CivicEngine, Ballotpedia, Democracy Works calendars, AP, official local sources, or labeled Google Civic fallback.",
+      "key_fields": [
+        "election_event_id",
+        "source",
+        "source_election_id",
+        "name",
+        "date",
+        "state",
+        "jurisdiction_name",
+        "election_type",
+        "coverage_status",
+        "retrieved_at"
+      ],
+      "indexes": [
+        {
+          "election_event_id": 1
+        },
+        {
+          "source": 1,
+          "source_election_id": 1
+        },
+        {
+          "state": 1,
+          "date": 1
+        },
+        {
+          "coverage_status": 1
+        }
+      ]
+    },
+    "contests": {
+      "description": "Generalized contest records for congressional, statewide, state legislative, local, judicial, school-board, and ballot-measure contests.",
+      "key_fields": [
+        "contest_key",
+        "election_event_id",
+        "cycle",
+        "office_name",
+        "office_level",
+        "office_role",
+        "state",
+        "district",
+        "jurisdiction",
+        "ocd_division_id",
+        "is_ballot_measure",
+        "source_ids",
+        "primary_ballot_provider",
+        "source_confidence",
+        "official_source_url",
+        "freshness_checked_at"
+      ],
+      "indexes": [
+        {
+          "contest_key": 1
+        },
+        {
+          "election_event_id": 1
+        },
+        {
+          "cycle": 1,
+          "state": 1,
+          "office_level": 1,
+          "office_role": 1
+        },
+        {
+          "ocd_division_id": 1
+        }
+      ]
+    },
+    "contest_candidates": {
+      "description": "Join records linking candidates to contests, ballot stages, parties, ballot order, and provider-specific external IDs.",
+      "key_fields": [
+        "contest_candidate_id",
+        "contest_key",
+        "candidate_id",
+        "party",
+        "ballot_order",
+        "incumbent",
+        "status",
+        "external_ids",
+        "source_ids",
+        "primary_ballot_provider",
+        "source_confidence"
+      ],
+      "indexes": [
+        {
+          "contest_candidate_id": 1
+        },
+        {
+          "contest_key": 1
+        },
+        {
+          "candidate_id": 1
+        },
+        {
+          "contest_key": 1,
+          "party": 1
+        }
+      ]
+    },
+    "ballot_items": {
+      "description": "Referenda and ballot-measure records stored separately from person-candidate contests.",
+      "key_fields": [
+        "ballot_item_id",
+        "contest_key",
+        "title",
+        "summary",
+        "full_text",
+        "responses",
+        "passage_threshold",
+        "source_url",
+        "source_ids"
+      ],
+      "indexes": [
+        {
+          "ballot_item_id": 1
+        },
+        {
+          "contest_key": 1
+        },
+        {
+          "title": "text"
+        }
+      ]
+    },
+    "state_legislative_actions": {
+      "description": "OpenStates-derived records for state legislative incumbents, including bills, votes, committees, and sponsorship/cosponsorship context.",
+      "key_fields": [
+        "openstates_person_id",
+        "state",
+        "chamber",
+        "bill_id",
+        "action_type",
+        "subjects",
+        "summary",
+        "vote_position",
+        "source_url"
+      ],
+      "indexes": [
+        {
+          "openstates_person_id": 1
+        },
+        {
+          "state": 1,
+          "chamber": 1
+        },
+        {
+          "candidate_id": 1
+        },
+        {
+          "contest_key": 1
+        },
+        {
+          "bill_id": 1
+        }
+      ]
+    },
+    "official_import_batches": {
+      "description": "Bulk or selective import job metadata for FEC, Congress.gov, GovInfo/GPO, and other official structured sources, including unitedstates/congress-legislators enrichment imports.",
+      "key_fields": [
+        "import_batch_id",
+        "source_system",
+        "scope",
+        "started_at",
+        "completed_at",
+        "status",
+        "record_counts",
+        "checksum_manifest",
+        "errors"
+      ],
+      "indexes": [
+        {
+          "import_batch_id": 1
+        },
+        {
+          "source_system": 1,
+          "started_at": -1
+        },
+        {
+          "status": 1
+        }
+      ]
+    },
+    "official_refresh_logs": {
+      "description": "Live official-data refresh checks triggered by the agent, admin endpoints, or scheduled jobs.",
+      "key_fields": [
+        "refresh_id",
+        "source_system",
+        "source_record_id",
+        "requested_by",
+        "reason",
+        "started_at",
+        "completed_at",
+        "status",
+        "changed",
+        "upserted_record_ids",
+        "error"
+      ],
+      "indexes": [
+        {
+          "refresh_id": 1
+        },
+        {
+          "source_system": 1,
+          "source_record_id": 1
+        },
+        {
+          "started_at": -1
+        },
+        {
+          "status": 1
+        }
+      ]
+    },
+    "user_profiles": {
+      "description": "Application-level profiles for optional Clerk-authenticated users. Clerk is the identity provider; MongoDB stores minimal app metadata only.",
+      "key_fields": [
+        "clerk_user_id",
+        "display_name",
+        "role",
+        "created_at",
+        "updated_at",
+        "last_seen_at",
+        "preferences",
+        "feature_flags"
+      ],
+      "indexes": [
+        {
+          "clerk_user_id": 1
+        },
+        {
+          "role": 1
+        },
+        {
+          "last_seen_at": -1
+        }
+      ]
+    },
+    "saved_districts": {
+      "description": "Districts and race pages bookmarked by signed-in Clerk users.",
+      "key_fields": [
+        "saved_district_id",
+        "clerk_user_id",
+        "district_key",
+        "race_key",
+        "label",
+        "created_at",
+        "updated_at"
+      ],
+      "indexes": [
+        {
+          "clerk_user_id": 1,
+          "race_key": 1
+        },
+        {
+          "clerk_user_id": 1,
+          "created_at": -1
+        }
+      ]
+    },
+    "saved_briefs": {
+      "description": "User-owned cited race brief snapshots saved after optional Clerk sign-in.",
+      "key_fields": [
+        "brief_id",
+        "clerk_user_id",
+        "race_key",
+        "question",
+        "answer_snapshot",
+        "source_refs",
+        "freshness",
+        "created_at",
+        "updated_at"
+      ],
+      "indexes": [
+        {
+          "clerk_user_id": 1,
+          "created_at": -1
+        },
+        {
+          "race_key": 1
+        },
+        {
+          "brief_id": 1
+        }
+      ]
+    },
+    "agent_threads": {
+      "description": "Optional persisted research threads for signed-in Clerk users. Public agent sessions do not need persistence.",
+      "key_fields": [
+        "thread_id",
+        "clerk_user_id",
+        "race_key",
+        "title",
+        "messages",
+        "created_at",
+        "updated_at"
+      ],
+      "indexes": [
+        {
+          "clerk_user_id": 1,
+          "updated_at": -1
+        },
+        {
+          "thread_id": 1
+        },
+        {
+          "race_key": 1
+        }
+      ]
+    },
+    "user_corrections": {
+      "description": "User-submitted corrections, missing-evidence reports, or source suggestions attributed to a Clerk user when enabled.",
+      "key_fields": [
+        "correction_id",
+        "clerk_user_id",
+        "target_type",
+        "target_id",
+        "submission",
+        "status",
+        "reviewed_by",
+        "created_at",
+        "updated_at"
+      ],
+      "indexes": [
+        {
+          "status": 1,
+          "created_at": -1
+        },
+        {
+          "clerk_user_id": 1,
+          "created_at": -1
+        },
+        {
+          "target_type": 1,
+          "target_id": 1
+        }
+      ]
+    },
+    "legislator_profiles": {
+      "description": "Bioguide-centered current congressional legislator identity and enrichment profiles imported from unitedstates/congress-legislators; used for member cards, official webpages, social links, crosswalks, and photo metadata.",
+      "key_fields": [
+        "bioguide_id",
+        "name",
+        "bio",
+        "current_term",
+        "terms",
+        "external_ids",
+        "fec_candidate_ids",
+        "official_url",
+        "contact_form",
+        "office",
+        "phone",
+        "rss_url",
+        "photo_source",
+        "pictorial_id",
+        "photo_url",
+        "photo_attribution",
+        "source_system",
+        "source_url",
+        "source_commit_sha",
+        "import_batch_id",
+        "ingested_at",
+        "source_updated_at",
+        "last_checked_at",
+        "freshness_status",
+        "checksum"
+      ],
+      "indexes": [
+        {
+          "bioguide_id": 1
+        },
+        {
+          "fec_candidate_ids": 1
+        },
+        {
+          "current_term.state": 1,
+          "current_term.district": 1
+        },
+        {
+          "name.official_full": "text",
+          "name.first": "text",
+          "name.last": "text"
+        },
+        {
+          "freshness_status": 1
+        }
+      ]
+    },
+    "legislator_social_accounts": {
+      "description": "Official social media handles for current members imported from unitedstates/congress-legislators legislators-social-media.",
+      "key_fields": [
+        "bioguide_id",
+        "govtrack_id",
+        "social",
+        "source_system",
+        "source_url",
+        "import_batch_id",
+        "ingested_at",
+        "last_checked_at",
+        "checksum"
+      ],
+      "indexes": [
+        {
+          "bioguide_id": 1
+        },
+        {
+          "govtrack_id": 1
+        },
+        {
+          "social.twitter": 1
+        },
+        {
+          "social.facebook": 1
+        },
+        {
+          "social.youtube_id": 1
+        }
+      ]
+    },
+    "legislator_district_offices": {
+      "description": "District office addresses, phones, and geocodes for current members imported from unitedstates/congress-legislators legislators-district-offices.",
+      "key_fields": [
+        "bioguide_id",
+        "offices",
+        "source_system",
+        "source_url",
+        "import_batch_id",
+        "ingested_at",
+        "last_checked_at",
+        "checksum"
+      ],
+      "indexes": [
+        {
+          "bioguide_id": 1
+        },
+        {
+          "offices.state": 1
+        },
+        {
+          "offices.city": 1
+        }
+      ]
+    },
+    "congress_committees": {
+      "description": "Current committee and subcommittee metadata imported from unitedstates/congress-legislators committees-current.",
+      "key_fields": [
+        "committee_id",
+        "name",
+        "type",
+        "url",
+        "jurisdiction",
+        "subcommittees",
+        "source_system",
+        "source_url",
+        "import_batch_id",
+        "ingested_at",
+        "checksum"
+      ],
+      "indexes": [
+        {
+          "committee_id": 1
+        },
+        {
+          "name": "text"
+        },
+        {
+          "type": 1
+        }
+      ]
+    },
+    "legislator_committee_memberships": {
+      "description": "Current committee and subcommittee assignments imported from unitedstates/congress-legislators committee-membership-current.",
+      "key_fields": [
+        "bioguide_id",
+        "committee_id",
+        "subcommittee_id",
+        "rank",
+        "title",
+        "party",
+        "source_system",
+        "source_url",
+        "import_batch_id",
+        "ingested_at",
+        "checksum"
+      ],
+      "indexes": [
+        {
+          "bioguide_id": 1
+        },
+        {
+          "committee_id": 1
+        },
+        {
+          "committee_id": 1,
+          "subcommittee_id": 1
+        }
+      ]
+    }
+  },
+  "notes": [
+    "Clerk optional-auth collections store user-owned saved artifacts; core civic data remains public-readable and MongoDB-first."
+  ]
+}

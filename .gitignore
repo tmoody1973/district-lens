@@ -1,0 +1,66 @@
+# DistrictLens monorepo .gitignore
+# See agent/.gitignore and web/.gitignore for layer-specific patterns.
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Secrets — never commit
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+.mcp.json
+
+# Cloud / auth
+.gcp-credentials.json
+service-account-*.json
+gha-creds-*.json
+
+# Python (mirrors agent/.gitignore essentials)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# uv
+.venv/
+venv/
+env/
+
+# Node / Next.js (for future web/)
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+
+# Logs and local caches
+*.log
+.cache/
+tmp/
+.tmp/
+
+# Demo prep / load test artifacts
+tests/load_test/.results/*.csv
+tests/load_test/.results/*.html
+agent/tests/load_test/.results/*.csv
+agent/tests/load_test/.results/*.html
+!**/.placeholder
+!**/.gitkeep
