@@ -25,8 +25,7 @@ from typing import Any
 
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmResponse
-from google.genai import Client
-from google.genai import types
+from google.genai import Client, types
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +110,7 @@ def check_output(
     try:
         client = Client()
         classifier_result = _classify(draft, client)
-    except Exception as exc:
+    except Exception:
         logger.exception(
             "civic_safety.layer3.classifier_error",
             extra={"agent": getattr(callback_context, "agent_name", None)},

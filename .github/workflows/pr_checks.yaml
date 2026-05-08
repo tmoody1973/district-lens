@@ -1,16 +1,15 @@
-# Copyright 2026 Google LLC
+# Copyright 2026 Tarik Moody
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     https://www.apache.org/licenses/LICENSE-2.0
+#     http://www.apache.org/licenses/LICENSE-2.0
 #
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# PR checks for the DistrictLens monorepo. Runs the gates that don't need
+# GCP credentials. The Tier 1 civic-safety eval gate (per
+# docs/DECISIONS_LOG.md §4.2) is currently disabled and will be re-enabled
+# once Workload Identity Federation is wired (DECISIONS_LOG.md §2.5).
 
 name: PR Checks
 
@@ -19,31 +18,54 @@ on:
     branches:
       - main
     paths:
-      - 'app/**'
-      - 'data_ingestion/**'
-      - 'tests/**'
-      - 'deployment/**'
-      - 'uv.lock'
+      - 'agent/app/**'
+      - 'agent/tests/**'
+      - 'agent/deployment/**'
+      - 'agent/pyproject.toml'
+      - 'agent/uv.lock'
+      - 'agent/Dockerfile'
+      - '.github/workflows/**'
+
+defaults:
+  run:
+    working-directory: agent
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      id-token: 'write'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
-      - id: 'auth'
-        name: 'Authenticate to Google Cloud'
-        uses: 'google-github-actions/auth@v2'
-        with:
-          workload_identity_provider: 'projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ secrets.WIF_POOL_ID }}/providers/${{ secrets.WIF_PROVIDER_ID }}'
-          service_account: '${{ secrets.GCP_SERVICE_ACCOUNT }}'
-          create_credentials_file: true
-          project_id: ${{ vars.CICD_PROJECT_ID }}
 
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.0.0
+
+      - name: Install lint extras
+        working-directory: agent
+        run: uv sync --locked --extra lint
+
+      - name: Ruff check
+        working-directory: agent
+        run: uv run ruff check .
+
+      - name: Codespell
+        working-directory: agent
+        run: uv run codespell --skip="uv.lock,*.lock,*.json"
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v4
@@ -54,10 +76,99 @@ jobs:
         uses: astral-sh/setup-uv@v8.0.0
 
       - name: Install dependencies
+        working-directory: agent
         run: uv sync --locked
 
       - name: Run unit tests
-        run: uv run pytest tests/unit
+        working-directory: agent
+        run: uv run pytest tests/unit -v
 
-      - name: Run integration tests
-        run: uv run pytest tests/integration
+  evalset-validity:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Validate eval JSON files parse and contain required fields
+        working-directory: agent
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          eval_dir = Path("tests/eval")
+          required_top = {"criteria"}
+          required_evalset = {"eval_set_id", "name", "eval_cases"}
+
+          errors = []
+
+          # eval_config.json
+          cfg = json.loads((eval_dir / "eval_config.json").read_text())
+          missing = required_top - cfg.keys()
+          if missing:
+              errors.append(f"eval_config.json missing keys: {missing}")
+          for crit_id, crit in cfg["criteria"].items():
+              if "rubrics" not in crit:
+                  errors.append(f"eval_config.json:{crit_id} missing rubrics")
+
+          # evalsets
+          for evalset_path in (eval_dir / "evalsets").glob("*.evalset.json"):
+              data = json.loads(evalset_path.read_text())
+              missing = required_evalset - data.keys()
+              if missing:
+                  errors.append(f"{evalset_path.name} missing keys: {missing}")
+              for case in data.get("eval_cases", []):
+                  if "eval_id" not in case:
+                      errors.append(f"{evalset_path.name} has eval_case missing eval_id")
+                  if "conversation" not in case:
+                      errors.append(f"{evalset_path.name}:{case.get('eval_id', '?')} missing conversation")
+
+          if errors:
+              for e in errors:
+                  print(f"::error::{e}", file=sys.stderr)
+              sys.exit(1)
+          print("All eval JSON files valid.")
+          PY
+
+  # Civic-safety Tier 1 eval gate. Disabled until Workload Identity Federation
+  # is configured per docs/DECISIONS_LOG.md §2.5. When WIF is ready:
+  # 1. Remove `if: false` from the job below.
+  # 2. Add the WIF auth step (see staging.yaml for the pattern).
+  # 3. Set GitHub repo vars: GCP_PROJECT_NUMBER, CICD_PROJECT_ID
+  # 4. Set GitHub repo secrets: WIF_POOL_ID, WIF_PROVIDER_ID, GCP_SERVICE_ACCOUNT
+  tier1-eval-gate:
+    if: false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.0.0
+
+      # TODO(districtlens): add `google-github-actions/auth@v2` step here
+      # using the WIF pool created by agent/deployment/terraform/cicd/.
+
+      - name: Install eval extras
+        working-directory: agent
+        run: uv sync --locked --extra eval
+
+      - name: Run Tier 1 civic-safety evals (CI-blocking)
+        working-directory: agent
+        run: uv run agents-cli eval run --evalset tests/eval/evalsets/tier1_civic_safety.evalset.json

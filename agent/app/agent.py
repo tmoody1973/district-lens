@@ -23,7 +23,6 @@ from google.genai import types
 
 from app.middleware import check_input, check_output
 
-
 _PROMPT_PATH = Path(__file__).parent / "prompts" / "civic_safety.md"
 
 

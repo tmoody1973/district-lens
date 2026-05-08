@@ -14,9 +14,17 @@
 
 name: Deploy to Production
 
+# Triggered manually (workflow_dispatch) or by staging.yaml (workflow_call).
+# Both paths require Workload Identity Federation to be wired per
+# docs/DECISIONS_LOG.md §2.5. Until then this workflow will fail at the
+# Authenticate to Google Cloud step.
 on:
   workflow_dispatch:
   workflow_call:
+
+defaults:
+  run:
+    working-directory: agent
 
 jobs:
   deploy:

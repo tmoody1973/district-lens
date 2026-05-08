@@ -14,16 +14,26 @@
 
 name: Deploy to Staging
 
+# Auto-trigger on push is disabled until Workload Identity Federation is wired
+# per docs/DECISIONS_LOG.md §2.5. When WIF is ready, replace the `on:` block
+# with the push trigger commented below.
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'app/**'
-      - 'data_ingestion/**'
-      - 'tests/**'
-      - 'deployment/**'
-      - 'uv.lock'
+  workflow_dispatch:
+# on:
+#   push:
+#     branches:
+#       - main
+#     paths:
+#       - 'agent/app/**'
+#       - 'agent/tests/**'
+#       - 'agent/deployment/**'
+#       - 'agent/pyproject.toml'
+#       - 'agent/uv.lock'
+#       - 'agent/Dockerfile'
+
+defaults:
+  run:
+    working-directory: agent
 
 jobs:
   deploy_and_test_staging:
