@@ -56,7 +56,7 @@ Phases ordered by dependency. Each task carries an ID, an acceptance criterion, 
 
 | ID | Task | Acceptance | Ref | Depends |
 |---|---|---|---|---|
-| A1 | Create / select GCP project for DistrictLens | `gcloud projects describe <id>` succeeds; billing linked | §2.5 | — |
+| A1 | Use existing GCP project `civicsync-440613` (display name `districtlens-prod`); link an open billing account; enable Cloud Run, Artifact Registry, IAM, IAM Credentials, Cloud Build, Secret Manager, Compute, Cloud Resource Manager, Vertex AI, Cloud Logging, Cloud Trace | `gcloud projects describe civicsync-440613` succeeds; `billingEnabled: true`; `gcloud run services list --region=us-central1` returns "Listed 0 items." with no error | §2.5, §2.7, §2.8 | — |
 | A2 | Create MongoDB Atlas M0 free cluster in `us-central1` | Connection string in hand; `mongosh` connects; cluster region matches `us-central1` | §2.6, §2.7 | — |
 | A3 | Obtain Geocod.io API key | Key stored locally; pay-as-you-go tier confirmed (2,500 free/day) | §3.5 | — |
 | A4 | Obtain Gemini API key (or set up Vertex AI ADC) | `GEMINI_API_KEY` set OR `gcloud auth application-default login` complete | §3.3 | A1 |

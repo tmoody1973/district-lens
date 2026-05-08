@@ -81,7 +81,7 @@ DistrictLens ships as a monorepo with two Cloud Run services: a Python ADK agent
 | Required partner MCP | MongoDB MCP Server (stdio child of the Python ADK process) for race lookup, finance retrieval, freshness inspection, issue evidence search, source-document storage, refresh-result persistence, brief cache. | Single visible MCP boundary for the hackathon partner integration. |
 | Storage | MongoDB Atlas (M0 free during build, M10 for the hackathon demo week, drop back after). Atlas Search + Atlas Vector Search handle all retrieval. | Drops Elastic entirely. |
 | Streaming + auth | CopilotKit (Next.js) → `/api/agent/ask` (Next.js API route, Clerk + Upstash rate limit) → Python ADK over AG-UI with internal-only ingress. | Clerk JS is mature; ADK runs cleanly behind internal ingress. |
-| Deployment | Google Cloud Run for both services in `us-central1`, using the auto-generated `*.run.app` URL for the hackathon demo (no custom domain). GitHub Actions with Workload Identity Federation (no service-account JSON keys). Apache 2.0 LICENSE + NOTICE at repo root. | Hackathon-friendly, judge-readable CI config; `us-central1` reaches Vertex AI feature parity first. |
+| Deployment | Google Cloud project `civicsync-440613` (display name `districtlens-prod`). Cloud Run for both services in `us-central1`, using the auto-generated `*.run.app` URL for the hackathon demo (no custom domain). GitHub Actions with Workload Identity Federation (no service-account JSON keys). Apache 2.0 LICENSE + NOTICE at repo root. | Hackathon-friendly, judge-readable CI config; `us-central1` reaches Vertex AI feature parity first. |
 
 ## Primary Build Path: Google Agents CLI
 

@@ -78,6 +78,11 @@ This file is the single source of truth for DistrictLens architectural decisions
 - **Rationale:** Vertex AI and Gemini features land in `us-central1` first and reach feature parity faster than other regions; it sits at the geographic center of US users and is Google's de facto default. `us-east1` was considered for marginal cost savings but trades AI feature parity for it, which is the wrong trade for a Gemini-throughout submission.
 - **Affects:** `agent/deployment/terraform/cicd/` variables, GitHub repo vars, README quickstart, BUILD_PLAN Phase A1.
 
+### 2.8 GCP project: civicsync-440613 (display name districtlens-prod)
+- **Decision (2026-05-08):** Reuse the existing GCP project `civicsync-440613` rather than creating a new one. Set the display name to `districtlens-prod` so the console reads as the current product. The immutable project ID stays `civicsync-440613` and is what every gcloud, Terraform, and CI command references.
+- **Rationale:** Billing, organization placement, and any prior IAM grants on `civicsync-440613` are reusable, which avoids a billing-account re-link and a fresh org-policy review. Creating a new project would have meant re-doing those steps for no functional gain. GCP project IDs cannot be renamed; only the display name is mutable, so we get a clean console label without losing the existing project's history.
+- **Affects:** `gcloud config set project` value, Terraform `project_id` variable, GitHub repo var `GCP_PROJECT_ID`, README quickstart, BUILD_PLAN Phase A1, all `--project=` flags in build/deploy scripts.
+
 ---
 
 ## 3. Data & Models
