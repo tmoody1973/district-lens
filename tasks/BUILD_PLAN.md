@@ -48,6 +48,8 @@ Phases ordered by dependency. Each task carries an ID, an acceptance criterion, 
 
 ### Phase A: Foundation infrastructure (mostly manual, parallel-safe)
 
+> **Quality gates:** Eng review — skip (manual setup, no architecture decisions). Refactor pass — skip (no code being written).
+
 | ID | Task | Acceptance | Ref | Depends |
 |---|---|---|---|---|
 | A1 | Create / select GCP project for DistrictLens | `gcloud projects describe <id>` succeeds; billing linked | §2.5 | — |
@@ -71,6 +73,8 @@ Phases ordered by dependency. Each task carries an ID, an acceptance criterion, 
 ---
 
 ### Phase B: First real agent tool — Geocod.io district lookup
+
+> **Quality gates:** `/plan-eng-review` before B1 (API contract, error model, caching strategy, ZIP ambiguity flow, address-hash invalidation are real design choices). `/simplify` after B6 (catches framework-fit issues — recall how it caught the ADK callback pattern). `/clean-code-review` before merge (apply clean-code patterns from CLAUDE.md to the first new module).
 
 | ID | Task | Acceptance | Ref | Depends |
 |---|---|---|---|---|
@@ -110,6 +114,8 @@ The `_id` field is auto-generated unless you set it; everything else is yours.
 
 ### Phase C: FEC bulk import (national backbone)
 
+> **Quality gates:** `/plan-eng-review` before C1 (schema design + idempotency + freshness pattern affects every later collection). `/simplify` after C5 (catches duplicate parsing logic, repeated date handling, etc.). `/clean-code-review` before merge (the importer is a future template for D and E imports — get the patterns clean now).
+
 | ID | Task | Acceptance | Ref | Depends |
 |---|---|---|---|---|
 | C1 | Download script for FEC bulk files (`cn.txt`, `cm.txt`, `weball.txt`) | `scripts/import_fec_bulk.py --cycle 2026 --download` writes files to `data/fec/2026/` | §3.2 | A2 |
@@ -133,6 +139,8 @@ The `_id` field is auto-generated unless you set it; everything else is yours.
 
 ### Phase D: unitedstates/congress-legislators import
 
+> **Quality gates:** Eng review — skip (mechanical YAML/JSON import, no architecture decisions). `/simplify` after D4. `/clean-code-review` before merge.
+
 | ID | Task | Acceptance | Ref | Depends |
 |---|---|---|---|---|
 | D1 | Import `legislators-current.json` into `legislator_profiles` | All 535 current Congress members present, keyed by `bioguide_id` | §3.2 | A2 |
@@ -149,6 +157,8 @@ The `_id` field is auto-generated unless you set it; everything else is yours.
 ---
 
 ### Phase E: Congress.gov enrichment (overnight bulk)
+
+> **Quality gates:** `/plan-eng-review` before E3 (rate-limit strategy + resumable bulk run + error handling for the 6-7 hour overnight job are real design choices). `/simplify` after E3 (catch slow patterns in the hot path of a 27,000-call run). `/clean-code-review` before merge.
 
 | ID | Task | Acceptance | Ref | Depends |
 |---|---|---|---|---|
@@ -168,6 +178,8 @@ The `_id` field is auto-generated unless you set it; everything else is yours.
 ---
 
 ### Phase F: MongoDB MCP wiring (partner integration)
+
+> **Quality gates:** `/plan-eng-review` before F2 (this is the partner integration story for the hackathon — MCP topology, MCPToolset config, query patterns, index design all matter). `/simplify` after F5 (the F5 audit step IS a refactor pass). `/clean-code-review` before merge.
 
 | ID | Task | Acceptance | Ref | Depends |
 |---|---|---|---|---|
@@ -248,6 +260,8 @@ This pattern replaces our current placeholder tool list. F2 is exactly this swap
 
 ### Phase G: Issue evidence pipeline (per demo race)
 
+> **Quality gates:** `/plan-eng-review` before G2 (source-discovery → fetch → extract → embed pipeline has real failure modes — partial failures, schema drift, embedding versioning, retry policy). `/simplify` after G6 (most engineering-novel phase, deserves a thorough pass). `/clean-code-review` before merge.
+
 | ID | Task | Acceptance | Ref | Depends |
 |---|---|---|---|---|
 | G1 | Pick specific demo race candidate names (4 slots: Senate + swing-incumbent House + open-seat House + WI-3) | `data/demo_races.json` lists chosen `race_key` and candidate IDs | §5.1 | C6 |
@@ -283,6 +297,8 @@ Vectors are big — 768 floats × 4 bytes = ~3 KB per doc. For 4 demo races with
 
 ### Phase H: Web app skeleton (Next.js 15)
 
+> **Quality gates:** Eng review — skip (conventional Next.js scaffold, well-trodden patterns). `/simplify` after H6. `/clean-code-review` before merge.
+
 | ID | Task | Acceptance | Ref | Depends |
 |---|---|---|---|---|
 | H1 | `cd web && pnpm create next-app` (TypeScript, App Router, Tailwind) | `web/package.json` exists; `pnpm dev` serves a Next.js 15 default page | §2.1 | — |
@@ -294,6 +310,8 @@ Vectors are big — 768 floats × 4 bytes = ~3 KB per doc. For 4 demo races with
 
 ### Phase I: Race workspace UI
 
+> **Quality gates:** `/plan-eng-review` before I5 (the conflict-evidence bifurcated UI is novel; `/plan-design-review` may also help here). `/simplify` after I6 (multiple components, deduplication patterns likely emerge). `/clean-code-review` before merge.
+
 | ID | Task | Acceptance | Ref | Depends |
 |---|---|---|---|---|
 | I1 | Race overview card + freshness timestamps from MongoDB docs | Card shows office, district, cycle, candidate count, FEC import timestamp | §1.2 | C2, H5 |
@@ -304,6 +322,8 @@ Vectors are big — 768 floats × 4 bytes = ~3 KB per doc. For 4 demo races with
 | I6 | Tool trace timeline (L2 trace events streamed from ADK over AG-UI) | Each tool call shows name, arg summary, result summary, latency, status; PII stripped | §5.5 | F2, H3 |
 
 ### Phase J: Voter brief generation
+
+> **Quality gates:** `/plan-eng-review` before J1 (composer prompt + structured output schema + civic-safety guards have real design choices). `/simplify` after J3. `/clean-code-review` before merge. Also re-run `Skill("humanizer")` on any default brief copy that ships in the BriefCard component.
 
 | ID | Task | Acceptance | Ref | Depends |
 |---|---|---|---|---|
@@ -322,6 +342,8 @@ Vectors are big — 768 floats × 4 bytes = ~3 KB per doc. For 4 demo races with
 
 ### Phase K: WIF + production CI activation
 
+> **Quality gates:** All — skip. CI activation is mechanical (run terraform + flip workflow flags + set GitHub vars/secrets). No code being written; no review needed.
+
 | ID | Task | Acceptance | Ref | Depends |
 |---|---|---|---|---|
 | K1 | Re-enable push trigger on `staging.yaml` (uncomment the `on: push:` block) | Push to main triggers staging deploy | §2.5 | A6 |
@@ -331,6 +353,8 @@ Vectors are big — 768 floats × 4 bytes = ~3 KB per doc. For 4 demo races with
 | K5 | First successful production deploy + hosted URL recorded | URL added to `docs/MAINTAINER_DISCLOSURE.md` and Devpost form | §2.5 | K3 |
 
 ### Phase L: Demo prep + recording
+
+> **Quality gates:** All — skip. Demo recording is a production task, not engineering. Use the `DEMO_VIDEO_SHOTLIST` checklist instead.
 
 | ID | Task | Acceptance | Ref | Depends |
 |---|---|---|---|---|
@@ -373,9 +397,11 @@ These are recorded in `docs/DECISIONS_LOG.md` as intentionally deferred. Do not 
 
 1. Read top-to-bottom on first encounter so the dependency graph is in your head.
 2. Pick the next [CRITICAL] task whose dependencies are all [DONE] or completed.
-3. Before starting a non-trivial task, draft a per-feature implementation plan and run `/plan-eng-review` on it. This BUILD_PLAN is the index; per-feature plans are where architecture conversations happen.
-4. When a task ships, mark it [DONE] here and reference the commit SHA.
-5. When a decision in this plan and `docs/DECISIONS_LOG.md` disagree, update one of them — don't let drift accumulate.
+3. Read the current phase's "Quality gates" line. It tells you which of the three gates apply: `/plan-eng-review`, `/simplify`, `/clean-code-review`. Skip any gate the phase header explicitly skips; that's intentional.
+4. Run the per-feature workflow described in Appendix C (the standard cycle: `/plan-eng-review` → code → `/simplify` → `/clean-code-review` → commit). The BUILD_PLAN is the index; per-feature plans are where architecture conversations happen.
+5. When a task ships, mark it [DONE] here and reference the commit SHA.
+6. When a decision in this plan and `docs/DECISIONS_LOG.md` disagree, update one of them — don't let drift accumulate.
+7. Before ending a session, run `/checkpoint` to save where you stopped. Next session, run `/checkpoint resume` to continue.
 
 ## Open questions to resolve before Phase A
 
@@ -585,7 +611,62 @@ For DistrictLens, this is how the agent answers "what do candidates say about cl
 
 ---
 
-## Appendix B: Where to learn more
+## Appendix B: Per-feature quality workflow
+
+The phase headers reference three skills as quality gates. They run at different points in the implementation cycle and catch different things. Use them as a stack, not as alternatives.
+
+### The cycle for a non-trivial feature
+
+```
+1. Pick the phase. Read its "Quality gates" line.
+2. (If gate says yes) /plan-eng-review on a fresh per-feature implementation spec.
+   --> Output: a reviewed plan with architecture, data flow, edge cases, test matrix.
+   --> Stop and resolve any concerns the eng review surfaces before coding.
+3. Code the feature against the reviewed plan.
+4. (If gate says yes) /simplify against the new code.
+   --> Output: 3 parallel review agents (reuse, quality, efficiency) with findings.
+   --> Fix P0 + P1 findings. Skip false positives, note them as skipped with reason.
+5. (If gate says yes) /clean-code-review against the new code.
+   --> Output: clean-code patterns review, refactor opportunities, code-smell catches.
+   --> Apply the changes. Re-run unit tests after.
+6. Commit + push. Mark the phase task [DONE] in this BUILD_PLAN with the commit SHA.
+7. (Optional) Run /checkpoint to bookmark progress.
+```
+
+### What each gate catches (different from each other)
+
+| Gate | When | What it's good at | What it misses |
+|---|---|---|---|
+| `/plan-eng-review` | Before coding | Architecture choices, data flow, edge cases, test coverage gaps, performance concerns at the design level | Code-level issues (naming, duplication, idioms) |
+| `/simplify` | Immediately after coding (3 parallel agents: reuse, quality, efficiency) | Framework-fit issues (e.g. "this should be an ADK callback"), duplicated logic, hot-path inefficiency, leaky abstractions | Higher-level architecture decisions; clean-code patterns from a handbook |
+| `/clean-code-review` | After `/simplify`, before merge | Clean-code handbook patterns, code-smell hunting (god objects, nested conditionals, primitive obsession), refactor opportunities the user's CLAUDE.md Clean Code Standards section calls out | Architecture concerns; performance |
+
+### When to skip
+
+- **Skip `/plan-eng-review`** when the phase is mechanical scaffolding (a YAML/JSON import, a conventional Next.js skeleton, CI activation). The phase header marks these `Eng review — skip`.
+- **Skip `/simplify`** rarely. Even mechanical code benefits from a reuse + quality + efficiency review. The only phases that skip it are infra-only phases that produce no code (Phase A, K, L).
+- **Skip `/clean-code-review`** for similar phases. It's cheap (~5 min) and the project's CLAUDE.md has a Clean Code Standards section explicitly committed to as non-negotiable defaults — running it enforces those.
+
+### Cost estimate
+
+Per non-trivial feature:
+
+- `/plan-eng-review` — ~5–10 minutes (interactive, with the user)
+- code itself — variable (the actual work)
+- `/simplify` — ~3–5 minutes (3 review agents in parallel, then fix findings)
+- `/clean-code-review` — ~5–10 minutes (review + apply changes)
+
+Quality gates total: ~15–25 minutes per feature on top of the coding time. For a hackathon that ships in ~2 weeks across ~10 non-trivial features, that's ~3–4 hours of quality-gate time. Worth it for code that judges and journalists will scrutinize in a public Apache 2.0 repo.
+
+### Refactoring is part of the feature, not a separate phase
+
+There is no "Phase R: refactor" in this plan. Refactoring happens **within** the feature cycle above — `/simplify` and `/clean-code-review` produce findings, and you fix them before commit. The Boy Scout Rule from the project's CLAUDE.md Clean Code Standards (`Leave every file cleaner than you found it`) applies to every PR. If you find yourself wanting to "come back later and refactor," that's a signal to do it now, in this PR, before merge.
+
+The exception is when a future feature reveals that an earlier feature's design was wrong — in that case, refactor as part of the new feature's work, not as a standalone refactor PR. Refactor PRs that aren't tied to a feature tend to bit-rot.
+
+---
+
+## Appendix C: Where to learn more
 
 - MongoDB official docs: https://www.mongodb.com/docs/
 - Atlas Search reference: https://www.mongodb.com/docs/atlas/atlas-search/
