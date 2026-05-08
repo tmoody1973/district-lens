@@ -56,11 +56,27 @@ out/
 .cache/
 tmp/
 .tmp/
+.remember/
 
 # Demo prep / load test artifacts
 tests/load_test/.results/*.csv
 tests/load_test/.results/*.html
 agent/tests/load_test/.results/*.csv
 agent/tests/load_test/.results/*.html
+
+# Terraform — never commit state, plans, lock dirs, or local var overrides.
+# Keep vars/env.tfvars (the committed template); ignore everything else under vars/.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfplan.binary
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+**/terraform/**/vars/local.tfvars
+**/terraform/**/vars/*.local.tfvars
+
 !**/.placeholder
 !**/.gitkeep

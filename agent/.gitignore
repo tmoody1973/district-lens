@@ -141,9 +141,12 @@ dmypy.json
 # PyCharm
 .idea
 
-# User-specific files
-.terraform*
-.Terraform*
+# User-specific files — Terraform working dirs only.
+# Note: keep .terraform.lock.hcl committed (provider version pins, per Terraform convention).
+.terraform/
+**/.terraform/
+.Terraform/
+**/.Terraform/
 
 
 tmp*

@@ -95,6 +95,27 @@ This file is the single source of truth for DistrictLens architectural decisions
 - **Verified (2026-05-08):** `mongosh` connection returns `ping_ok: 1`, MongoDB 8.0.23. Cluster reached `IDLE` state after Atlas CLI watch.
 - **Affects:** `agent/app/.env` `MONGODB_URI`, BUILD_PLAN A2 acceptance, future Atlas-Search and Atlas-Vector-Search index creation (Phase D), MongoDB MCP runtime config (Phase F), upgrade-to-M10 plan for demo week (§2.6).
 
+### 2.11 A5 execution: single-project Terraform + manual gcloud for AR + WIF
+- **Decision (2026-05-08):** Run `agent/deployment/terraform/single-project/` for the runtime stack (App SA, Cloud Run service skeleton, GCS log bucket, BigQuery telemetry dataset + tables, log sinks). Skip the sibling `cicd/` Terraform because it assumes a three-project (prod + staging + cicd-runner) production layout and we have one project per §2.8. Provision the missing pieces (Artifact Registry repo + Workload Identity Federation pool/provider + CI deployer service account) with five gcloud commands instead of porting `cicd/` to single-project.
+- **What got created:**
+  - 31 Terraform-managed resources, including `google_service_account.app_sa` (`districtlens-agent-app@civicsync-440613.iam.gserviceaccount.com` with `aiplatform.user`, `logging.logWriter`, `cloudtrace.agent`, `storage.admin`, `serviceusage.serviceUsageConsumer`), `google_cloud_run_v2_service.app` (`districtlens-agent` in `us-central1`, 4 vCPU / 8 GiB, 1-10 instances, placeholder hello container), `google_storage_bucket.logs_data_bucket` (`civicsync-440613-districtlens-agent-logs`), `google_bigquery_dataset.telemetry_dataset` (`districtlens_agent_telemetry` with `completions` table + view), and two log sinks routing genai + feedback logs to BigQuery.
+  - Artifact Registry repo `districtlens-agent` (Docker format) in `us-central1`.
+  - WIF pool `github-actions` (location `global`) + OIDC provider `github` with attribute condition `attribute.repository_owner=='tmoody1973'` (security: only the user's repos can mint impersonation tokens).
+  - CI deployer SA `districtlens-agent-cicd@civicsync-440613.iam.gserviceaccount.com` with roles `run.developer`, `artifactregistry.writer`, `iam.serviceAccountUser`, `storage.admin`, `cloudbuild.builds.builder`. Bound to the WIF pool for `tmoody1973/district-lens` only.
+- **Locked values (used by GitHub Actions in A6):**
+  - `WIF_PROVIDER`: `projects/655022470154/locations/global/workloadIdentityPools/github-actions/providers/github`
+  - `GCP_SERVICE_ACCOUNT`: `districtlens-agent-cicd@civicsync-440613.iam.gserviceaccount.com`
+  - `WIF_POOL_ID`: `github-actions`
+  - `WIF_PROVIDER_ID`: `github`
+  - `GCP_PROJECT_NUMBER`: `655022470154`
+  - `ARTIFACT_REGISTRY_REPO_NAME`: `districtlens-agent`
+  - `CONTAINER_NAME`: `districtlens-agent`
+  - `LOGS_BUCKET_NAME_STAGING`: `civicsync-440613-districtlens-agent-logs`
+- **Verified (2026-05-08):** Anonymous `curl https://districtlens-agent-adewe5kxtq-uc.a.run.app/` returns `HTTP 403` (locked down by default, no `allUsers` invoker). Authenticated `curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" ...` returns `HTTP 200` with the placeholder hello container HTML in 97ms.
+- **Known follow-up (intentional, not blocking):** Cloud Run service is set to `INGRESS_TRAFFIC_ALL` because `single-project/service.tf` ships that way. CLAUDE.md says the agent should be internal-only behind the Next.js web app. Lock down to `INGRESS_TRAFFIC_INTERNAL_ONLY` when the Next.js → ADK call is wired (Phase G). For now, the service is auth-gated by Cloud Run's default IAM, so unauthenticated traffic gets 403 even though ingress is technically `ALL`.
+- **A6 implications (existing workflows expect 3-project layout):** The committed workflows under `.github/workflows/` reference `vars.STAGING_PROJECT_ID`, `vars.PROD_PROJECT_ID`, `vars.CICD_PROJECT_ID` separately. With our single-project setup, set all three GitHub repo variables to `civicsync-440613`. The workflows then deploy to the same project for both stages, which matches the hackathon scope. No workflow file edits needed.
+- **Affects:** BUILD_PLAN A5 (executed via different path than originally written), BUILD_PLAN A6 (specific values to set in GitHub repo settings), Phase G (revisit Cloud Run ingress and the storage.admin role for least-privilege).
+
 ---
 
 ## 3. Data & Models
