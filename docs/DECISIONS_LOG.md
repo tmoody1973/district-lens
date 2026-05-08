@@ -89,6 +89,12 @@ This file is the single source of truth for DistrictLens architectural decisions
 - **Why `location=global` and not `us-central1`:** Gemini 3.x preview models on Vertex AI (`gemini-3.1-pro-preview`, `gemini-3-flash-preview`, `gemini-3.1-flash-lite-preview`) are exposed only on the global endpoint `aiplatform.googleapis.com`. Regional endpoints like `us-central1-aiplatform.googleapis.com` return 404 for these IDs. The `us-central1` region lock from §2.7 still applies to where the Cloud Run services and Atlas cluster live; only the Vertex API call routing is global. Verified end-to-end with a live `gemini-3.1-pro-preview` call returning "PONG" through `google-genai` from the agent venv on 2026-05-08.
 - **Affects:** `agent/app/.env` (three vars instead of `GOOGLE_API_KEY`), `agent/app/agent.py` (no code change required; ADK reads env), Cloud Run runtime service account needs `roles/aiplatform.user` on the project (Phase A5 Terraform), GitHub Actions does not need a Gemini secret.
 
+### 2.10 Atlas project + cluster: dedicated DistrictLens project, M0 in CENTRAL_US
+- **Decision (2026-05-08):** Create a new Atlas project named `DistrictLens` (id `69fe6b7164bc6cb361ac7f1e`) under `Tarik's Org - 2023-11-29` (id `6566e0bcea23b31c99a2e222`) and provision the build-week M0 cluster `districtlens` inside it on GCP `CENTRAL_US` (Atlas's name for `us-central1`). Database name is `districtlens`. SRV host is `districtlens.qgjxhfq.mongodb.net`. DB user is `districtlens` with role `atlasAdmin`; password is randomly generated 20-char and lives only in `agent/app/.env` (gitignored).
+- **Rationale:** Atlas allows only one M0 free cluster per project, and the existing `Project 0` already had `RhtyhmLab0` in that slot (an unrelated paused AWS US_EAST_1 M0). A new project gives DistrictLens its own M0 quota, cleaner naming, and per-project isolation, without destroying the existing cluster. The CENTRAL_US region keeps the Atlas cluster co-located with the Cloud Run services per §2.7. M0 supports Atlas Search and Atlas Vector Search, which is what §3.1 needs.
+- **Verified (2026-05-08):** `mongosh` connection returns `ping_ok: 1`, MongoDB 8.0.23. Cluster reached `IDLE` state after Atlas CLI watch.
+- **Affects:** `agent/app/.env` `MONGODB_URI`, BUILD_PLAN A2 acceptance, future Atlas-Search and Atlas-Vector-Search index creation (Phase D), MongoDB MCP runtime config (Phase F), upgrade-to-M10 plan for demo week (§2.6).
+
 ---
 
 ## 3. Data & Models
