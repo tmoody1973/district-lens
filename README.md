@@ -2,6 +2,8 @@
 
 **DistrictLens** is a nonpartisan civic intelligence agent for the 2026 midterm cycle. It helps voters, journalists, students, and civic organizations understand a congressional race by connecting **who is running**, **who funds the race**, **what incumbents have done in Congress**, **what candidates say they support**, and **how district context shapes the race**.
 
+> **Canonical decisions:** [`docs/DECISIONS_LOG.md`](docs/DECISIONS_LOG.md) is the single source of truth for stack, models, partner integrations, and CI/CD choices. When older planning docs in this package conflict with `DECISIONS_LOG.md`, the log wins. Built by Tarik Moody — see [`docs/MAINTAINER_DISCLOSURE.md`](docs/MAINTAINER_DISCLOSURE.md). Apache 2.0.
+
 This package is designed to be copied into a repository and handed to **Claude Code** as the build specification. Start with `CLAUDE.md`, then read the hackathon requirements, PRD, architecture, schemas, MCP integration specification, and task plan. The package now explicitly maps DistrictLens to the **Google Cloud Rapid Agent Hackathon** requirements, judging criteria, partner MCP expectations, and Devpost submission needs.
 
 ## Recommended Claude Code workflow
@@ -29,8 +31,8 @@ Open the project in Claude Code and ask it to work in plan mode before editing c
 | `docs/BULK_IMPORT_REFRESH_STRATEGY.md` | MongoDB bulk-import-first strategy with live FEC, Congress.gov, and GPO refresh tools. |
 | `docs/AUTH_STRATEGY.md` | Public-first Clerk authentication strategy for saved user features and protected admin operations. |
 | `docs/GUARDRAILS.md` | Nonpartisan civic-safety and citation guardrails. |
-| `specs/MCP_INTEGRATION.md` | Partner MCP integration specification for the MongoDB primary track and Elastic alternate track. |
-| `specs/TOOLS.md` | Tool contracts for FEC, Congress.gov, search, source retrieval, extraction, MongoDB, and Elastic. |
+| `specs/MCP_INTEGRATION.md` | Partner MCP integration specification (MongoDB MCP Server, stdio child of the Python ADK process). Carries a cascade banner pointing to `DECISIONS_LOG.md` for any Elastic references that predate the locked decision. |
+| `specs/TOOLS.md` | Tool contracts for FEC, Congress.gov, source discovery (Gemini grounding), source retrieval, extraction, and MongoDB. Carries the same cascade banner. |
 | `specs/API_SPEC.md` | Proposed backend API surface for the web app and agent. |
 | `schemas/mongodb_collections.json` | MongoDB collection shapes and indexes. |
 | `schemas/issue_claim.schema.json` | JSON Schema for extracted candidate issue-position claims. |
@@ -53,41 +55,47 @@ The build assumes API keys or service credentials may be provided through enviro
 
 | Service | Env var | MVP role |
 |---|---|---|
-| FEC OpenFEC API | `FEC_API_KEY` | Bulk-import seed data plus live refresh for candidate, committee, finance, filing, and independent-expenditure records. |
+| FEC OpenFEC API | `FEC_API_KEY` | Bulk-import seed data (free FEC bulk files; no API quota) plus live refresh for selected detailed filings. |
 | Congress.gov API | `CONGRESS_API_KEY` | Bulk-import seed data plus live refresh for incumbent members, sponsored/cosponsored legislation, bill summaries, subjects, related bills, laws, and votes. |
-| Geocod.io API | `GEOCODIO_API_KEY` | Address or coordinate lookup for congressional districts, 2026/120th Congress district context, state legislative districts, Census geography, and civic identifiers. |
-| Perplexity or other search API | `PERPLEXITY_API_KEY` or provider-specific key | Optional source discovery for campaign websites, issue pages, questionnaires, and news quotes. |
-| MongoDB Atlas | `MONGODB_URI` | Primary app-read layer, bulk-imported civic memory, evidence store, claim store, freshness metadata, refresh results, user-owned saved artifacts, and cached briefs. |
-| Elastic Cloud | `ELASTICSEARCH_URL`, `ELASTICSEARCH_API_KEY` | Hybrid search over source documents, claims, and legislative evidence. |
+| Geocod.io API | `GEOCODIO_API_KEY` | Address or coordinate lookup with compound `cd120,cd` field append for 2026 election boundaries plus current 119th Congress fallback. |
+| Gemini 3.1 (Pro + Flash-Lite) | `GEMINI_API_KEY` (or Vertex AI ADC via `GOOGLE_GENAI_USE_VERTEXAI=true`) | Agent reasoning + answer composition (`gemini-3.1-pro-preview`), claim extraction + civic-safety output classifier (`gemini-3.1-flash-lite`), and **built-in Google Search grounding** for source discovery. Replaces OpenAI. Locked per the Google Cloud Rapid Agent Hackathon's Gemini requirement. See [`docs/DECISIONS_LOG.md`](docs/DECISIONS_LOG.md) §3.3, §3.4. |
+| MongoDB Atlas | `MONGODB_URI` | **Sole** operational data layer: bulk-imported civic memory, Atlas Search + Atlas Vector Search retrieval, evidence + claim + freshness stores, brief cache, optional saved-user artifacts. Surfaced through the MongoDB MCP Server (locked partner integration). Replaces Elastic. |
 | Clerk | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | Optional sign-in for saved districts, saved briefs, user preferences, correction submissions, and protected admin workflows. |
-| LLM provider | `OPENAI_API_KEY` or configured provider | Agent reasoning and structured extraction. |
+| Address-privacy salt | `ADDRESS_HASH_SALT` | Server-side salt for SHA-256 hashing of normalized addresses; never rotated during the demo window. See [`docs/PRIVACY_POLICY.md`](docs/PRIVACY_POLICY.md). |
+| Internal API token | `INTERNAL_API_TOKEN` | Shared bearer token used by the Next.js web service to call the Python ADK agent service over Cloud Run internal ingress. |
+| Upstash Redis | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Public-agent rate limiting in the Next.js API route. |
 
-## Build stack recommendation
+> **Dropped from MVP, post-MVP only:** Elastic (replaced by MongoDB Atlas Search + Vector Search), OpenAI (replaced by Gemini 3.1 family), and Perplexity Search API (federal-MVP source discovery now uses Gemini built-in Google Search grounding; Perplexity is reserved for post-MVP local-race extraction with TabStack). The corresponding env vars are documented in `.env.example` under a commented "Post-MVP only" block.
 
-For speed, build a TypeScript application with a backend API and a simple web UI. Use the Google Cloud Agent Starter Pack or Google Cloud Agent Builder pattern as the agent orchestration foundation where possible, because the hackathon rewards functional agents powered by Gemini and Google Cloud. The default partner track should be **MongoDB**, with MongoDB MCP Server as the visible partner integration. Recommended components are:
+## Build stack (locked)
 
-| Layer | Recommendation |
-|---|---|
-| Frontend | Next.js or Vite React with district/race search and agent chat. |
-| Backend | FastAPI or Node/Express API with tool endpoints. |
-| Agent orchestration | Google Cloud Agent Starter Pack / Google Cloud Agent Builder pattern with Gemini-powered planning and synthesis. |
-| Required partner MCP | MongoDB MCP Server for race lookup, finance retrieval, freshness inspection, issue evidence search, source-document storage, refresh-result persistence, and brief cache. |
-| Storage | MongoDB Atlas as the **bulk-imported civic memory and primary read model**; Elastic as an optional alternate or secondary hybrid retrieval layer. |
-| Deployment | Google Cloud Run for app/API; managed MongoDB and Elastic. |
+DistrictLens ships as a monorepo with two Cloud Run services: a Python ADK agent (`agent/`, scaffolded from Google Agents CLI) and a TypeScript Next.js 15 web app (`web/`). MongoDB is the only partner integration. See [`docs/DECISIONS_LOG.md`](docs/DECISIONS_LOG.md) for full rationale.
+
+| Layer | Choice | Why |
+|---|---|---|
+| Frontend | Next.js 15 (TypeScript) with OSS HeroUI (`@heroui/react`, MIT) and a custom Civic Brutal Tailwind theme. CopilotKit for the agent panel and typed generative UI. | Mature React ecosystem; HeroUI Pro was dropped because its source can't ship in a public Apache 2.0 repo. |
+| Backend | Python ADK agent in `agent/app/`, FastAPI server, `agents-cli scaffold` template `adk`. | Scaffold is the documented Gemini-Enterprise path; FastAPI is the AG-UI surface that CopilotKit talks to. |
+| Models | Gemini 3.1 Pro for reasoning (`gemini-3.1-pro-preview`); Gemini 3.1 Flash-Lite for extraction + output classifier. | Hackathon mandates Gemini; ADK is Gemini-native; Flash-Lite is cheapest at high volume. |
+| Source discovery | Gemini built-in Google Search grounding behind a `SourceDiscoveryProvider` interface. | In-stack, free with the Gemini call, one less vendor. Perplexity is post-MVP for local-race extraction. |
+| Embeddings | Google embedding model, manually generated and stored on `claim_embedding`; queried via Atlas Vector Search `$vectorSearch`. | All-Gemini story. |
+| Required partner MCP | MongoDB MCP Server (stdio child of the Python ADK process) for race lookup, finance retrieval, freshness inspection, issue evidence search, source-document storage, refresh-result persistence, brief cache. | Single visible MCP boundary for the hackathon partner integration. |
+| Storage | MongoDB Atlas (M0 free during build, M10 for the hackathon demo week, drop back after). Atlas Search + Atlas Vector Search handle all retrieval. | Drops Elastic entirely. |
+| Streaming + auth | CopilotKit (Next.js) → `/api/agent/ask` (Next.js API route, Clerk + Upstash rate limit) → Python ADK over AG-UI with internal-only ingress. | Clerk JS is mature; ADK runs cleanly behind internal ingress. |
+| Deployment | Google Cloud Run for both services. GitHub Actions with Workload Identity Federation (no service-account JSON keys). Apache 2.0 LICENSE + NOTICE at repo root. | Hackathon-friendly, judge-readable CI config. |
 
 ## Primary Build Path: Google Agents CLI
 
-DistrictLens now uses **Google Agents CLI** as the preferred implementation path for the hackathon build. Claude Code should install/setup Agents CLI, scaffold the `districtlens-agent` project, implement selective FEC and Congress.gov/GPO importers, live refresh tools, source-discovery, MongoDB MCP, and optional Elastic tools inside the generated ADK structure, then run evaluations and deploy through the Google Cloud path.
+DistrictLens uses **Google Agents CLI** as the implementation scaffold. The agent project at `agent/` was created via `agents-cli scaffold create districtlens-agent -a adk -d cloud_run --cicd-runner github_actions`. Claude Code's job is to implement the FEC bulk imports, Congress.gov enrichment, source discovery via Gemini grounding, MongoDB MCP-backed retrieval, claim extraction, and the layered civic-safety refusal architecture (already wired as ADK before/after-model callbacks at `agent/app/middleware/`), then run Tier 1 + Tier 2 evals and deploy via Cloud Run.
 
 Read `docs/AGENTS_CLI_IMPLEMENTATION.md` immediately after the hackathon requirements and technical architecture documents. The Google Cloud Agent Starter Pack remains useful as a reference architecture, but Agents CLI is the most concrete Claude Code execution path.
 
 ## State and local election extension
 
-DistrictLens now intentionally **defers governor, state senate, state house, county, municipal, school-board, judicial, and ballot-measure race coverage until post-MVP**. See `docs/MVP_SCOPE_DECISION.md` and `docs/STATE_LOCAL_ELECTION_STRATEGY.md`. The hackathon build should focus on congressional district intelligence, federal candidate comparison, FEC finance, Congress.gov incumbent context, source-backed issue evidence, MongoDB civic memory, CopilotKit, and HeroUI Pro.
+DistrictLens now intentionally **defers governor, state senate, state house, county, municipal, school-board, judicial, and ballot-measure race coverage until post-MVP**. See `docs/MVP_SCOPE_DECISION.md` and `docs/STATE_LOCAL_ELECTION_STRATEGY.md`. The hackathon build focuses on congressional district intelligence, federal candidate comparison, FEC finance, Congress.gov incumbent context, source-backed issue evidence, MongoDB civic memory, CopilotKit, and OSS HeroUI with a Civic Brutal Tailwind theme.
 
 ## Frontend design-system decision
 
-DistrictLens should use **HeroUI Pro** with a restrained **Civic Brutal** theme for the deterministic dashboard UI, while keeping **CopilotKit** for the right-side agent panel and typed generative UI. The package includes `docs/HEROUI_PRO_DECISION.md`, `docs/HEROUI_PRO_ADOPTION_SCOPE.md`, and `.mcp.example.json` for local HeroUI Pro MCP setup. Do not commit a real `HEROUI_PERSONAL_TOKEN`; configure it only in local or secret-managed development environments.
+DistrictLens uses **OSS HeroUI** (`@heroui/react`, MIT) with a custom **Civic Brutal** Tailwind theme for the deterministic dashboard UI, alongside **CopilotKit** for the right-side agent panel and typed generative UI. HeroUI Pro was originally proposed but dropped because its source code can't be redistributed in the public Apache 2.0 repo this hackathon submission requires. See [`docs/DECISIONS_LOG.md`](docs/DECISIONS_LOG.md) §1.1; the older `docs/HEROUI_PRO_*.md` decision memos are retained as superseded historical context. `.mcp.example.json` ships only the OSS `@heroui/mcp` and a placeholder MongoDB MCP entry.
 
 
 ### Post-MVP local-race discovery bridge
