@@ -88,6 +88,22 @@ export default function HomePage() {
   });
 
   useCopilotAction({
+    name: "get_incumbent_legislation",
+    description:
+      "Get recent sponsored legislation for the incumbent in a 2026 congressional race. " +
+      "Use after lookup_district to show what the incumbent has introduced in the 119th Congress.",
+    parameters: [
+      { name: "race_key", type: "string", description: "Race key from lookup_district, e.g. '2026-H-WI-04'.", required: true },
+    ],
+    handler: async ({ race_key }: { race_key: string }) => {
+      const res = await fetch(`/api/incumbent/legislation?race_key=${encodeURIComponent(race_key)}`);
+      const data = await res.json();
+      if (!res.ok) return `Could not retrieve legislation: ${data.error}`;
+      return data.legislation as string;
+    },
+  });
+
+  useCopilotAction({
     name: "find_candidate",
     description:
       "Search for a 2026 congressional candidate by name. Use when the user mentions a candidate by name " +

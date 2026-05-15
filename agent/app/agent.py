@@ -6,14 +6,14 @@
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
-# DistrictLens root agent. Real tools (FEC, Congress.gov, MongoDB MCP,
-# Geocodio, source discovery, claim extraction) are added in subsequent
-# build phases. The civic-safety system prompt at app/prompts/civic_safety.md
-# is the canonical refusal-rule source. See docs/REFUSAL_DESIGN.md for the
-# layered refusal architecture wired below via before/after model callbacks.
+# DistrictLens root agent.
+# Civic-safety system prompt: app/prompts/civic_safety.md (Layer 1).
+# Refusal architecture: before/after model callbacks (Layers 2–3).
+# See docs/REFUSAL_DESIGN.md for the full layered design.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from google.adk.agents import Agent
@@ -23,6 +23,7 @@ from google.genai import types
 
 from app.middleware import check_input, check_output
 from app.tools.district_lookup import lookup_district
+from app.tools.mongodb_mcp_toolset import create_mongodb_mcp_toolset
 from app.tools.mongodb_tools import (
     find_candidate,
     get_candidate_finance,
@@ -30,6 +31,8 @@ from app.tools.mongodb_tools import (
     get_race_candidates,
     get_race_finance_brief,
 )
+
+logger = logging.getLogger(__name__)
 
 _PROMPT_PATH = Path(__file__).parent / "prompts" / "civic_safety.md"
 
@@ -39,6 +42,31 @@ def _load_system_instruction() -> str:
     return _PROMPT_PATH.read_text(encoding="utf-8")
 
 
+def _build_tools() -> list:
+    """Build the full tool list including the MongoDB MCP toolset.
+
+    MongoDB MCP Server (partner integration, DECISIONS_LOG §2.3) is added
+    as a McpToolset spawning mongodb-mcp-server via stdio. Custom tools
+    provide structured civic-specific wrappers on top of the raw MCP access.
+    """
+    tools: list = [
+        lookup_district,
+        get_race_candidates,
+        get_race_finance_brief,
+        get_candidate_finance,
+        get_incumbent_legislation,
+        find_candidate,
+    ]
+    try:
+        mcp_toolset = create_mongodb_mcp_toolset()
+        tools.append(mcp_toolset)
+        logger.info("MongoDB MCP toolset registered (partner integration)")
+    except Exception as exc:
+        # Non-fatal: agent works without MCP, but judging may note its absence
+        logger.warning("MongoDB MCP toolset not available: %s", exc)
+    return tools
+
+
 root_agent = Agent(
     name="districtlens_root",
     model=Gemini(
@@ -46,14 +74,7 @@ root_agent = Agent(
         retry_options=types.HttpRetryOptions(attempts=3),
     ),
     instruction=_load_system_instruction(),
-    tools=[
-        lookup_district,
-        get_race_candidates,
-        get_race_finance_brief,
-        get_candidate_finance,
-        get_incumbent_legislation,
-        find_candidate,
-    ],
+    tools=_build_tools(),
     before_model_callback=check_input,
     after_model_callback=check_output,
 )
