@@ -1,25 +1,32 @@
-# Copyright 2026 Google LLC
+# Copyright 2026 Tarik Moody
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
+# see LICENSE at repo root.
 #
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Multi-runtime image: Python 3.12 (ADK agent) + Node.js 22 LTS (MongoDB MCP server).
+# Node.js is required to run `npx mongodb-mcp-server` as a stdio child process
+# per DECISIONS_LOG §2.3.
 
 FROM python:3.12-slim
 
+# ---- Node.js 22 LTS (required for npx mongodb-mcp-server) ----
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+        ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pre-fetch mongodb-mcp-server so first-run doesn't need npm download in production
+RUN npx --yes mongodb-mcp-server --version || true
+
+# ---- Python / uv / ADK ----
 RUN pip install --no-cache-dir uv==0.8.13
 
 WORKDIR /code
 
 COPY ./pyproject.toml ./README.md ./uv.lock* ./
-
 COPY ./app ./app
 
 RUN uv sync --frozen
