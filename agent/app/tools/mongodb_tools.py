@@ -24,6 +24,8 @@ import pymongo.errors
 
 logger = logging.getLogger(__name__)
 
+CONGRESS_GOV_URL = "https://www.congress.gov"
+
 _mongo_client: pymongo.MongoClient | None = None  # type: ignore[type-arg]
 
 
@@ -243,4 +245,60 @@ def find_candidate(name: str, state: str = "") -> str:
         lines.append(
             f"  {r['name']} ({r['party']}, {status}) — {r['race_key']} [ID: {r['candidate_id']}]"
         )
+    return "\n".join(lines)
+
+
+def get_incumbent_legislation(race_key: str, limit: int = 8) -> str:
+    """Get recent sponsored legislation for the incumbent in a 2026 congressional race.
+
+    Returns bills the incumbent has introduced in the current 119th Congress
+    (Jan 2025 – present), with bill IDs, titles, and latest committee status.
+    Use this to describe an incumbent's legislative priorities and activity.
+
+    Civic safety: bill sponsorship shows legislative priorities, not personal
+    policy positions. Always label these as "sponsored legislation" and cite
+    Congress.gov as the source.
+
+    Args:
+        race_key: Race identifier, e.g. '2026-H-WI-04'. Must contain an incumbent.
+        limit: Maximum bills to return (default 8, max 20).
+    """
+    try:
+        db = _get_db()
+        bills = list(
+            db.legislative_actions.find(
+                {"race_key_2026": race_key, "action_type": "sponsored_bill"},
+                {"_id": 0, "bill_id": 1, "title": 1, "introduced_date": 1,
+                 "latest_action": 1, "latest_action_date": 1, "url": 1, "member_name": 1},
+            )
+            .sort("introduced_date", -1)
+            .limit(min(limit, 20))
+        )
+    except pymongo.errors.PyMongoError as exc:
+        logger.error("mongodb.get_incumbent_legislation: %s", exc)
+        return f"Database error retrieving legislation for {race_key}."
+
+    if not bills:
+        return (
+            f"No sponsored legislation found for the incumbent in race {race_key}. "
+            "The incumbent may not have filed sponsorships in the 119th Congress yet, "
+            "or the race key may have no incumbent."
+        )
+
+    member = bills[0].get("member_name", "The incumbent")
+    lines = [
+        f"Recent sponsored legislation for {member} ({race_key}) — 119th Congress:",
+        f"Source: Congress.gov official records.",
+    ]
+    for b in bills:
+        status = b.get("latest_action", "")
+        date_str = f" ({b['introduced_date']})" if b.get("introduced_date") else ""
+        lines.append(f"\n  {b['bill_id']}{date_str}: {b.get('title','')[:120]}")
+        if status:
+            lines.append(f"    Status: {status[:100]}")
+
+    lines.append(
+        "\nBill sponsorship shows legislative priorities. "
+        "It does not constitute a definitive policy position statement."
+    )
     return "\n".join(lines)

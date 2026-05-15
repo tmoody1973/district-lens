@@ -26,6 +26,7 @@ from app.tools.district_lookup import lookup_district
 from app.tools.mongodb_tools import (
     find_candidate,
     get_candidate_finance,
+    get_incumbent_legislation,
     get_race_candidates,
     get_race_finance_brief,
 )
@@ -50,6 +51,7 @@ root_agent = Agent(
         get_race_candidates,
         get_race_finance_brief,
         get_candidate_finance,
+        get_incumbent_legislation,
         find_candidate,
     ],
     before_model_callback=check_input,
