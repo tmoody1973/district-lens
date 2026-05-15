@@ -28,7 +28,7 @@ import {
 
 class VertexServiceAdapter implements CopilotServiceAdapter {
   readonly name = "VertexAdapter";
-  private readonly model: LanguageModel;
+  private readonly _lm: LanguageModel;
 
   constructor() {
     const vertex = createVertex({
@@ -38,11 +38,11 @@ class VertexServiceAdapter implements CopilotServiceAdapter {
     // gemini-3.1-pro-preview requires thought_signature for tool calls in
     // thinking blocks — not yet supported by @ai-sdk/google-vertex.
     // gemini-2.5-pro is stable GA and works correctly with the AI SDK tool loop.
-    this.model = vertex("gemini-2.5-pro");
+    this._lm = vertex("gemini-2.5-pro");
   }
 
   getLanguageModel(): LanguageModel {
-    return this.model;
+    return this._lm;
   }
 
   async process(

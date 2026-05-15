@@ -5,6 +5,7 @@ import { Button } from "@heroui/react";
 import { useCopilotAction, useCopilotReadable } from "@copilotkit/react-core";
 import { CopilotSidebar } from "@copilotkit/react-ui";
 import "@copilotkit/react-ui/styles.css";
+import { TraceCard } from "@/components/TraceCard";
 
 interface DistrictResult {
   formatted_address: string;
@@ -53,6 +54,16 @@ export default function HomePage() {
     parameters: [
       { name: "address", type: "string", description: "Street address, ZIP code, or city+state.", required: true },
     ],
+    render: ({ status, args, result }: { status: "inProgress" | "executing" | "complete"; args: { address?: string }; result?: string }) => (
+      <TraceCard
+        icon="📍"
+        label="Geocod.io · district lookup"
+        detail={args.address ? `"${args.address}"` : "resolving…"}
+        status={status}
+        result={result?.split("\n")[0]}
+        source={status === "complete" ? "Source: Geocod.io, cd120/cd boundaries" : undefined}
+      />
+    ),
     handler: async ({ address }: { address: string }) => {
       const res = await fetch("/api/district/lookup", {
         method: "POST",
@@ -79,6 +90,16 @@ export default function HomePage() {
     parameters: [
       { name: "race_key", type: "string", description: "Race key from lookup_district, e.g. '2026-H-WI-04'.", required: true },
     ],
+    render: ({ status, args, result }: { status: "inProgress" | "executing" | "complete"; args: { race_key?: string }; result?: string }) => (
+      <TraceCard
+        icon="🗳️"
+        label="MongoDB Atlas · FEC candidates + finance"
+        detail={args.race_key ?? "loading…"}
+        status={status}
+        result={status === "complete" ? result?.split("\n").slice(0, 2).join(" · ") : undefined}
+        source={status === "complete" ? "Source: FEC bulk data (fec.gov), imported 2026-05-14" : undefined}
+      />
+    ),
     handler: async ({ race_key }: { race_key: string }) => {
       const res = await fetch(`/api/race/brief?race_key=${encodeURIComponent(race_key)}`);
       const data = await res.json();
@@ -95,6 +116,16 @@ export default function HomePage() {
     parameters: [
       { name: "race_key", type: "string", description: "Race key from lookup_district, e.g. '2026-H-WI-04'.", required: true },
     ],
+    render: ({ status, args, result }: { status: "inProgress" | "executing" | "complete"; args: { race_key?: string }; result?: string }) => (
+      <TraceCard
+        icon="📜"
+        label="MongoDB Atlas · 119th Congress legislation"
+        detail={args.race_key ?? "loading…"}
+        status={status}
+        result={status === "complete" ? result?.split("\n")[0] : undefined}
+        source={status === "complete" ? "Source: Congress.gov API" : undefined}
+      />
+    ),
     handler: async ({ race_key }: { race_key: string }) => {
       const res = await fetch(`/api/incumbent/legislation?race_key=${encodeURIComponent(race_key)}`);
       const data = await res.json();
@@ -112,6 +143,16 @@ export default function HomePage() {
       { name: "name", type: "string", description: "Candidate name or partial name.", required: true },
       { name: "state", type: "string", description: "Optional two-letter state code, e.g. 'WI'.", required: false },
     ],
+    render: ({ status, args, result }: { status: "inProgress" | "executing" | "complete"; args: { name?: string; state?: string }; result?: string }) => (
+      <TraceCard
+        icon="🔍"
+        label="MongoDB Atlas · FEC candidate search"
+        detail={args.name ? `"${args.name}"${args.state ? ` · ${args.state}` : ""}` : "searching…"}
+        status={status}
+        result={status === "complete" ? result?.split("\n")[0] : undefined}
+        source={status === "complete" ? "Source: FEC 2026 candidate master file" : undefined}
+      />
+    ),
     handler: async ({ name, state }: { name: string; state?: string }) => {
       const params = new URLSearchParams({ name });
       if (state) params.set("state", state);
@@ -122,8 +163,8 @@ export default function HomePage() {
       }
       const lines = [`Candidates matching "${name}":`];
       for (const c of data.candidates) {
-        const status = (c.incumbent_challenge_status ?? "unknown").replace("_", " ");
-        lines.push(`  ${c.name} (${c.party}, ${status}) — ${c.race_key}`);
+        const statusLabel = (c.incumbent_challenge_status ?? "unknown").replace("_", " ");
+        lines.push(`  ${c.name} (${c.party}, ${statusLabel}) — ${c.race_key}`);
       }
       return lines.join("\n");
     },
@@ -244,7 +285,7 @@ export default function HomePage() {
                 />
                 <Button
                   type="submit"
-                  isLoading={loading}
+                  isDisabled={loading}
                   className="rounded-[2px] border-2 border-slate-900 bg-slate-900 px-6 font-semibold text-white"
                 >
                   {loading ? "Looking up…" : "Find my district"}
