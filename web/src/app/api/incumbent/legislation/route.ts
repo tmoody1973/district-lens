@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   if (!raceKey) return NextResponse.json({ error: "race_key required" }, { status: 400 });
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const bills = await db
       .collection("legislative_actions")
       .find(

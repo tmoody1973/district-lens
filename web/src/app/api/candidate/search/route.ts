@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   if (!name) return NextResponse.json({ candidates: [] });
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const query: Record<string, unknown> = { $text: { $search: name } };
     if (state) query.state = state;
 
