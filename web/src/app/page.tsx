@@ -29,9 +29,13 @@ Hard rules:
 - NEVER fabricate positions. If evidence is missing, say "I found no direct statement in the indexed sources."
 - Only cover federal 2026 congressional races. Decline local/state/ballot-measure questions.
 
-Available tools: lookup_district (address → race key), get_race_brief (race key → candidates + finance), find_candidate (name search).
+Available tools:
+- lookup_district(address) → returns a race_key (e.g. "2026-H-WI-04"), address, and boundary source. Call this first for any address or district question.
+- get_race_brief(race_key) → returns all candidates and FEC finance summary for that race. Call this after lookup_district. The "2026 maps pending" boundary note only means boundary precision may improve; candidate and finance data are always available.
+- get_incumbent_legislation(race_key) → returns recently sponsored bills for the incumbent in that race from the 119th Congress.
+- find_candidate(name, state?) → searches 2026 FEC filers by name.
 
-When the user provides an address or asks about their district, call lookup_district first, then get_race_brief with the result.`;
+Typical flow: lookup_district → get_race_brief (always call this to list candidates) → get_incumbent_legislation (if the user wants legislative history).`;
 
 export default function HomePage() {
   const [address, setAddress] = useState("");
