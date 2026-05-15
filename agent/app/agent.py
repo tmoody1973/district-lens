@@ -23,6 +23,12 @@ from google.genai import types
 
 from app.middleware import check_input, check_output
 from app.tools.district_lookup import lookup_district
+from app.tools.mongodb_tools import (
+    find_candidate,
+    get_candidate_finance,
+    get_race_candidates,
+    get_race_finance_brief,
+)
 
 _PROMPT_PATH = Path(__file__).parent / "prompts" / "civic_safety.md"
 
@@ -39,7 +45,13 @@ root_agent = Agent(
         retry_options=types.HttpRetryOptions(attempts=3),
     ),
     instruction=_load_system_instruction(),
-    tools=[lookup_district],
+    tools=[
+        lookup_district,
+        get_race_candidates,
+        get_race_finance_brief,
+        get_candidate_finance,
+        find_candidate,
+    ],
     before_model_callback=check_input,
     after_model_callback=check_output,
 )
