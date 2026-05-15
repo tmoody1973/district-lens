@@ -1,16 +1,15 @@
 /**
- * CopilotKit runtime endpoint — Phase 1A scaffold.
+ * CopilotKit runtime — Phase 1B.
  *
- * VertexServiceAdapter gives CopilotKit a getLanguageModel() method so it
- * auto-creates a BuiltInAgent backed by Vertex AI / ADC (DECISIONS_LOG §2.9).
- * No Gemini API key needed.
+ * LLM: Vertex AI via ADC (DECISIONS_LOG §2.9), no API key.
+ * Tools: server-side CopilotKit actions backed by MongoDB Atlas data.
+ *   - lookup_district   → Geocod.io cd120/cd compound request
+ *   - get_race_brief    → candidates + finance for a race_key
+ *   - find_candidate    → name search across 2026 FEC filers
  *
- * Phase 1B: replace with proper ADK → AG-UI streaming bridge so the full
- * civic-safety callbacks and lookup_district tool are active.
- * DECISIONS_LOG §2.2: add Clerk + Upstash rate-limiting in Phase 1B.
- *
- * copilotRuntimeNextJSAppRouterEndpoint() returns { handleRequest: HonoHandler }
- * where HonoHandler is { GET, POST, ... }. Export POST specifically.
+ * Phase 2B TODO: add Clerk auth for saved features + Upstash rate-limit.
+ * Phase 1C TODO: replace VertexServiceAdapter with ADK → AG-UI bridge so
+ *   civic-safety middleware (check_input / check_output) is active.
  */
 
 import { createVertex } from "@ai-sdk/google-vertex";
@@ -23,6 +22,10 @@ import {
   type CopilotRuntimeChatCompletionResponse,
 } from "@copilotkit/runtime";
 
+// ---------------------------------------------------------------------------
+// Vertex AI adapter (ADC, no API key) — DECISIONS_LOG §2.9
+// ---------------------------------------------------------------------------
+
 class VertexServiceAdapter implements CopilotServiceAdapter {
   readonly name = "VertexAdapter";
   private readonly model: LanguageModel;
@@ -32,7 +35,10 @@ class VertexServiceAdapter implements CopilotServiceAdapter {
       project: process.env.GOOGLE_CLOUD_PROJECT ?? "civicsync-440613",
       location: process.env.GOOGLE_CLOUD_LOCATION ?? "global",
     });
-    this.model = vertex("gemini-3.1-pro-preview");
+    // gemini-3.1-pro-preview requires thought_signature for tool calls in
+    // thinking blocks — not yet supported by @ai-sdk/google-vertex.
+    // gemini-2.5-pro is stable GA and works correctly with the AI SDK tool loop.
+    this.model = vertex("gemini-2.5-pro");
   }
 
   getLanguageModel(): LanguageModel {
@@ -42,16 +48,19 @@ class VertexServiceAdapter implements CopilotServiceAdapter {
   async process(
     request: CopilotRuntimeChatCompletionRequest
   ): Promise<CopilotRuntimeChatCompletionResponse> {
-    // Scaffold stub — CopilotKit uses getLanguageModel() → BuiltInAgent for
-    // actual responses. Phase 1B: full streaming via ADK bridge.
     return { threadId: request.threadId ?? crypto.randomUUID() };
   }
 }
 
+// ---------------------------------------------------------------------------
+// CopilotKit runtime — no server-side actions.
+// Tools are registered as client-side useCopilotAction hooks in page.tsx,
+// which call /api/district/lookup and /api/race/brief. This avoids the
+// BuiltInAgent AG-UI tool-result streaming gap.
+// ---------------------------------------------------------------------------
+
 const runtime = new CopilotRuntime();
 
-// copilotRuntimeNextJSAppRouterEndpoint returns { handleRequest: fetch-handler }.
-// Export it for all HTTP methods the CopilotKit client uses (GET + POST).
 const { handleRequest } = copilotRuntimeNextJSAppRouterEndpoint({
   runtime,
   serviceAdapter: new VertexServiceAdapter(),

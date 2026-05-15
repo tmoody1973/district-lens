@@ -1,9 +1,9 @@
 /**
  * GET /api/copilotkit/threads
  * CopilotKit polls this for conversation thread history.
- * Returns empty list until thread persistence is wired in Phase 1B.
+ * Returns the expected { threads: [] } format until persistence is wired.
  */
 
 export function GET() {
-  return Response.json([]);
+  return Response.json({ threads: [] });
 }
