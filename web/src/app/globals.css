@@ -1,0 +1,20 @@
+/* HeroUI v3 styles — includes Tailwind CSS v4 base, components, and themes */
+@import "@heroui/styles";
+
+/* -----------------------------------------------------------------------
+   Civic Brutal theme — DECISIONS_LOG §1.1
+   Restrained brutalism: strong borders, neutral civic palette, high contrast.
+------------------------------------------------------------------------ */
+:root {
+  --civic-blue-700: #1d4ed8;
+  --civic-blue-900: #1e3a8a;
+  --civic-slate-50: #f8fafc;
+  --civic-slate-900: #0f172a;
+  --civic-amber-700: #b45309;
+}
+
+body {
+  font-family: var(--font-geist-sans), "Inter", system-ui, sans-serif;
+  background: var(--civic-slate-50);
+  color: var(--civic-slate-900);
+}
