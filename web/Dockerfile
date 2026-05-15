@@ -4,7 +4,7 @@
 # Stage 1: install deps + build standalone output
 # Stage 2: minimal runtime image (~150MB vs ~600MB full)
 
-FROM node:22-slim AS builder
+FROM node:24-slim AS builder
 
 RUN npm install -g pnpm@10
 
@@ -32,7 +32,7 @@ RUN NEXT_TELEMETRY_DISABLED=1 \
 # ---------------------------------------------------------------------------
 # Stage 2: runtime — only the standalone output + public assets
 # ---------------------------------------------------------------------------
-FROM node:22-slim AS runner
+FROM node:24-slim AS runner
 
 WORKDIR /app
 
