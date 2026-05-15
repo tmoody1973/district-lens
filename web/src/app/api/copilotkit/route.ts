@@ -1,20 +1,61 @@
 /**
- * CopilotKit runtime endpoint.
+ * CopilotKit runtime endpoint — Phase 1A scaffold.
  *
- * Phase 1B: wire to the Python ADK agent via AGENT_URL + INTERNAL_API_TOKEN.
- * DECISIONS_LOG §2.2: Next.js API routes own Clerk verification (saved-features
- * only) and Upstash rate-limiting (public agent path). ADK service has
- * internal-only ingress; this route holds the INTERNAL_API_TOKEN.
+ * VertexServiceAdapter gives CopilotKit a getLanguageModel() method so it
+ * auto-creates a BuiltInAgent backed by Vertex AI / ADC (DECISIONS_LOG §2.9).
+ * No Gemini API key needed.
  *
- * TODO (Phase 1B):
- *   1. Add CopilotRuntime with remoteEndpoints pointing at process.env.AGENT_URL
- *   2. Add Upstash rate-limiting middleware
- *   3. Add Clerk verification for saved-feature endpoints
+ * Phase 1B: replace with proper ADK → AG-UI streaming bridge so the full
+ * civic-safety callbacks and lookup_district tool are active.
+ * DECISIONS_LOG §2.2: add Clerk + Upstash rate-limiting in Phase 1B.
+ *
+ * copilotRuntimeNextJSAppRouterEndpoint() returns { handleRequest: HonoHandler }
+ * where HonoHandler is { GET, POST, ... }. Export POST specifically.
  */
 
-export async function POST() {
-  return new Response(
-    JSON.stringify({ error: "Agent endpoint not yet wired (Phase 1B)" }),
-    { status: 503, headers: { "Content-Type": "application/json" } }
-  );
+import { createVertex } from "@ai-sdk/google-vertex";
+import type { LanguageModel } from "ai";
+import {
+  CopilotRuntime,
+  copilotRuntimeNextJSAppRouterEndpoint,
+  type CopilotServiceAdapter,
+  type CopilotRuntimeChatCompletionRequest,
+  type CopilotRuntimeChatCompletionResponse,
+} from "@copilotkit/runtime";
+
+class VertexServiceAdapter implements CopilotServiceAdapter {
+  readonly name = "VertexAdapter";
+  private readonly model: LanguageModel;
+
+  constructor() {
+    const vertex = createVertex({
+      project: process.env.GOOGLE_CLOUD_PROJECT ?? "civicsync-440613",
+      location: process.env.GOOGLE_CLOUD_LOCATION ?? "global",
+    });
+    this.model = vertex("gemini-3.1-pro-preview");
+  }
+
+  getLanguageModel(): LanguageModel {
+    return this.model;
+  }
+
+  async process(
+    request: CopilotRuntimeChatCompletionRequest
+  ): Promise<CopilotRuntimeChatCompletionResponse> {
+    // Scaffold stub — CopilotKit uses getLanguageModel() → BuiltInAgent for
+    // actual responses. Phase 1B: full streaming via ADK bridge.
+    return { threadId: request.threadId ?? crypto.randomUUID() };
+  }
 }
+
+const runtime = new CopilotRuntime();
+
+// copilotRuntimeNextJSAppRouterEndpoint returns { handleRequest: fetch-handler }.
+// Export it for all HTTP methods the CopilotKit client uses (GET + POST).
+const { handleRequest } = copilotRuntimeNextJSAppRouterEndpoint({
+  runtime,
+  serviceAdapter: new VertexServiceAdapter(),
+  endpoint: "/api/copilotkit",
+});
+
+export { handleRequest as GET, handleRequest as POST };
