@@ -46,3 +46,25 @@ export function fmtMoney(val: number | undefined | null): string {
   if (abs >= 1_000) return `$${(val / 1_000).toFixed(1)}K`;
   return `$${val.toFixed(0)}`;
 }
+
+export async function getFinanceSummaries(candidateIds: string[]) {
+  const db = await getDb();
+  return db
+    .collection("finance_summaries")
+    .find(
+      { candidate_id: { $in: candidateIds } },
+      {
+        projection: {
+          _id: 0,
+          candidate_id: 1,
+          receipts: 1,
+          disbursements: 1,
+          cash_on_hand: 1,
+          individual_contributions: 1,
+          pac_contributions: 1,
+          coverage_end_date: 1,
+        },
+      }
+    )
+    .toArray();
+}

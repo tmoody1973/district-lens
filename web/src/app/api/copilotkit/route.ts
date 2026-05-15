@@ -1,14 +1,15 @@
 /**
- * CopilotKit runtime — Phase 1B.
+ * CopilotKit runtime — Phase 1C.
  *
  * LLM: Vertex AI via ADC (DECISIONS_LOG §2.9), no API key.
  * Tools: server-side CopilotKit actions backed by MongoDB Atlas data.
- *   - lookup_district   → Geocod.io cd120/cd compound request
- *   - get_race_brief    → candidates + finance for a race_key
- *   - find_candidate    → name search across 2026 FEC filers
+ *   - lookup_district         → Geocod.io cd120/cd compound request
+ *   - get_race_brief          → candidates + finance for a race_key
+ *   - get_incumbent_legislation → sponsored bills from the 119th Congress
+ *   - find_candidate          → name search across 2026 FEC filers
  *
  * Phase 2B TODO: add Clerk auth for saved features + Upstash rate-limit.
- * Phase 1C TODO: replace VertexServiceAdapter with ADK → AG-UI bridge so
+ * Phase 2A TODO: replace VertexServiceAdapter with ADK → AG-UI bridge so
  *   civic-safety middleware (check_input / check_output) is active.
  */
 
@@ -21,6 +22,7 @@ import {
   type CopilotRuntimeChatCompletionRequest,
   type CopilotRuntimeChatCompletionResponse,
 } from "@copilotkit/runtime";
+import { allActions } from "@/lib/server-actions";
 
 // ---------------------------------------------------------------------------
 // Vertex AI adapter (ADC, no API key) — DECISIONS_LOG §2.9
@@ -35,8 +37,6 @@ class VertexServiceAdapter implements CopilotServiceAdapter {
       project: process.env.GOOGLE_CLOUD_PROJECT ?? "civicsync-440613",
       location: process.env.GOOGLE_CLOUD_LOCATION ?? "global",
     });
-    // gemini-3.1-pro-preview requires thought_signature for tool calls in
-    // thinking blocks — not yet supported by @ai-sdk/google-vertex.
     // gemini-2.5-pro is stable GA and works correctly with the AI SDK tool loop.
     this._lm = vertex("gemini-2.5-pro");
   }
@@ -53,13 +53,11 @@ class VertexServiceAdapter implements CopilotServiceAdapter {
 }
 
 // ---------------------------------------------------------------------------
-// CopilotKit runtime — no server-side actions.
-// Tools are registered as client-side useCopilotAction hooks in page.tsx,
-// which call /api/district/lookup and /api/race/brief. This avoids the
-// BuiltInAgent AG-UI tool-result streaming gap.
+// CopilotKit runtime — server-side actions registered here.
 // ---------------------------------------------------------------------------
 
-const runtime = new CopilotRuntime();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const runtime = new CopilotRuntime({ actions: allActions as any });
 
 const { handleRequest } = copilotRuntimeNextJSAppRouterEndpoint({
   runtime,
