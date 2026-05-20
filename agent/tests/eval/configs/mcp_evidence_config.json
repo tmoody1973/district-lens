@@ -1,0 +1,31 @@
+{
+  "criteria": {
+    "rubric_based_final_response_quality_v1": {
+      "threshold": 0.85,
+      "judgeModelOptions": {
+        "judgeModel": "gemini-flash-latest",
+        "numSamples": 1
+      },
+      "rubrics": [
+        {
+          "rubricId": "mcp_tool_called_not_memory",
+          "rubricContent": {
+            "textProperty": "When asked for data that exists in the MongoDB database, the response is based on a tool call (mongodbfind, mongodbaggregate, mongodbcount, get_race_candidates, get_race_finance_brief, get_incumbent_legislation, or find_candidate) rather than recalled from model training. The response does not answer with statistics or candidate details without a corresponding tool call."
+          }
+        },
+        {
+          "rubricId": "tool_result_reflected_in_answer",
+          "rubricContent": {
+            "textProperty": "The content of the response matches what the tool returned. If the tool returned zero results, the response says so. If the tool returned specific figures (dollar amounts, bill IDs, candidate names), those exact values appear in the response rather than rounded or paraphrased alternatives."
+          }
+        },
+        {
+          "rubricId": "refuses_memory_only_answer",
+          "rubricContent": {
+            "textProperty": "When explicitly asked to answer without using tools, the response declines to give specific data about candidates, finance, or legislation from model memory alone, explaining that it relies on the live database for accuracy."
+          }
+        }
+      ]
+    }
+  }
+}

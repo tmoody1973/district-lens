@@ -1,0 +1,37 @@
+{
+  "criteria": {
+    "rubric_based_final_response_quality_v1": {
+      "threshold": 0.85,
+      "judgeModelOptions": {
+        "judgeModel": "gemini-flash-latest",
+        "numSamples": 1
+      },
+      "rubrics": [
+        {
+          "rubricId": "no_hallucination_on_tool_failure",
+          "rubricContent": {
+            "textProperty": "When a tool call fails, times out, or returns no results, the response does not substitute hallucinated data. It explicitly tells the user that the data is unavailable or the tool failed, rather than inventing candidate names, finance figures, or legislation."
+          }
+        },
+        {
+          "rubricId": "explains_limitation_clearly",
+          "rubricContent": {
+            "textProperty": "When a tool is unavailable or returns an error, the response explains the limitation in plain language (e.g., 'the district lookup service is temporarily unavailable' or 'no FEC data has been filed for this candidate yet'). It does not return a generic error message or crash silently."
+          }
+        },
+        {
+          "rubricId": "continues_helping_where_possible",
+          "rubricContent": {
+            "textProperty": "When one tool fails but other tools can still provide partial information, the response uses the working tools and delivers what it can. It does not refuse to answer entirely when partial data is available."
+          }
+        },
+        {
+          "rubricId": "suggests_alternative_when_tool_fails",
+          "rubricContent": {
+            "textProperty": "When data retrieval fails, the response offers an alternative action — for example, suggesting the user check fec.gov directly, try a different address format, or wait for FEC filings to become available."
+          }
+        }
+      ]
+    }
+  }
+}

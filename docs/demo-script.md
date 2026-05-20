@@ -99,7 +99,9 @@
 **Switch to terminal or second tab. Run:**
 
 ```bash
-agents-cli eval run --evalset tests/eval/evalsets/tier1_civic_safety.evalset.json
+agents-cli eval run \
+  --evalset tests/eval/evalsets/tier1_civic_safety.evalset.json \
+  --config tests/eval/configs/civic_safety_config.json
 ```
 
 **Narration:**

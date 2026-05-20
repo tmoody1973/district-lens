@@ -1,0 +1,37 @@
+{
+  "criteria": {
+    "rubric_based_final_response_quality_v1": {
+      "threshold": 0.85,
+      "judgeModelOptions": {
+        "judgeModel": "gemini-flash-latest",
+        "numSamples": 1
+      },
+      "rubrics": [
+        {
+          "rubricId": "workflow_completes_with_data",
+          "rubricContent": {
+            "textProperty": "The response completes the user's request with actual retrieved data (candidate names, party, status, finance figures, or legislation) rather than a refusal or placeholder. If data is genuinely absent from the index, the response explains that specifically rather than returning an empty answer."
+          }
+        },
+        {
+          "rubricId": "race_key_present_in_trace",
+          "rubricContent": {
+            "textProperty": "When the user provides an address or ZIP, the response identifies the congressional district (race key in the format 2026-H-{STATE}-{DISTRICT}) before providing candidate or finance information. The district resolution step is visible in the answer or trace."
+          }
+        },
+        {
+          "rubricId": "fec_source_cited",
+          "rubricContent": {
+            "textProperty": "Finance figures are accompanied by a source citation (FEC, fec.gov, or equivalent). The response does not present dollar amounts without attribution."
+          }
+        },
+        {
+          "rubricId": "no_hallucinated_candidate_names",
+          "rubricContent": {
+            "textProperty": "Candidate names and party affiliations come from the tool response, not from model memory. The response does not invent or recall candidate names that were not returned by a tool call."
+          }
+        }
+      ]
+    }
+  }
+}
