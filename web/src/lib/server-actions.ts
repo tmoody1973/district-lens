@@ -8,7 +8,7 @@
 
 import { getDb, getFinanceSummaries, fmtMoney } from "@/lib/mongodb";
 import { bioguidePhotoUrl, placeholderAvatarUrl } from "@/lib/bioguide";
-import type { CandidateCard, FinanceSummary } from "@/types/agent-state";
+import type { BillRecord, CandidateCard, FinanceSummary } from "@/types/agent-state";
 
 // ---------------------------------------------------------------------------
 // Local Action type (mirrors @copilotkit/shared Action but with a plain-object
@@ -76,7 +76,7 @@ export const districtLookupAction: Action<{ address: string }> = {
         ? "2026 election boundaries"
         : "119th Congress (2026 maps pending)";
 
-    return `District: ${raceKey}\nAddress: ${result.formatted_address}\nBoundary: ${source}`;
+    return `District: ${raceKey}\nAddress: ${result.formatted_address}\nBoundary: ${source}\n\nSTRUCTURED_DATA:${JSON.stringify({ currentRaceKey: raceKey, stage: "district" })}`;
   },
 };
 
@@ -183,7 +183,7 @@ export const getRaceBriefAction: Action<{ race_key: string }> = {
     lines.push(
       "Source: FEC bulk data (fec.gov). Finance data does not prove issue positions."
     );
-    return lines.join("\n");
+    return `${lines.join("\n")}\n\nSTRUCTURED_DATA:${JSON.stringify({ candidates, finance, currentRaceKey: race_key, stage: "candidates" })}`;
   },
 };
 
@@ -228,18 +228,26 @@ export const getIncumbentLegislationAction: Action<{ race_key: string }> = {
     if (!bills.length)
       return `No sponsored legislation found for the incumbent in ${race_key}.`;
 
-    const member = bills[0]?.member_name ?? "The incumbent";
+    const legislation: BillRecord[] = bills.map((b) => ({
+      billId: b.bill_id as string,
+      title: b.title as string,
+      introducedDate: (b.introduced_date as string) ?? null,
+      latestAction: (b.latest_action as string) ?? null,
+      memberName: (b.member_name as string) ?? "",
+    }));
+
+    const member = legislation[0]?.memberName ?? "The incumbent";
     const lines = [
       `${member} — recent sponsored legislation (119th Congress, source: Congress.gov):`,
     ];
-    for (const b of bills) {
-      lines.push(`  ${b.bill_id} (${b.introduced_date}): ${b.title}`);
-      if (b.latest_action) lines.push(`    Status: ${b.latest_action}`);
+    for (const b of legislation) {
+      lines.push(`  ${b.billId} (${b.introducedDate}): ${b.title}`);
+      if (b.latestAction) lines.push(`    Status: ${b.latestAction}`);
     }
     lines.push(
       "Sponsorship shows legislative priorities, not definitive policy positions."
     );
-    return lines.join("\n");
+    return `${lines.join("\n")}\n\nSTRUCTURED_DATA:${JSON.stringify({ legislation, stage: "legislation" })}`;
   },
 };
 

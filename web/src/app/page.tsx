@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@heroui/react";
-import { useCoAgentStateRender, useCopilotReadable, useCopilotAction } from "@copilotkit/react-core";
+import { useCoAgentStateRender, useCopilotReadable, useCopilotMessagesContext } from "@copilotkit/react-core";
 import { CopilotSidebar } from "@copilotkit/react-ui";
 import "@copilotkit/react-ui/styles.css";
 import { USMap } from "@/components/map/USMap";
@@ -22,30 +22,15 @@ Hard rules:
 
 Available tools:
 - lookup_district(address) → race_key. Call first for any address.
-- get_race_brief(race_key) → candidates + FEC finance. Call after lookup_district. Returns STRUCTURED_DATA.
-- get_incumbent_legislation(race_key) → sponsored bills. Returns STRUCTURED_DATA.
+- get_race_brief(race_key) → candidates + FEC finance. Call after lookup_district.
+- get_incumbent_legislation(race_key) → sponsored bills for the incumbent.
 - find_candidate(name, state?) → FEC name search.
-- get_state_races(state_code) → all races in a state. Returns STRUCTURED_DATA.
-- find_competitive_races(state?) → challenger outraising incumbent. Returns STRUCTURED_DATA.
-- build_candidate_profile(race_key) → photos, websites, committees. Returns STRUCTURED_DATA.
-- search_candidate_positions(candidate_name, issue) → Perplexity web search. Returns STRUCTURED_DATA.
-- search_current_news(candidate_name) → last 7 days news. Returns STRUCTURED_DATA.
-- get_election_dates(state_code) → primary dates, early voting.
-- set_canvas_state(updates) → UPDATE THE CANVAS DISPLAY. Call this after every tool that returns STRUCTURED_DATA.
-
-CRITICAL CANVAS UPDATE RULE:
-After EVERY tool call that returns "STRUCTURED_DATA:" in its response:
-1. Parse the JSON after "STRUCTURED_DATA:"
-2. Immediately call set_canvas_state with the parsed data as "updates" (JSON string)
-3. Also include "stage" and "currentRaceKey" in set_canvas_state when relevant
-
-Example flow:
-1. lookup_district("123 Main St") → returns "District: 2026-H-WI-04..."
-2. set_canvas_state({ updates: '{"stage":"district","currentRaceKey":"2026-H-WI-04"}' })
-3. get_race_brief("2026-H-WI-04") → returns "...STRUCTURED_DATA:{candidates:[...],finance:[...]}"
-4. set_canvas_state({ updates: '{"stage":"candidates","candidates":[...],"finance":[...]}' })
-5. get_incumbent_legislation("2026-H-WI-04") → returns "...STRUCTURED_DATA:{legislation:[...]}"
-6. set_canvas_state({ updates: '{"stage":"legislation","legislation":[...]}' })`;
+- get_state_races(state_code) → all races in a state.
+- find_competitive_races(state?) → challenger outraising incumbent.
+- build_candidate_profile(race_key) → photos, websites, committees.
+- search_candidate_positions(candidate_name, issue) → Perplexity web search for candidate stances.
+- search_current_news(candidate_name) → last 7 days news.
+- get_election_dates(state_code) → primary dates, early voting.`;
 
 export default function HomePage() {
   const [address, setAddress] = useState("");
@@ -57,6 +42,7 @@ export default function HomePage() {
   const [agentState, setAgentState] = useState<DistrictLensState>(DEFAULT_STATE);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const processedMsgIdsRef = useRef<Set<string>>(new Set());
 
   useCoAgentStateRender<DistrictLensState>({
     name: "districtlens",
@@ -71,31 +57,29 @@ export default function HomePage() {
     value: `Mode: ${mode}. Current race: ${agentState.currentRaceKey ?? "none"}.`,
   });
 
-  useCopilotAction({
-    name: "set_canvas_state",
-    description:
-      "Update the canvas display with structured data from a tool result. " +
-      "Call after every tool that returns STRUCTURED_DATA.",
-    parameters: [
-      {
-        name: "updates",
-        type: "string",
-        description:
-          "JSON stringified partial DistrictLensState object. " +
-          "Keys: stage, currentRaceKey, candidates, finance, legislation, news, positions, stateRaces, comparisons.",
-        required: true,
-      },
-    ],
-    handler: async ({ updates }: { updates: string }) => {
+  const { messages } = useCopilotMessagesContext();
+
+  useEffect(() => {
+    const MARKER = "STRUCTURED_DATA:";
+    for (const msg of messages) {
+      const typedMsg = msg as { type?: string; id: string; result?: string };
+      if (typedMsg.type !== "ResultMessage" || !typedMsg.result) continue;
+      if (processedMsgIdsRef.current.has(typedMsg.id)) continue;
+
+      const idx = typedMsg.result.indexOf(MARKER);
+      if (idx === -1) continue;
+
+      processedMsgIdsRef.current.add(typedMsg.id);
+
       try {
-        const parsed = JSON.parse(updates) as Partial<DistrictLensState>;
+        const jsonStr = typedMsg.result.slice(idx + MARKER.length).trim();
+        const parsed = JSON.parse(jsonStr) as Partial<DistrictLensState>;
         setAgentState((prev) => ({ ...prev, ...parsed }));
-        return "Canvas updated.";
       } catch {
-        return "Canvas update failed — invalid JSON.";
+        // Ignore malformed STRUCTURED_DATA
       }
-    },
-  });
+    }
+  }, [messages]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
