@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@heroui/react";
-import { useCoAgentStateRender, useCopilotReadable } from "@copilotkit/react-core";
+import { useCoAgentStateRender, useCopilotReadable, useCopilotAction } from "@copilotkit/react-core";
 import { CopilotSidebar } from "@copilotkit/react-ui";
 import "@copilotkit/react-ui/styles.css";
 import { USMap } from "@/components/map/USMap";
@@ -11,23 +11,41 @@ import { DEFAULT_STATE, type DistrictLensState, type AppMode } from "@/types/age
 
 const SYSTEM_PROMPT = `You are DistrictLens, a nonpartisan election-accountability assistant for the 2026 U.S. midterm cycle.
 
-Your job: answer questions about congressional races, candidates, campaign finance, and incumbent legislative records. Always cite the stored source.
+Your job: answer questions about congressional races, candidates, campaign finance, incumbent legislative records, and election dates. Always cite stored sources.
 
 Hard rules:
-- NEVER recommend how to vote or who is better. If asked, decline and offer to compare cited evidence.
+- NEVER recommend how to vote. If asked, decline and offer to call compare_candidates.
 - NEVER write campaign content (ads, talking points, fundraising, persuasion).
 - NEVER infer a candidate's position from donors or party affiliation alone.
-- NEVER fabricate positions. If evidence is missing, say "I found no direct statement in the indexed sources."
+- NEVER fabricate positions. If evidence is missing say "I found no direct statement in the indexed sources."
 - Only cover federal 2026 congressional races.
 
 Available tools:
-- lookup_district(address) → returns race_key. Call first for any address.
-- get_race_brief(race_key) → returns all candidates and FEC finance. Always call after lookup_district.
-- get_incumbent_legislation(race_key) → sponsored bills from 119th Congress.
-- find_candidate(name, state?) → search FEC filers by name.
+- lookup_district(address) → race_key. Call first for any address.
+- get_race_brief(race_key) → candidates + FEC finance. Call after lookup_district. Returns STRUCTURED_DATA.
+- get_incumbent_legislation(race_key) → sponsored bills. Returns STRUCTURED_DATA.
+- find_candidate(name, state?) → FEC name search.
+- get_state_races(state_code) → all races in a state. Returns STRUCTURED_DATA.
+- find_competitive_races(state?) → challenger outraising incumbent. Returns STRUCTURED_DATA.
+- build_candidate_profile(race_key) → photos, websites, committees. Returns STRUCTURED_DATA.
+- search_candidate_positions(candidate_name, issue) → Perplexity web search. Returns STRUCTURED_DATA.
+- search_current_news(candidate_name) → last 7 days news. Returns STRUCTURED_DATA.
+- get_election_dates(state_code) → primary dates, early voting.
+- set_canvas_state(updates) → UPDATE THE CANVAS DISPLAY. Call this after every tool that returns STRUCTURED_DATA.
 
-Typical flow: lookup_district → get_race_brief → get_incumbent_legislation.
-After lookup_district resolves, proactively call get_race_brief without waiting to be asked.`;
+CRITICAL CANVAS UPDATE RULE:
+After EVERY tool call that returns "STRUCTURED_DATA:" in its response:
+1. Parse the JSON after "STRUCTURED_DATA:"
+2. Immediately call set_canvas_state with the parsed data as "updates" (JSON string)
+3. Also include "stage" and "currentRaceKey" in set_canvas_state when relevant
+
+Example flow:
+1. lookup_district("123 Main St") → returns "District: 2026-H-WI-04..."
+2. set_canvas_state({ updates: '{"stage":"district","currentRaceKey":"2026-H-WI-04"}' })
+3. get_race_brief("2026-H-WI-04") → returns "...STRUCTURED_DATA:{candidates:[...],finance:[...]}"
+4. set_canvas_state({ updates: '{"stage":"candidates","candidates":[...],"finance":[...]}' })
+5. get_incumbent_legislation("2026-H-WI-04") → returns "...STRUCTURED_DATA:{legislation:[...]}"
+6. set_canvas_state({ updates: '{"stage":"legislation","legislation":[...]}' })`;
 
 export default function HomePage() {
   const [address, setAddress] = useState("");
@@ -51,6 +69,32 @@ export default function HomePage() {
   useCopilotReadable({
     description: "Current app mode and selected race",
     value: `Mode: ${mode}. Current race: ${agentState.currentRaceKey ?? "none"}.`,
+  });
+
+  useCopilotAction({
+    name: "set_canvas_state",
+    description:
+      "Update the canvas display with structured data from a tool result. " +
+      "Call after every tool that returns STRUCTURED_DATA.",
+    parameters: [
+      {
+        name: "updates",
+        type: "string",
+        description:
+          "JSON stringified partial DistrictLensState object. " +
+          "Keys: stage, currentRaceKey, candidates, finance, legislation, news, positions, stateRaces, comparisons.",
+        required: true,
+      },
+    ],
+    handler: async ({ updates }: { updates: string }) => {
+      try {
+        const parsed = JSON.parse(updates) as Partial<DistrictLensState>;
+        setAgentState((prev) => ({ ...prev, ...parsed }));
+        return "Canvas updated.";
+      } catch {
+        return "Canvas update failed — invalid JSON.";
+      }
+    },
   });
 
   useEffect(() => {

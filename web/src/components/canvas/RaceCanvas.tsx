@@ -4,6 +4,9 @@ import { RaceHeader } from "./RaceHeader";
 import { CandidateCard } from "./CandidateCard";
 import { FinanceChart } from "./FinanceChart";
 import { ResearchProgress } from "./ResearchProgress";
+import { BillFeed } from "./BillFeed";
+import { NewsCard } from "./NewsCard";
+import { EvidenceCard } from "./EvidenceCard";
 
 interface Props { state: DistrictLensState; }
 
@@ -34,6 +37,25 @@ export function RaceCanvas({ state }: Props) {
 
       {state.finance.length > 0 && (
         <FinanceChart finance={state.finance} />
+      )}
+
+      {state.legislation.length > 0 && (
+        <BillFeed
+          legislation={state.legislation}
+          memberName={state.legislation[0]?.memberName}
+        />
+      )}
+
+      {state.news.length > 0 && (
+        <NewsCard news={state.news} />
+      )}
+
+      {state.positions.length > 0 && (
+        <div className="space-y-4">
+          {state.positions.map((ev, i) => (
+            <EvidenceCard key={i} evidence={ev} />
+          ))}
+        </div>
       )}
     </div>
   );

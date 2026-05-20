@@ -303,6 +303,185 @@ export const findCandidateAction: Action<{ name: string; state?: string }> = {
 };
 
 // ---------------------------------------------------------------------------
+// get_state_races
+// ---------------------------------------------------------------------------
+
+export const getStateRacesAction: Action<{ state_code: string }> = {
+  name: "get_state_races",
+  description:
+    "Get all 2026 congressional races in a US state with finance gap data. " +
+    "Use after the user clicks a state on the map or asks about races in a state.",
+  parameters: [
+    { name: "state_code", type: "string", description: "Two-letter state code, e.g. 'WI'.", required: true },
+  ],
+  handler: async ({ state_code }) => {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const res = await fetch(`${baseUrl}/api/races/state?state=${encodeURIComponent(state_code)}`);
+    if (!res.ok) return `Failed to fetch races for ${state_code}.`;
+    const data = await res.json();
+    const races = (data.races ?? []) as Array<Record<string, unknown>>;
+    if (!races.length) return `No races found for ${state_code}.`;
+    const lines = [`Races in ${state_code} (${races.length} total):`];
+    for (const r of races.slice(0, 10)) {
+      const gap = r.financeGap != null ? ` | Gap: $${Math.abs(r.financeGap as number).toLocaleString()}` : "";
+      lines.push(`  ${r.raceKey}: ${r.incumbentName ?? "Open seat"} (${r.incumbentParty ?? "?"})${gap}`);
+    }
+    return `${lines.join("\n")}\n\nSTRUCTURED_DATA:${JSON.stringify({ stateRaces: races })}`;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// find_competitive_races
+// ---------------------------------------------------------------------------
+
+export const findCompetitiveRacesAction: Action<{ state?: string }> = {
+  name: "find_competitive_races",
+  description:
+    "Find 2026 congressional races where challenger is outraising the incumbent or finance gap is narrow. " +
+    "Great for journalists looking for story angles.",
+  parameters: [
+    { name: "state", type: "string", description: "Optional two-letter state code to narrow results.", required: false },
+  ],
+  handler: async ({ state }) => {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const url = `/api/races/competitive${state ? `?state=${state}` : ""}`;
+    const res = await fetch(`${baseUrl}${url}`);
+    if (!res.ok) return "Failed to fetch competitive races.";
+    const data = await res.json();
+    const races = (data.competitive ?? []) as Array<Record<string, unknown>>;
+    if (!races.length) return "No highly competitive races found matching the criteria.";
+    const lines = ["Most competitive races (challenger leading or gap < $100K):"];
+    for (const r of races.slice(0, 8)) {
+      const direction = r.challengerLeading ? "🔴 challenger leading" : "🟡 close";
+      lines.push(`  ${r.raceKey}: ${r.incumbentName} vs ${r.topChallengerName} — ${direction}`);
+      lines.push(`    Inc: $${((r.incumbentReceipts as number) / 1000).toFixed(0)}K | Chal: $${((r.topChallengerReceipts as number) / 1000).toFixed(0)}K`);
+    }
+    return `${lines.join("\n")}\n\nSTRUCTURED_DATA:${JSON.stringify({ comparisons: races })}`;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// build_candidate_profile
+// ---------------------------------------------------------------------------
+
+export const getCandidateProfileAction: Action<{ race_key: string }> = {
+  name: "build_candidate_profile",
+  description:
+    "Get full candidate profiles for a race including photos, Ballotpedia URLs, official websites, " +
+    "and committee memberships. Use after get_race_brief for richer candidate display.",
+  parameters: [
+    { name: "race_key", type: "string", description: "Race key, e.g. '2026-H-WI-04'.", required: true },
+  ],
+  handler: async ({ race_key }) => {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const res = await fetch(`${baseUrl}/api/candidate/profile?race_key=${encodeURIComponent(race_key)}`);
+    if (!res.ok) return `Failed to fetch profiles for ${race_key}.`;
+    const data = await res.json();
+    const candidates = data.candidates ?? [];
+    const lines = [`Full candidate profiles for ${race_key}:`];
+    for (const c of candidates) {
+      lines.push(`  ${c.name} (${c.party}, ${c.status})`);
+      if (c.officialWebsite) lines.push(`    Official: ${c.officialWebsite}`);
+      if (c.ballotpediaUrl) lines.push(`    Ballotpedia: ${c.ballotpediaUrl}`);
+    }
+    return `${lines.join("\n")}\n\nSTRUCTURED_DATA:${JSON.stringify({ candidates })}`;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// search_candidate_positions
+// ---------------------------------------------------------------------------
+
+export const searchCandidatePositionsAction: Action<{ candidate_name: string; issue: string }> = {
+  name: "search_candidate_positions",
+  description:
+    "Search the open web for what a specific candidate has publicly said about a policy issue. " +
+    "Use when the user asks about a candidate's stance on housing, climate, healthcare, immigration, or any other topic.",
+  parameters: [
+    { name: "candidate_name", type: "string", description: "Full candidate name.", required: true },
+    { name: "issue", type: "string", description: "Policy issue, e.g. 'housing affordability'.", required: true },
+  ],
+  handler: async ({ candidate_name, issue }) => {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const res = await fetch(`${baseUrl}/api/search/positions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidateName: candidate_name, issue }),
+    });
+    if (!res.ok) return `Position search failed for ${candidate_name} on ${issue}.`;
+    const data = await res.json();
+    const sourceLines = (data.sources ?? []).slice(0, 3).map(
+      (s: { title: string; url: string; date: string | null }, i: number) =>
+        `[${i + 1}] ${s.title} — ${s.url}`
+    );
+    return `${data.answer ?? "No answer returned."}\n\nSources:\n${sourceLines.join("\n")}\n\nSTRUCTURED_DATA:${JSON.stringify({ positions: [{ candidateName: candidate_name, issue, answer: data.answer, sources: data.sources }] })}`;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// search_current_news
+// ---------------------------------------------------------------------------
+
+export const searchCurrentNewsAction: Action<{ candidate_name: string }> = {
+  name: "search_current_news",
+  description:
+    "Search recent news (last 7 days) about a specific candidate. " +
+    "Use when the user asks about current events, recent statements, or what's happening with a candidate.",
+  parameters: [
+    { name: "candidate_name", type: "string", description: "Full candidate name.", required: true },
+  ],
+  handler: async ({ candidate_name }) => {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const res = await fetch(`${baseUrl}/api/search/news`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidateName: candidate_name }),
+    });
+    if (!res.ok) return `News search failed for ${candidate_name}.`;
+    const data = await res.json();
+    return `${data.answer ?? ""}\n\nSTRUCTURED_DATA:${JSON.stringify({ news: data.sources })}`;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// get_election_dates
+// ---------------------------------------------------------------------------
+
+export const getElectionDatesAction: Action<{ state_code: string }> = {
+  name: "get_election_dates",
+  description:
+    "Get 2026 primary date, general election date, and early voting information for a US state. " +
+    "Essential for voters asking when they need to vote.",
+  parameters: [
+    { name: "state_code", type: "string", description: "Two-letter state code, e.g. 'WI'.", required: true },
+  ],
+  handler: async ({ state_code }) => {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const res = await fetch(`${baseUrl}/api/election-dates?state=${encodeURIComponent(state_code)}`);
+    if (!res.ok) return `No election date data for ${state_code}.`;
+    const data = await res.json();
+    const primary = data.primary?.date ?? "Not available";
+    const runoff = data.primary?.runoff_date_if_necessary ?? null;
+    const general = data.general_election_date ?? "2026-11-03";
+    const earlyStart = data.general_early_in_person_voting?.computed_start_date ?? null;
+    const earlyEnd = data.general_early_in_person_voting?.computed_end_date ?? null;
+    const earlyRule = data.general_early_in_person_voting?.rule_text ?? null;
+    const lines = [
+      `2026 Election Dates for ${data.state ?? state_code}:`,
+      `  Primary: ${primary}${runoff ? ` (Runoff if needed: ${runoff})` : ""}`,
+      `  General Election: ${general}`,
+    ];
+    if (earlyStart && earlyEnd) {
+      lines.push(`  Early Voting: ${earlyStart} through ${earlyEnd}`);
+    } else if (earlyRule) {
+      lines.push(`  Early Voting: ${earlyRule}`);
+    }
+    lines.push("Source: NCSL, FEC, Vote.org (2026). Confirm with your state's election authority.");
+    return lines.join("\n");
+  },
+};
+
+// ---------------------------------------------------------------------------
 // All actions — passed to CopilotRuntime constructor
 // ---------------------------------------------------------------------------
 
@@ -312,4 +491,10 @@ export const allActions: Action<any>[] = [
   getRaceBriefAction,
   getIncumbentLegislationAction,
   findCandidateAction,
+  getStateRacesAction,
+  findCompetitiveRacesAction,
+  getCandidateProfileAction,
+  searchCandidatePositionsAction,
+  searchCurrentNewsAction,
+  getElectionDatesAction,
 ];
