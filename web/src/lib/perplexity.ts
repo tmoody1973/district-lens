@@ -113,9 +113,14 @@ export async function searchPerplexity(
 
   const data = await response.json();
   const answer: string = data.choices?.[0]?.message?.content ?? "";
-  const citations: string[] = data.citations ?? [];
-  const rawSources = data.search_results ?? [];
-  const sources = extractCitations(citations, rawSources);
+  const rawSources: Array<{ title?: string; url: string; date?: string; last_updated?: string; snippet?: string }> =
+    data.search_results ?? [];
+  const sources: PerplexitySource[] = rawSources.map((sr) => ({
+    title: sr.title ?? sr.url,
+    url: sr.url,
+    date: sr.date ?? sr.last_updated ?? null,
+    snippet: sr.snippet ?? "",
+  }));
 
   return { answer, sources, relatedQuestions: data.related_questions ?? [] };
 }
