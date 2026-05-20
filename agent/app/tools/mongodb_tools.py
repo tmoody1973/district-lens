@@ -5,9 +5,10 @@ These tools give the agent access to the FEC bulk-imported data in Atlas:
   - get_race_finance_brief: one-call race + finance summary for all candidates
   - get_candidate_finance: financial detail for a single candidate
   - find_candidate: look up a candidate by name and optional state
+  - get_incumbent_legislation: recent sponsored bills for a race's incumbent
 
-All tools use the singleton pymongo client from district_lookup to avoid
-duplicate connection overhead.
+All tools return {status, data, warnings, source} so the agent trace shows
+exactly what the database returned and what civic-safety warnings apply.
 
 Race key format: 2026-{H|S}-{STATE}-{DISTRICT:02d}
   e.g.  2026-H-WI-04  (Wisconsin 4th Congressional District)
@@ -18,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Any
 
 import pymongo
 import pymongo.errors
@@ -25,6 +27,8 @@ import pymongo.errors
 logger = logging.getLogger(__name__)
 
 CONGRESS_GOV_URL = "https://www.congress.gov"
+FEC_SOURCE = "FEC bulk import (fec.gov), 2026 cycle, imported 2026-05-14"
+CONGRESS_SOURCE = "Congress.gov official records, 119th Congress"
 
 _mongo_client: pymongo.MongoClient | None = None  # type: ignore[type-arg]
 
@@ -49,7 +53,15 @@ def _fmt_money(val: float | None) -> str:
     return f"${val:.0f}"
 
 
-def get_race_candidates(race_key: str) -> str:
+def _error(message: str, source: str = "") -> dict[str, Any]:
+    return {"status": "error", "data": None, "warnings": [message], "source": source}
+
+
+def _not_found(message: str, source: str = "") -> dict[str, Any]:
+    return {"status": "not_found", "data": None, "warnings": [message], "source": source}
+
+
+def get_race_candidates(race_key: str) -> dict[str, Any]:
     """Look up all 2026 candidates for a congressional race by race key.
 
     Use this after resolve_district (which returns a race key like '2026-H-WI-04')
@@ -71,29 +83,42 @@ def get_race_candidates(race_key: str) -> str:
         )
     except pymongo.errors.PyMongoError as exc:
         logger.error("mongodb.get_race_candidates: %s", exc)
-        return f"Database error retrieving candidates for {race_key}."
+        return _error(f"Database error retrieving candidates for {race_key}.", FEC_SOURCE)
 
     if not cands:
-        return (
-            f"No candidates found in the database for race {race_key}. "
-            "This race may not have active FEC filers yet, or the race key may be incorrect."
+        return _not_found(
+            f"No candidates found for race {race_key}. "
+            "This race may not have active FEC filers yet, or the race key may be incorrect.",
+            FEC_SOURCE,
         )
 
-    lines = [f"Candidates for {race_key} (2026 FEC filings):"]
-    for c in cands:
-        status = c.get("incumbent_challenge_status", "unknown").replace("_", " ")
-        lines.append(f"  {c['name']} ({c['party']}) — {status} [ID: {c['candidate_id']}]")
+    return {
+        "status": "success",
+        "data": {
+            "race_key": race_key,
+            "candidate_count": len(cands),
+            "candidates": [
+                {
+                    "name": c["name"],
+                    "party": c["party"],
+                    "status": c.get("incumbent_challenge_status", "unknown").replace("_", " "),
+                    "candidate_id": c["candidate_id"],
+                }
+                for c in cands
+            ],
+        },
+        "warnings": [],
+        "source": FEC_SOURCE,
+    }
 
-    lines.append(f"\nTotal: {len(cands)} candidate(s) with FEC filings in this race.")
-    return "\n".join(lines)
 
-
-def get_race_finance_brief(race_key: str) -> str:
+def get_race_finance_brief(race_key: str) -> dict[str, Any]:
     """Get a finance summary for all candidates in a race in one call.
 
-    Returns fundraising totals, disbursements, and cash on hand for every
-    candidate with FEC financial filings in the specified race. Use this
-    to give a comparative finance overview of a congressional race.
+    Returns fundraising totals, disbursements, cash on hand, and the
+    individual vs. PAC contribution split for every candidate with FEC
+    financial filings in the specified race. Use this to give a comparative
+    finance overview of a congressional race.
 
     Args:
         race_key: Race identifier, e.g. '2026-H-WI-04' or '2026-S-TX-00'.
@@ -108,7 +133,7 @@ def get_race_finance_brief(race_key: str) -> str:
             )
         )
         if not cands:
-            return f"No candidates found for race {race_key}."
+            return _not_found(f"No candidates found for race {race_key}.", FEC_SOURCE)
 
         cand_ids = [c["candidate_id"] for c in cands]
         fins = {
@@ -122,33 +147,60 @@ def get_race_finance_brief(race_key: str) -> str:
         }
     except pymongo.errors.PyMongoError as exc:
         logger.error("mongodb.get_race_finance_brief: %s", exc)
-        return f"Database error retrieving finance data for {race_key}."
+        return _error(f"Database error retrieving finance data for {race_key}.", FEC_SOURCE)
 
-    lines = [f"Finance summary for {race_key}:"]
+    candidates_finance = []
+    missing_finance = []
     for c in sorted(cands, key=lambda x: x.get("incumbent_challenge_status", "z")):
-        status = c.get("incumbent_challenge_status", "unknown").replace("_", " ")
         fin = fins.get(c["candidate_id"])
+        entry: dict[str, Any] = {
+            "name": c["name"],
+            "party": c["party"],
+            "status": c.get("incumbent_challenge_status", "unknown").replace("_", " "),
+            "candidate_id": c["candidate_id"],
+        }
         if fin:
-            cov = fin.get("coverage_end_date", "unknown date")
-            lines.append(
-                f"\n  {c['name']} ({c['party']}, {status})"
-                f"\n    Raised:       {_fmt_money(fin.get('receipts'))} (through {cov})"
-                f"\n    Spent:        {_fmt_money(fin.get('disbursements'))}"
-                f"\n    Cash on hand: {_fmt_money(fin.get('cash_on_hand'))}"
-                f"\n    From individuals: {_fmt_money(fin.get('individual_contributions'))}"
-                f"\n    From PACs:        {_fmt_money(fin.get('pac_contributions'))}"
-            )
+            entry.update({
+                "raised": fin.get("receipts"),
+                "raised_fmt": _fmt_money(fin.get("receipts")),
+                "spent": fin.get("disbursements"),
+                "spent_fmt": _fmt_money(fin.get("disbursements")),
+                "cash_on_hand": fin.get("cash_on_hand"),
+                "cash_on_hand_fmt": _fmt_money(fin.get("cash_on_hand")),
+                "individual_contributions": fin.get("individual_contributions"),
+                "individual_contributions_fmt": _fmt_money(fin.get("individual_contributions")),
+                "pac_contributions": fin.get("pac_contributions"),
+                "pac_contributions_fmt": _fmt_money(fin.get("pac_contributions")),
+                "coverage_end_date": fin.get("coverage_end_date"),
+                "has_finance": True,
+            })
         else:
-            lines.append(f"\n  {c['name']} ({c['party']}, {status}) — no financial filing on record")
+            entry["has_finance"] = False
+            missing_finance.append(c["name"])
 
-    lines.append(
-        "\nSource: FEC bulk data (fec.gov), imported 2026-05-14. "
-        "Finance data reflects FEC filings through the coverage end date shown."
-    )
-    return "\n".join(lines)
+        candidates_finance.append(entry)
+
+    warnings = [
+        "Finance data reflects FEC filings through each candidate's coverage end date.",
+        "Finance figures are fundraising context. They do not prove issue positions.",
+    ]
+    if missing_finance:
+        warnings.append(
+            f"No FEC financial filing on record for: {', '.join(missing_finance)}."
+        )
+
+    return {
+        "status": "success",
+        "data": {
+            "race_key": race_key,
+            "candidates": candidates_finance,
+        },
+        "warnings": warnings,
+        "source": FEC_SOURCE,
+    }
 
 
-def get_candidate_finance(candidate_id: str) -> str:
+def get_candidate_finance(candidate_id: str) -> dict[str, Any]:
     """Get detailed campaign finance data for a single FEC candidate.
 
     Use this when you need specific financial details for one candidate
@@ -174,35 +226,55 @@ def get_candidate_finance(candidate_id: str) -> str:
         )
     except pymongo.errors.PyMongoError as exc:
         logger.error("mongodb.get_candidate_finance: %s", exc)
-        return f"Database error retrieving finance for candidate {candidate_id}."
-
-    if not cand:
-        return f"No candidate found with ID {candidate_id}."
-    if not fin:
-        return (
-            f"{cand['name']} ({cand['party']}) has no financial filing on record in the FEC database. "
-            "They may not have registered a committee yet."
+        return _error(
+            f"Database error retrieving finance for candidate {candidate_id}.", FEC_SOURCE
         )
 
-    cov = fin.get("coverage_end_date", "unknown")
-    return (
-        f"Finance for {cand['name']} ({cand['party']}) — {cand.get('incumbent_challenge_status','').replace('_',' ')}"
-        f"\nRace: {cand.get('race_key', 'unknown')}\n"
-        f"\n  Total raised:          {_fmt_money(fin.get('receipts'))}"
-        f"\n  Total spent:           {_fmt_money(fin.get('disbursements'))}"
-        f"\n  Cash on hand:          {_fmt_money(fin.get('cash_on_hand'))}"
-        f"\n  From individuals:      {_fmt_money(fin.get('individual_contributions'))}"
-        f"\n  From PACs:             {_fmt_money(fin.get('pac_contributions'))}"
-        f"\n  From candidate:        {_fmt_money(fin.get('candidate_contributions'))}"
-        f"\n  Loans from candidate:  {_fmt_money(fin.get('loans_from_candidate'))}"
-        f"\n  Debts owed:            {_fmt_money(fin.get('debts'))}"
-        f"\n\nCoverage through: {cov}"
-        f"\nSource: FEC bulk data (fec.gov). Finance records do not prove issue positions "
-        f"— use only for fundraising context."
-    )
+    if not cand:
+        return _not_found(f"No candidate found with ID {candidate_id}.", FEC_SOURCE)
+
+    if not fin:
+        return _not_found(
+            f"{cand['name']} ({cand['party']}) has no financial filing on record. "
+            "They may not have registered a committee yet.",
+            FEC_SOURCE,
+        )
+
+    return {
+        "status": "success",
+        "data": {
+            "candidate_id": candidate_id,
+            "name": cand["name"],
+            "party": cand["party"],
+            "race_key": cand.get("race_key"),
+            "status": cand.get("incumbent_challenge_status", "").replace("_", " "),
+            "raised": fin.get("receipts"),
+            "raised_fmt": _fmt_money(fin.get("receipts")),
+            "spent": fin.get("disbursements"),
+            "spent_fmt": _fmt_money(fin.get("disbursements")),
+            "cash_on_hand": fin.get("cash_on_hand"),
+            "cash_on_hand_fmt": _fmt_money(fin.get("cash_on_hand")),
+            "individual_contributions": fin.get("individual_contributions"),
+            "individual_contributions_fmt": _fmt_money(fin.get("individual_contributions")),
+            "pac_contributions": fin.get("pac_contributions"),
+            "pac_contributions_fmt": _fmt_money(fin.get("pac_contributions")),
+            "candidate_contributions": fin.get("candidate_contributions"),
+            "candidate_contributions_fmt": _fmt_money(fin.get("candidate_contributions")),
+            "loans_from_candidate": fin.get("loans_from_candidate"),
+            "loans_from_candidate_fmt": _fmt_money(fin.get("loans_from_candidate")),
+            "debts": fin.get("debts"),
+            "debts_fmt": _fmt_money(fin.get("debts")),
+            "coverage_end_date": fin.get("coverage_end_date"),
+        },
+        "warnings": [
+            "Finance data reflects FEC filings through the coverage end date.",
+            "Finance figures are fundraising context. They do not prove issue positions.",
+        ],
+        "source": FEC_SOURCE,
+    }
 
 
-def find_candidate(name: str, state: str = "") -> str:
+def find_candidate(name: str, state: str = "") -> dict[str, Any]:
     """Search for a congressional candidate by name across 2026 FEC filings.
 
     Use this when a user names a candidate but you don't have their race key
@@ -230,25 +302,39 @@ def find_candidate(name: str, state: str = "") -> str:
         )
     except pymongo.errors.PyMongoError as exc:
         logger.error("mongodb.find_candidate: %s", exc)
-        return f"Database error searching for candidate '{name}'."
+        return _error(f"Database error searching for candidate '{name}'.", FEC_SOURCE)
 
     if not results:
-        return (
+        return _not_found(
             f"No 2026 FEC filers found matching '{name}'"
             + (f" in {state.upper()}" if state else "")
-            + ". They may not have filed with the FEC yet."
+            + ". They may not have filed with the FEC yet.",
+            FEC_SOURCE,
         )
 
-    lines = [f"Candidates matching '{name}'" + (f" in {state.upper()}" if state else "") + ":"]
-    for r in results:
-        status = r.get("incumbent_challenge_status", "unknown").replace("_", " ")
-        lines.append(
-            f"  {r['name']} ({r['party']}, {status}) — {r['race_key']} [ID: {r['candidate_id']}]"
-        )
-    return "\n".join(lines)
+    return {
+        "status": "success",
+        "data": {
+            "query": name,
+            "state_filter": state.upper() if state else None,
+            "match_count": len(results),
+            "candidates": [
+                {
+                    "name": r["name"],
+                    "party": r["party"],
+                    "status": r.get("incumbent_challenge_status", "unknown").replace("_", " "),
+                    "race_key": r["race_key"],
+                    "candidate_id": r["candidate_id"],
+                }
+                for r in results
+            ],
+        },
+        "warnings": [],
+        "source": FEC_SOURCE,
+    }
 
 
-def get_incumbent_legislation(race_key: str, limit: int = 8) -> str:
+def get_incumbent_legislation(race_key: str, limit: int = 8) -> dict[str, Any]:
     """Get recent sponsored legislation for the incumbent in a 2026 congressional race.
 
     Returns bills the incumbent has introduced in the current 119th Congress
@@ -276,29 +362,38 @@ def get_incumbent_legislation(race_key: str, limit: int = 8) -> str:
         )
     except pymongo.errors.PyMongoError as exc:
         logger.error("mongodb.get_incumbent_legislation: %s", exc)
-        return f"Database error retrieving legislation for {race_key}."
+        return _error(f"Database error retrieving legislation for {race_key}.", CONGRESS_SOURCE)
 
     if not bills:
-        return (
+        return _not_found(
             f"No sponsored legislation found for the incumbent in race {race_key}. "
             "The incumbent may not have filed sponsorships in the 119th Congress yet, "
-            "or the race key may have no incumbent."
+            "or this race may have no incumbent.",
+            CONGRESS_SOURCE,
         )
 
     member = bills[0].get("member_name", "The incumbent")
-    lines = [
-        f"Recent sponsored legislation for {member} ({race_key}) — 119th Congress:",
-        f"Source: Congress.gov official records.",
-    ]
-    for b in bills:
-        status = b.get("latest_action", "")
-        date_str = f" ({b['introduced_date']})" if b.get("introduced_date") else ""
-        lines.append(f"\n  {b['bill_id']}{date_str}: {b.get('title','')[:120]}")
-        if status:
-            lines.append(f"    Status: {status[:100]}")
-
-    lines.append(
-        "\nBill sponsorship shows legislative priorities. "
-        "It does not constitute a definitive policy position statement."
-    )
-    return "\n".join(lines)
+    return {
+        "status": "success",
+        "data": {
+            "race_key": race_key,
+            "member_name": member,
+            "bill_count": len(bills),
+            "congress": "119th",
+            "bills": [
+                {
+                    "bill_id": b["bill_id"],
+                    "title": b.get("title", "")[:200],
+                    "introduced_date": b.get("introduced_date"),
+                    "latest_action": b.get("latest_action", "")[:150],
+                    "latest_action_date": b.get("latest_action_date"),
+                    "url": b.get("url"),
+                }
+                for b in bills
+            ],
+        },
+        "warnings": [
+            "Bill sponsorship reflects legislative priorities, not a definitive policy position.",
+        ],
+        "source": CONGRESS_SOURCE,
+    }
