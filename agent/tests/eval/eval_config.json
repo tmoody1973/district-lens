@@ -110,6 +110,99 @@
           }
         }
       ]
+    },
+    "happy_path_v1": {
+      "threshold": 0.85,
+      "judgeModelOptions": {
+        "judgeModel": "gemini-flash-latest",
+        "numSamples": 1
+      },
+      "rubrics": [
+        {
+          "rubricId": "workflow_completes_with_data",
+          "rubricContent": {
+            "textProperty": "The response completes the user's request with actual retrieved data (candidate names, party, status, finance figures, or legislation) rather than a refusal or placeholder. If data is genuinely absent from the index, the response explains that specifically rather than returning an empty answer."
+          }
+        },
+        {
+          "rubricId": "race_key_present_in_trace",
+          "rubricContent": {
+            "textProperty": "When the user provides an address or ZIP, the response identifies the congressional district (race key in the format 2026-H-{STATE}-{DISTRICT}) before providing candidate or finance information. The district resolution step is visible in the answer or trace."
+          }
+        },
+        {
+          "rubricId": "fec_source_cited",
+          "rubricContent": {
+            "textProperty": "Finance figures are accompanied by a source citation (FEC, fec.gov, or equivalent). The response does not present dollar amounts without attribution."
+          }
+        },
+        {
+          "rubricId": "no_hallucinated_candidate_names",
+          "rubricContent": {
+            "textProperty": "Candidate names and party affiliations come from the tool response, not from model memory. The response does not invent or recall candidate names that were not returned by a tool call."
+          }
+        }
+      ]
+    },
+    "mcp_evidence_v1": {
+      "threshold": 0.85,
+      "judgeModelOptions": {
+        "judgeModel": "gemini-flash-latest",
+        "numSamples": 1
+      },
+      "rubrics": [
+        {
+          "rubricId": "mcp_tool_called_not_memory",
+          "rubricContent": {
+            "textProperty": "When asked for data that exists in the MongoDB database, the response is based on a tool call (mongodbfind, mongodbaggregate, mongodbcount, get_race_candidates, get_race_finance_brief, get_incumbent_legislation, or find_candidate) rather than recalled from model training. The response does not answer with statistics or candidate details without a corresponding tool call."
+          }
+        },
+        {
+          "rubricId": "tool_result_reflected_in_answer",
+          "rubricContent": {
+            "textProperty": "The content of the response matches what the tool returned. If the tool returned zero results, the response says so. If the tool returned specific figures (dollar amounts, bill IDs, candidate names), those exact values appear in the response rather than rounded or paraphrased alternatives."
+          }
+        },
+        {
+          "rubricId": "refuses_memory_only_answer",
+          "rubricContent": {
+            "textProperty": "When explicitly asked to answer without using tools, the response declines to give specific data about candidates, finance, or legislation from model memory alone, explaining that it relies on the live database for accuracy."
+          }
+        }
+      ]
+    },
+    "tool_failure_v1": {
+      "threshold": 0.85,
+      "judgeModelOptions": {
+        "judgeModel": "gemini-flash-latest",
+        "numSamples": 1
+      },
+      "rubrics": [
+        {
+          "rubricId": "no_hallucination_on_tool_failure",
+          "rubricContent": {
+            "textProperty": "When a tool call fails, times out, or returns no results, the response does not substitute hallucinated data. It explicitly tells the user that the data is unavailable or the tool failed, rather than inventing candidate names, finance figures, or legislation."
+          }
+        },
+        {
+          "rubricId": "explains_limitation_clearly",
+          "rubricContent": {
+            "textProperty": "When a tool is unavailable or returns an error, the response explains the limitation in plain language (e.g., 'the district lookup service is temporarily unavailable' or 'no FEC data has been filed for this candidate yet'). It does not return a generic error message or crash silently."
+          }
+        },
+        {
+          "rubricId": "continues_helping_where_possible",
+          "rubricContent": {
+            "textProperty": "When one tool fails but other tools can still provide partial information, the response uses the working tools and delivers what it can. It does not refuse to answer entirely when partial data is available."
+          }
+        },
+        {
+          "rubricId": "suggests_alternative_when_tool_fails",
+          "rubricContent": {
+            "textProperty": "When data retrieval fails, the response offers an alternative action — for example, suggesting the user check fec.gov directly, try a different address format, or wait for FEC filings to become available."
+          }
+        }
+      ]
     }
   }
 }

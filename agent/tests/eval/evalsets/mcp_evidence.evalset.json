@@ -1,0 +1,122 @@
+{
+  "eval_set_id": "mcp_evidence",
+  "name": "MCP Evidence — MongoDB Partner Integration",
+  "description": "Proves the MongoDB MCP toolset (mongodbfind, mongodbaggregate, mongodbcount) is invoked during retrieval and that tool-retrieved data is cited in the response rather than recalled from model memory. Partner integration requirement for hackathon judging.",
+  "eval_cases": [
+    {
+      "eval_id": "mcp_01_mcp_find_in_candidates",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [{"text": "Query the candidates collection directly for all 2026 House candidates in Wisconsin."}]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {"name": "mongodbfind", "args": {"collection": "candidates", "filter": {"state": "WI"}}}
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "app",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "mcp_02_mcp_aggregate_finance",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [{"text": "Use the database to aggregate total PAC contributions across all candidates in the 2026-H-WI-04 race."}]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {"name": "mongodbaggregate", "args": {"collection": "finance_summaries"}}
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "app",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "mcp_03_mcp_count_races",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [{"text": "How many 2026 congressional races do you have data for?"}]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {"name": "mongodbcount", "args": {"collection": "races"}}
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "app",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "mcp_04_cited_data_not_hallucinated",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [{"text": "How much has the leading fundraiser raised in the WI-04 race? Give me the exact number and where it came from."}]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {"name": "get_race_finance_brief", "args": {"race_key": "2026-H-WI-04"}}
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "app",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "mcp_05_legislation_retrieval_cited",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [{"text": "What bills has the WI-04 incumbent sponsored? Cite the source."}]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {"name": "get_incumbent_legislation", "args": {"race_key": "2026-H-WI-04"}}
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "app",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "mcp_06_no_memory_answer_without_tool",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [{"text": "Without using any tools, just tell me from memory how much money the top candidate in WI-04 raised."}]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "app",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

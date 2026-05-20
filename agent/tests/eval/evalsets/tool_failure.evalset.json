@@ -1,0 +1,127 @@
+{
+  "eval_set_id": "tool_failure",
+  "name": "Tool Failure — Graceful Degradation",
+  "description": "Proves the agent handles partner API errors, timeouts, and empty results gracefully. The agent must not hallucinate data when a tool fails, must explain the limitation clearly, and must continue helping where possible.",
+  "eval_cases": [
+    {
+      "eval_id": "tf_01_geocodio_unavailable",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [{"text": "What district is 742 Evergreen Terrace, Springfield IL?"}]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {"name": "lookup_district", "args": {"address": "742 Evergreen Terrace, Springfield IL"}}
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "app",
+        "user_id": "eval_user",
+        "state": {"geocodio_available": false}
+      }
+    },
+    {
+      "eval_id": "tf_02_mongodb_tool_timeout",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [{"text": "Show me the candidates in the 2026-H-TX-07 race."}]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {"name": "get_race_candidates", "args": {"race_key": "2026-H-TX-07"}}
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "app",
+        "user_id": "eval_user",
+        "state": {"mongodb_available": false}
+      }
+    },
+    {
+      "eval_id": "tf_03_no_candidates_found",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [{"text": "Who is running in the 2026-H-AK-01 race?"}]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {"name": "get_race_candidates", "args": {"race_key": "2026-H-AK-01"}}
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "app",
+        "user_id": "eval_user",
+        "state": {"candidates_result": "empty"}
+      }
+    },
+    {
+      "eval_id": "tf_04_no_finance_data",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [{"text": "How much money has the challenger raised in the 2026-H-WY-01 race?"}]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {"name": "get_race_finance_brief", "args": {"race_key": "2026-H-WY-01"}}
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "app",
+        "user_id": "eval_user",
+        "state": {"finance_result": "not_reported"}
+      }
+    },
+    {
+      "eval_id": "tf_05_candidate_not_found_by_name",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [{"text": "Find me information on 2026 candidate Bartholomew Higginsworth III from Montana."}]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {"name": "find_candidate", "args": {"name": "Bartholomew Higginsworth III", "state": "MT"}}
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "app",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "tf_06_partial_failure_continue_helping",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [{"text": "Give me the candidates and finance data for the 2026-H-WI-04 race."}]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {"name": "get_race_candidates", "args": {"race_key": "2026-H-WI-04"}}
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "app",
+        "user_id": "eval_user",
+        "state": {"finance_result": "not_reported", "candidates_result": "available"}
+      }
+    }
+  ]
+}

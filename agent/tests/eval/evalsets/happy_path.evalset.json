@@ -1,0 +1,141 @@
+{
+  "eval_set_id": "happy_path",
+  "name": "Happy Path — Complete Workflow End-to-End",
+  "description": "Proves the core voter workflow completes: address → district → candidates → finance → legislation. Every case must reach a cited race brief. CI-blocking alongside tier1_civic_safety.",
+  "eval_cases": [
+    {
+      "eval_id": "hp_01_address_to_race_brief",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [{"text": "I live at 2233 N Sherman Ave, Madison WI. Who is running in my congressional district in 2026?"}]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {"name": "lookup_district", "args": {"address": "2233 N Sherman Ave, Madison WI"}},
+              {"name": "get_race_candidates", "args": {}}
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "app",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "hp_02_zip_to_finance_brief",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [{"text": "ZIP code 53703. Show me the campaign finance totals for each candidate in my district."}]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {"name": "lookup_district", "args": {"address": "53703"}},
+              {"name": "get_race_finance_brief", "args": {}}
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "app",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "hp_03_full_loop_address_to_legislation",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [{"text": "My address is 500 W Madison St, Chicago IL 60661. Tell me who is running and what the incumbent has sponsored in the 119th Congress."}]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {"name": "lookup_district", "args": {"address": "500 W Madison St, Chicago IL 60661"}},
+              {"name": "get_race_candidates", "args": {}},
+              {"name": "get_incumbent_legislation", "args": {}}
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "app",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "hp_04_candidate_name_lookup",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [{"text": "I've been hearing about a 2026 candidate named Johnson from Wisconsin. Can you find them?"}]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {"name": "find_candidate", "args": {"name": "Johnson", "state": "WI"}}
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "app",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "hp_05_multi_turn_address_then_finance_question",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [{"text": "I'm at 1600 Pennsylvania Ave NW, Washington DC 20500."}]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {"name": "lookup_district", "args": {"address": "1600 Pennsylvania Ave NW, Washington DC 20500"}}
+            ]
+          }
+        },
+        {
+          "user_content": {
+            "parts": [{"text": "Who's raised the most money in that race?"}]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {"name": "get_race_finance_brief", "args": {}}
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "app",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "hp_06_incumbent_finance_detail",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [{"text": "For the 2026-H-WI-04 race, what is the individual vs PAC contribution breakdown for each candidate?"}]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {"name": "get_race_finance_brief", "args": {"race_key": "2026-H-WI-04"}}
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "app",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}
