@@ -8,7 +8,7 @@
 
 import { getDb, getFinanceSummaries, fmtMoney } from "@/lib/mongodb";
 import { bioguidePhotoUrl, placeholderAvatarUrl } from "@/lib/bioguide";
-import type { BillRecord, CandidateCard, FinanceSummary } from "@/types/agent-state";
+import type { BillRecord, CandidateCard, FinanceSummary, RaceRow } from "@/types/agent-state";
 
 // ---------------------------------------------------------------------------
 // Local Action type (mirrors @copilotkit/shared Action but with a plain-object
@@ -122,24 +122,24 @@ export const getRaceBriefAction: Action<{ race_key: string }> = {
       .filter((c) => c.incumbent_challenge_status === "incumbent")
       .map((c) => c.name as string);
 
-    const profileMap: Record<string, string> = {};
-    if (incumbentNames.length > 0) {
-      const profiles = await db
-        .collection("legislator_profiles")
-        .find(
-          { name: { $in: incumbentNames } },
-          { projection: { _id: 0, name: 1, bioguide_id: 1 } }
-        )
-        .toArray();
-      for (const p of profiles) {
-        if (p.name && p.bioguide_id)
-          profileMap[p.name as string] = p.bioguide_id as string;
-      }
-    }
+    const [profileDocs, fins] = await Promise.all([
+      incumbentNames.length > 0
+        ? db
+            .collection("legislator_profiles")
+            .find(
+              { name: { $in: incumbentNames } },
+              { projection: { _id: 0, name: 1, bioguide_id: 1 } }
+            )
+            .toArray()
+        : Promise.resolve([]),
+      getFinanceSummaries(rawCands.map((c) => c.candidate_id as string)),
+    ]);
 
-    const fins = await getFinanceSummaries(
-      rawCands.map((c) => c.candidate_id as string)
-    );
+    const profileMap: Record<string, string> = {};
+    for (const p of profileDocs) {
+      if (p.name && p.bioguide_id)
+        profileMap[p.name as string] = p.bioguide_id as string;
+    }
     const finMap = Object.fromEntries(fins.map((f) => [f.candidate_id, f]));
 
     const candidates: CandidateCard[] = rawCands.map((c) => {
@@ -323,18 +323,65 @@ export const getStateRacesAction: Action<{ state_code: string }> = {
     { name: "state_code", type: "string", description: "Two-letter state code, e.g. 'WI'.", required: true },
   ],
   handler: async ({ state_code }) => {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    const res = await fetch(`${baseUrl}/api/races/state?state=${encodeURIComponent(state_code)}`);
-    if (!res.ok) return `Failed to fetch races for ${state_code}.`;
-    const data = await res.json();
-    const races = (data.races ?? []) as Array<Record<string, unknown>>;
-    if (!races.length) return `No races found for ${state_code}.`;
-    const lines = [`Races in ${state_code} (${races.length} total):`];
-    for (const r of races.slice(0, 10)) {
-      const gap = r.financeGap != null ? ` | Gap: $${Math.abs(r.financeGap as number).toLocaleString()}` : "";
+    const state = state_code.toUpperCase().trim();
+    const db = await getDb();
+
+    const raceDocs = await db
+      .collection("races")
+      .find({ state }, { projection: { _id: 0, race_key: 1, state: 1, office: 1, district: 1 } })
+      .toArray();
+
+    if (!raceDocs.length) return `No races found for ${state}.`;
+
+    const raceKeys = raceDocs.map((r) => r.race_key as string);
+    const candidates = await db
+      .collection("candidates")
+      .find({ race_key: { $in: raceKeys } })
+      .toArray();
+    const finance = await db
+      .collection("finance_summaries")
+      .find({ candidate_id: { $in: candidates.map((c) => c.candidate_id as string) } })
+      .toArray();
+
+    const finMap = Object.fromEntries(finance.map((f) => [f.candidate_id as string, f]));
+
+    const rows: RaceRow[] = raceDocs.map((race) => {
+      const raceCands = candidates.filter((c) => c.race_key === race.race_key);
+      const incumbent = raceCands.find((c) => c.incumbent_challenge_status === "incumbent");
+      const challengers = raceCands.filter((c) => c.incumbent_challenge_status !== "incumbent");
+      const incFin = incumbent ? finMap[incumbent.candidate_id as string] : null;
+      const topChallenger = [...challengers].sort((a, b) => {
+        const fa = (finMap[a.candidate_id as string]?.receipts as number) ?? 0;
+        const fb = (finMap[b.candidate_id as string]?.receipts as number) ?? 0;
+        return fb - fa;
+      })[0];
+      const chalFin = topChallenger ? finMap[topChallenger.candidate_id as string] : null;
+      const incReceipts = (incFin?.receipts as number) ?? null;
+      const chalReceipts = (chalFin?.receipts as number) ?? null;
+      return {
+        raceKey: race.race_key as string,
+        state: race.state as string,
+        office: race.office as string,
+        district: race.district as string,
+        incumbentName: (incumbent?.name as string) ?? null,
+        incumbentParty: (incumbent?.party as string) ?? null,
+        incumbentReceipts: incReceipts,
+        topChallengerName: (topChallenger?.name as string) ?? null,
+        topChallengerReceipts: chalReceipts,
+        financeGap: incReceipts !== null && chalReceipts !== null ? incReceipts - chalReceipts : null,
+        pacPct:
+          incFin && (incFin.receipts as number) > 0
+            ? Math.round(((incFin.pac_contributions as number) / (incFin.receipts as number)) * 100)
+            : null,
+      };
+    });
+
+    const lines = [`Races in ${state} (${rows.length} total):`];
+    for (const r of rows.slice(0, 10)) {
+      const gap = r.financeGap != null ? ` | Gap: $${Math.abs(r.financeGap).toLocaleString()}` : "";
       lines.push(`  ${r.raceKey}: ${r.incumbentName ?? "Open seat"} (${r.incumbentParty ?? "?"})${gap}`);
     }
-    return `${lines.join("\n")}\n\nSTRUCTURED_DATA:${JSON.stringify({ stateRaces: races })}`;
+    return `${lines.join("\n")}\n\nSTRUCTURED_DATA:${JSON.stringify({ stateRaces: rows })}`;
   },
 };
 
@@ -351,20 +398,68 @@ export const findCompetitiveRacesAction: Action<{ state?: string }> = {
     { name: "state", type: "string", description: "Optional two-letter state code to narrow results.", required: false },
   ],
   handler: async ({ state }) => {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    const url = `/api/races/competitive${state ? `?state=${state}` : ""}`;
-    const res = await fetch(`${baseUrl}${url}`);
-    if (!res.ok) return "Failed to fetch competitive races.";
-    const data = await res.json();
-    const races = (data.competitive ?? []) as Array<Record<string, unknown>>;
-    if (!races.length) return "No highly competitive races found matching the criteria.";
-    const lines = ["Most competitive races (challenger leading or gap < $100K):"];
-    for (const r of races.slice(0, 8)) {
-      const direction = r.challengerLeading ? "🔴 challenger leading" : "🟡 close";
-      lines.push(`  ${r.raceKey}: ${r.incumbentName} vs ${r.topChallengerName} — ${direction}`);
-      lines.push(`    Inc: $${((r.incumbentReceipts as number) / 1000).toFixed(0)}K | Chal: $${((r.topChallengerReceipts as number) / 1000).toFixed(0)}K`);
+    const db = await getDb();
+    const query = state ? { state: state.toUpperCase().trim() } : {};
+
+    const candidates = await db
+      .collection("candidates")
+      .find(query, {
+        projection: { _id: 0, candidate_id: 1, race_key: 1, name: 1, party: 1, state: 1, incumbent_challenge_status: 1 },
+      })
+      .toArray();
+
+    const finance = await db
+      .collection("finance_summaries")
+      .find({ candidate_id: { $in: candidates.map((c) => c.candidate_id as string) } })
+      .toArray();
+
+    const finMap = Object.fromEntries(finance.map((f) => [f.candidate_id as string, f]));
+
+    type RaceAccum = { incumbent: typeof candidates[0] | null; topChallenger: typeof candidates[0] | null; state: string };
+    const byRace: Record<string, RaceAccum> = {};
+    for (const c of candidates) {
+      const key = c.race_key as string;
+      if (!byRace[key]) byRace[key] = { incumbent: null, topChallenger: null, state: c.state as string };
+      if (c.incumbent_challenge_status === "incumbent") {
+        byRace[key].incumbent = c;
+      } else {
+        const current = byRace[key].topChallenger;
+        const currentReceipts = current ? ((finMap[current.candidate_id as string]?.receipts as number) ?? 0) : -1;
+        const thisReceipts = (finMap[c.candidate_id as string]?.receipts as number) ?? 0;
+        if (thisReceipts > currentReceipts) byRace[key].topChallenger = c;
+      }
     }
-    return `${lines.join("\n")}\n\nSTRUCTURED_DATA:${JSON.stringify({ comparisons: races })}`;
+
+    const competitive = Object.entries(byRace)
+      .filter(([, d]) => d.incumbent && d.topChallenger)
+      .map(([raceKey, d]) => {
+        const incReceipts = (finMap[d.incumbent!.candidate_id as string]?.receipts as number) ?? 0;
+        const chalReceipts = (finMap[d.topChallenger!.candidate_id as string]?.receipts as number) ?? 0;
+        return {
+          raceKey,
+          state: d.state,
+          incumbentName: d.incumbent!.name as string,
+          incumbentParty: d.incumbent!.party as string,
+          incumbentReceipts: incReceipts,
+          topChallengerName: d.topChallenger!.name as string,
+          topChallengerReceipts: chalReceipts,
+          financeGap: incReceipts - chalReceipts,
+          challengerLeading: chalReceipts > incReceipts,
+        };
+      })
+      .filter((r) => r.challengerLeading || r.financeGap < 100_000)
+      .sort((a, b) => a.financeGap - b.financeGap)
+      .slice(0, 20);
+
+    if (!competitive.length) return "No highly competitive races found matching the criteria.";
+
+    const lines = ["Most competitive races (challenger leading or gap < $100K):"];
+    for (const r of competitive.slice(0, 8)) {
+      const direction = r.challengerLeading ? "challenger leading" : "close";
+      lines.push(`  ${r.raceKey}: ${r.incumbentName} vs ${r.topChallengerName} — ${direction}`);
+      lines.push(`    Inc: $${(r.incumbentReceipts / 1000).toFixed(0)}K | Chal: $${(r.topChallengerReceipts / 1000).toFixed(0)}K`);
+    }
+    return `${lines.join("\n")}\n\nSTRUCTURED_DATA:${JSON.stringify({ comparisons: competitive })}`;
   },
 };
 
@@ -381,11 +476,45 @@ export const getCandidateProfileAction: Action<{ race_key: string }> = {
     { name: "race_key", type: "string", description: "Race key, e.g. '2026-H-WI-04'.", required: true },
   ],
   handler: async ({ race_key }) => {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    const res = await fetch(`${baseUrl}/api/candidate/profile?race_key=${encodeURIComponent(race_key)}`);
-    if (!res.ok) return `Failed to fetch profiles for ${race_key}.`;
-    const data = await res.json();
-    const candidates = data.candidates ?? [];
+    const db = await getDb();
+
+    const rawCands = await db.collection("candidates").find({ race_key }, {
+      projection: {
+        _id: 0, candidate_id: 1, name: 1, party: 1, incumbent_challenge_status: 1,
+        ballotpedia_profile_url: 1, official_government_website: 1, official_campaign_website: 1,
+      },
+    }).toArray();
+
+    if (!rawCands.length) return `No candidates found for ${race_key}.`;
+
+    const profileDocs = await db
+      .collection("legislator_profiles")
+      .find({ name: { $in: rawCands.map((c) => c.name as string) } })
+      .toArray();
+
+    const profileMap = Object.fromEntries(profileDocs.map((p) => [p.name as string, p]));
+
+    const candidates = rawCands.map((c) => {
+      const profile = profileMap[c.name as string];
+      const bioguideId = (profile?.bioguide_id as string) ?? null;
+      const photoUrl = bioguideId
+        ? bioguidePhotoUrl(bioguideId)!
+        : placeholderAvatarUrl(c.name as string, c.party as string);
+      return {
+        candidateId: c.candidate_id,
+        name: c.name,
+        party: c.party,
+        status: (c.incumbent_challenge_status as string) ?? "unknown",
+        photoUrl,
+        photoSource: bioguideId ? "bioguide" : "placeholder",
+        raceKey: race_key,
+        ballotpediaUrl: (c.ballotpedia_profile_url as string) ?? null,
+        officialWebsite: (c.official_government_website as string) ?? (profile?.official_website as string) ?? null,
+        campaignWebsite: (c.official_campaign_website as string) ?? null,
+        committees: (profile?.committees as string[]) ?? [],
+      };
+    });
+
     const lines = [`Full candidate profiles for ${race_key}:`];
     for (const c of candidates) {
       lines.push(`  ${c.name} (${c.party}, ${c.status})`);
@@ -411,18 +540,26 @@ export const searchCandidatePositionsAction: Action<{ candidate_name: string; is
   ],
   handler: async ({ candidate_name, issue }) => {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    const res = await fetch(`${baseUrl}/api/search/positions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ candidateName: candidate_name, issue }),
-    });
-    if (!res.ok) return `Position search failed for ${candidate_name} on ${issue}.`;
-    const data = await res.json();
-    const sourceLines = (data.sources ?? []).slice(0, 3).map(
-      (s: { title: string; url: string; date: string | null }, i: number) =>
-        `[${i + 1}] ${s.title} — ${s.url}`
-    );
-    return `${data.answer ?? "No answer returned."}\n\nSources:\n${sourceLines.join("\n")}\n\nSTRUCTURED_DATA:${JSON.stringify({ positions: [{ candidateName: candidate_name, issue, answer: data.answer, sources: data.sources }] })}`;
+    try {
+      const res = await fetch(`${baseUrl}/api/search/positions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidateName: candidate_name, issue }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!res.ok) return `Position search failed for ${candidate_name} on ${issue}.`;
+      const data = await res.json();
+      const sourceLines = (data.sources ?? []).slice(0, 3).map(
+        (s: { title: string; url: string; date: string | null }, i: number) =>
+          `[${i + 1}] ${s.title} — ${s.url}`
+      );
+      return `${data.answer ?? "No answer returned."}\n\nSources:\n${sourceLines.join("\n")}\n\nSTRUCTURED_DATA:${JSON.stringify({ positions: [{ candidateName: candidate_name, issue, answer: data.answer, sources: data.sources }] })}`;
+    } catch (err) {
+      const isTimeout = err instanceof Error && err.name === "TimeoutError";
+      return isTimeout
+        ? `Position search timed out for ${candidate_name} — try again.`
+        : `Position search failed for ${candidate_name} on ${issue}.`;
+    }
   },
 };
 
@@ -440,14 +577,22 @@ export const searchCurrentNewsAction: Action<{ candidate_name: string }> = {
   ],
   handler: async ({ candidate_name }) => {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    const res = await fetch(`${baseUrl}/api/search/news`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ candidateName: candidate_name }),
-    });
-    if (!res.ok) return `News search failed for ${candidate_name}.`;
-    const data = await res.json();
-    return `${data.answer ?? ""}\n\nSTRUCTURED_DATA:${JSON.stringify({ news: data.sources })}`;
+    try {
+      const res = await fetch(`${baseUrl}/api/search/news`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidateName: candidate_name }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!res.ok) return `News search failed for ${candidate_name}.`;
+      const data = await res.json();
+      return `${data.answer ?? ""}\n\nSTRUCTURED_DATA:${JSON.stringify({ news: data.sources })}`;
+    } catch (err) {
+      const isTimeout = err instanceof Error && err.name === "TimeoutError";
+      return isTimeout
+        ? `News search timed out for ${candidate_name} — try again.`
+        : `News search failed for ${candidate_name}.`;
+    }
   },
 };
 
@@ -464,18 +609,24 @@ export const getElectionDatesAction: Action<{ state_code: string }> = {
     { name: "state_code", type: "string", description: "Two-letter state code, e.g. 'WI'.", required: true },
   ],
   handler: async ({ state_code }) => {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    const res = await fetch(`${baseUrl}/api/election-dates?state=${encodeURIComponent(state_code)}`);
-    if (!res.ok) return `No election date data for ${state_code}.`;
-    const data = await res.json();
-    const primary = data.primary?.date ?? "Not available";
-    const runoff = data.primary?.runoff_date_if_necessary ?? null;
-    const general = data.general_election_date ?? "2026-11-03";
-    const earlyStart = data.general_early_in_person_voting?.computed_start_date ?? null;
-    const earlyEnd = data.general_early_in_person_voting?.computed_end_date ?? null;
-    const earlyRule = data.general_early_in_person_voting?.rule_text ?? null;
+    const state = state_code.toUpperCase().trim();
+    const db = await getDb();
+    const record = await db.collection("election_dates").findOne(
+      { state_abbreviation: state },
+      { projection: { _id: 0, state: 1, primary: 1, general_election_date: 1, general_early_in_person_voting: 1 } }
+    );
+    if (!record) return `No election date data for ${state}.`;
+
+    const primary = (record.primary as Record<string, string>)?.date ?? "Not available";
+    const runoff = (record.primary as Record<string, string>)?.runoff_date_if_necessary ?? null;
+    const general = (record.general_election_date as string) ?? "2026-11-03";
+    const earlyVoting = record.general_early_in_person_voting as Record<string, string> | null;
+    const earlyStart = earlyVoting?.computed_start_date ?? null;
+    const earlyEnd = earlyVoting?.computed_end_date ?? null;
+    const earlyRule = earlyVoting?.rule_text ?? null;
+
     const lines = [
-      `2026 Election Dates for ${data.state ?? state_code}:`,
+      `2026 Election Dates for ${(record.state as string) ?? state}:`,
       `  Primary: ${primary}${runoff ? ` (Runoff if needed: ${runoff})` : ""}`,
       `  General Election: ${general}`,
     ];
