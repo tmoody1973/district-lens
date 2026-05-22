@@ -57,6 +57,21 @@ export function FinanceChart({ finance }: Props) {
           </div>
         );
       })}
+      {/* Gap multiplier label */}
+      {(() => {
+        if (finance.length < 2) return null;
+        const sorted = [...finance].sort((a, b) => (b.receipts ?? 0) - (a.receipts ?? 0));
+        const top = sorted[0].receipts ?? 0;
+        const second = sorted[1].receipts ?? 0;
+        if (second === 0 || top / second < 2) return null;
+        const multiplier = Math.round(top / second);
+        return (
+          <p className="text-xs text-slate-500 border-t border-slate-100 pt-3 mt-1">
+            ⚡ <strong>{sorted[0].name.split(" ").pop()}</strong> outraises{" "}
+            <strong>{sorted[1].name.split(" ").pop()}</strong> {multiplier}×
+          </p>
+        );
+      })()}
     </div>
   );
 }
