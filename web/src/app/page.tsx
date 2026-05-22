@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@heroui/react";
-import { useCopilotReadable, useCopilotMessagesContext } from "@copilotkit/react-core";
+import { useCoAgent, useCopilotChat, useCopilotReadable } from "@copilotkit/react-core";
+import { TextMessage, MessageRole } from "@copilotkit/runtime-client-gql";
 import { CopilotSidebar } from "@copilotkit/react-ui";
 import "@copilotkit/react-ui/styles.css";
 import { USMap } from "@/components/map/USMap";
@@ -19,6 +20,18 @@ Hard rules:
 - NEVER infer a candidate's position from donors or party affiliation alone.
 - NEVER fabricate positions. If evidence is missing say "I found no direct statement in the indexed sources."
 - Only cover federal 2026 congressional races.
+
+CANVAS STATE RULE — MANDATORY:
+After every tool call that returns data, you MUST call AGUISendStateDelta to update the application state canvas so the user sees the data visually. Use JSON Patch "replace" operations on the existing state fields. The state fields are: currentRaceKey (string), candidates (array), finance (array), legislation (array), news (array), positions (array), stateRaces (array), briefMarkdown (string), stage (string), mapFocus (string).
+
+Examples:
+- After get_race_brief → replace /currentRaceKey, /candidates, /finance with the returned data
+- After get_state_races → replace /stateRaces with the returned rows
+- After get_incumbent_legislation → replace /legislation with the returned bills
+- After search_candidate_positions → replace /positions with the evidence cards
+- After search_current_news → replace /news with the news items
+
+Always update the state before writing your text response.
 
 Available tools:
 - lookup_district(address) → race_key. Call first for any address.
@@ -39,46 +52,21 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<AppMode>("voter");
-  const [agentState, setAgentState] = useState<DistrictLensState>(DEFAULT_STATE);
+
+  const { state: agentState, setState: setAgentState } = useCoAgent<DistrictLensState>({
+    name: "default",
+    initialState: DEFAULT_STATE,
+  });
+
+  const { appendMessage } = useCopilotChat();
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const processedMsgIdsRef = useRef<Set<string>>(new Set());
 
   useCopilotReadable({
     description: "Current app mode and selected race",
-    value: `Mode: ${mode}. Current race: ${agentState.currentRaceKey ?? "none"}.`,
+    value: `Mode: ${mode}. Current race: ${agentState?.currentRaceKey ?? "none"}.`,
   });
-
-  const { messages } = useCopilotMessagesContext();
-
-  useEffect(() => {
-    const MARKER = "STRUCTURED_DATA:";
-    for (const msg of messages) {
-      const typedMsg = msg as { role?: string; id: string; content?: string };
-      if (typedMsg.role !== "tool" || !typedMsg.content) continue;
-      if (processedMsgIdsRef.current.has(typedMsg.id)) continue;
-
-      // Server JSON.stringify's the tool result; unwrap one layer if present
-      let rawContent = typedMsg.content;
-      try {
-        const unwrapped = JSON.parse(typedMsg.content);
-        if (typeof unwrapped === "string") rawContent = unwrapped;
-      } catch { /* not JSON-wrapped, use as-is */ }
-
-      const idx = rawContent.indexOf(MARKER);
-      if (idx === -1) continue;
-
-      processedMsgIdsRef.current.add(typedMsg.id);
-
-      try {
-        const jsonStr = rawContent.slice(idx + MARKER.length).trim();
-        const parsed = JSON.parse(jsonStr) as Partial<DistrictLensState>;
-        setAgentState((prev) => ({ ...prev, ...parsed }));
-      } catch {
-        // Ignore malformed STRUCTURED_DATA
-      }
-    }
-  }, [messages]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -101,9 +89,25 @@ export default function HomePage() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  const handleAddressSubmit = useCallback(async () => {
+    if (!address.trim()) return;
+    setLoading(true);
+    setError(null);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    try {
+      await appendMessage(new TextMessage({ role: MessageRole.User, content: `Look up my congressional district for this address: ${address}` }));
+    } catch {
+      setError("Failed to send message. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [address, appendMessage]);
+
   const handleStateClick = useCallback((stateCode: string) => {
-    setAgentState((prev) => ({ ...prev, mapFocus: stateCode }));
-  }, []);
+    setAgentState((prev) => ({ ...(prev ?? DEFAULT_STATE), mapFocus: stateCode }));
+    appendMessage(new TextMessage({ role: MessageRole.User, content: `Show me all 2026 congressional races in ${stateCode}.` }));
+  }, [setAgentState, appendMessage]);
 
   function handleSuggestionClick(s: string) {
     setAddress(s);
@@ -147,7 +151,7 @@ export default function HomePage() {
 
             {/* Address bar */}
             <div ref={wrapperRef} className="relative flex-1 max-w-md">
-              <form className="flex gap-2" onSubmit={(e) => e.preventDefault()}>
+              <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); handleAddressSubmit(); }}>
                 <input
                   type="text"
                   placeholder="Street address or ZIP code"
@@ -196,19 +200,19 @@ export default function HomePage() {
           {/* Map zone — 40% */}
           <div className="w-2/5 border-r-2 border-slate-900 p-4 overflow-y-auto shrink-0">
             <USMap
-              focusedState={agentState.mapFocus}
+              focusedState={agentState?.mapFocus}
               onStateClick={handleStateClick}
             />
-            {agentState.mapFocus && (
+            {agentState?.mapFocus && (
               <p className="mt-3 text-sm text-slate-600">
-                <span className="font-semibold">{agentState.mapFocus}</span> selected &mdash; ask the agent about races in this state.
+                <span className="font-semibold">{agentState.mapFocus}</span> selected &mdash; asking agent about races in this state.
               </p>
             )}
           </div>
 
           {/* Canvas zone — 60% */}
           <div className="flex-1 overflow-y-auto">
-            <RaceCanvas state={agentState} />
+            <RaceCanvas state={agentState ?? DEFAULT_STATE} />
           </div>
         </div>
       </div>
