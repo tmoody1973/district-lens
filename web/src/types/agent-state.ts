@@ -91,6 +91,7 @@ export interface DistrictLensState {
   currentRaceKey: string | null;
   stage: ResearchStage;
   briefStartedAt: number | null;   // ms timestamp, set when stage leaves idle
+  status_message: string | null;
   candidates: CandidateCard[];
   finance: FinanceSummary[];
   legislation: BillRecord[];
@@ -108,6 +109,7 @@ export const DEFAULT_STATE: DistrictLensState = {
   currentRaceKey: null,
   stage: "idle",
   briefStartedAt: null,
+  status_message: null,
   candidates: [],
   finance: [],
   legislation: [],

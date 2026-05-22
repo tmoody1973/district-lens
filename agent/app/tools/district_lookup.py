@@ -140,6 +140,7 @@ def lookup_district(address_or_zip: str, tool_context: ToolContext) -> str:
     Args:
         address_or_zip: A full street address, ZIP code, or "lat,lng" pair.
     """
+    tool_context.state["status_message"] = f"Looking up district for {address_or_zip}…"
     lookup_hash = _hash_address(address_or_zip)
 
     # Check cache first (DECISIONS_LOG §4.3 R6)

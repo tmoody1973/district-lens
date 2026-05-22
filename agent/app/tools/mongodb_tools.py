@@ -81,6 +81,7 @@ def get_race_candidates(race_key: str, tool_context: ToolContext) -> dict[str, A
         race_key: The race identifier in the format '2026-{H|S}-{STATE}-{DISTRICT}'.
                   Example: '2026-H-WI-04', '2026-S-CA-00'.
     """
+    tool_context.state["status_message"] = f"Loading candidates for {race_key}…"
     try:
         db = _get_db()
         cands = list(
@@ -149,6 +150,7 @@ def get_race_finance_brief(race_key: str, tool_context: ToolContext) -> dict[str
     Args:
         race_key: Race identifier, e.g. '2026-H-WI-04' or '2026-S-TX-00'.
     """
+    tool_context.state["status_message"] = f"Pulling FEC finance data for {race_key}…"
     try:
         db = _get_db()
         cands = list(
@@ -407,6 +409,7 @@ def get_incumbent_legislation(race_key: str, tool_context: ToolContext, limit: i
         race_key: Race identifier, e.g. '2026-H-WI-04'. Must contain an incumbent.
         limit: Maximum bills to return (default 8, max 20).
     """
+    tool_context.state["status_message"] = f"Loading incumbent legislation for {race_key}…"
     try:
         db = _get_db()
         bills = list(

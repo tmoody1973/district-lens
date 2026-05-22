@@ -47,7 +47,7 @@ export function RaceCanvas({ state, onShareBrief }: Props) {
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-5">
       {/* Receipt progress + complete bar */}
       <div className="rounded-[2px] border border-slate-200 bg-slate-50 p-3">
-        <ReceiptProgress steps={steps} briefStartedAt={state.briefStartedAt} />
+        <ReceiptProgress steps={steps} briefStartedAt={state.briefStartedAt} statusMessage={state.status_message} />
         {isComplete && (
           <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3">
             <span className="text-xs text-slate-500">{sourceCount} sources</span>

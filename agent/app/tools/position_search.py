@@ -52,6 +52,10 @@ async def search_candidate_positions(
     if not api_key:
         raise ValueError("PERPLEXITY_API_KEY environment variable is not set")
 
+    tool_context.state["status_message"] = (
+        f"Searching {candidate_name}'s {issue} position via Perplexity…"
+    )
+
     _BROAD_TRIGGERS = {"", "all", "general", "overview", "issues", "everything"}
     broad = issue.strip().lower() in _BROAD_TRIGGERS
 
@@ -90,17 +94,26 @@ async def search_candidate_positions(
     }
 
     t0 = time.monotonic()
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        resp = await client.post(
-            _ENDPOINT,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-        )
-        resp.raise_for_status()
-        data = resp.json()
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                _ENDPOINT,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+    except (httpx.TimeoutException, httpx.HTTPStatusError) as exc:
+        logger.warning("search_candidate_positions failed: %s", exc)
+        tool_context.state["status_message"] = "Position search unavailable"
+        return "NO DIRECT STATEMENT FOUND (search unavailable)"
+    except Exception as exc:
+        logger.error("search_candidate_positions unexpected error: %s", exc)
+        tool_context.state["status_message"] = ""
+        return "NO DIRECT STATEMENT FOUND (search error)"
     elapsed = time.monotonic() - t0
 
     answer: str = data.get("choices", [{}])[0].get("message", {}).get("content", "")

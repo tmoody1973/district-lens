@@ -22,3 +22,30 @@ test("shows green complete bar when all steps done", () => {
   render(<ReceiptProgress steps={steps} briefStartedAt={Date.now() - 10000} />);
   expect(screen.getAllByText("Brief complete").length).toBeGreaterThan(0);
 });
+
+test("renders status_message when non-null", () => {
+  const steps = [{ label: "District resolved", status: "running" as const }];
+  render(
+    <ReceiptProgress
+      steps={steps}
+      briefStartedAt={Date.now()}
+      statusMessage="Looking up district for 123 Main St…"
+    />
+  );
+  expect(screen.getByTestId("status-message")).toBeInTheDocument();
+  expect(screen.getByText("Looking up district for 123 Main St…")).toBeInTheDocument();
+});
+
+test("does not render status message when statusMessage is null", () => {
+  const steps = [{ label: "District resolved", status: "running" as const }];
+  render(
+    <ReceiptProgress steps={steps} briefStartedAt={Date.now()} statusMessage={null} />
+  );
+  expect(screen.queryByTestId("status-message")).not.toBeInTheDocument();
+});
+
+test("shows MongoDB badge when steps are present", () => {
+  const steps = [{ label: "District resolved", status: "running" as const }];
+  render(<ReceiptProgress steps={steps} briefStartedAt={Date.now()} />);
+  expect(screen.getByText(/MongoDB/)).toBeInTheDocument();
+});

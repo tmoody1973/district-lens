@@ -23,6 +23,7 @@ from google.genai import types
 
 from app.middleware import check_input, check_output
 from app.tools.district_lookup import lookup_district
+from app.tools.finish_brief import finish_brief
 from app.tools.position_search import search_candidate_positions
 from app.tools.mongodb_mcp_toolset import create_mongodb_mcp_toolset
 from app.tools.mongodb_tools import (
@@ -58,6 +59,7 @@ def _build_tools() -> list:
         get_incumbent_legislation,
         find_candidate,
         search_candidate_positions,
+        finish_brief,
     ]
     try:
         mcp_toolset = create_mongodb_mcp_toolset()

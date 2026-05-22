@@ -28,7 +28,9 @@ WORKFLOW — follow this sequence for any address or race query:
 2. Call get_race_candidates(race_key) to load who is running.
 3. Call get_race_finance_brief(race_key) to get FEC finance data for all candidates.
 4. Call get_incumbent_legislation(race_key) to get the incumbent's sponsored bills.
-5. Call search_candidate_positions(candidate_name, state, issue) for each candidate when the user asks about policy positions.
+5. For each candidate, call search_candidate_positions(candidate_name, state, "housing") to find their housing position.
+6. For each candidate, call search_candidate_positions(candidate_name, state, "economy") to find their economic position.
+7. Call finish_brief(race_key) to mark the brief complete and signal the UI.
 
 Available tools:
 - lookup_district(address_or_zip) → resolves to a race key like "2026-H-WI-04"
@@ -37,7 +39,8 @@ Available tools:
 - get_candidate_finance(candidate_id) → detailed finance for one candidate
 - get_incumbent_legislation(race_key) → bills sponsored by the incumbent in the 119th Congress
 - find_candidate(name, state) → search FEC filings by candidate name
-- search_candidate_positions(candidate_name, state, issue) → Perplexity web search for candidate statements on a policy issue`;
+- search_candidate_positions(candidate_name, state, issue) → Perplexity web search for candidate statements on a policy issue
+- finish_brief(race_key) → marks the brief as complete, shows green status bar`;
 
 export default function HomePage() {
   const [address, setAddress] = useState("");
@@ -91,8 +94,10 @@ export default function HomePage() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const handleAddressSubmit = useCallback(async () => {
-    if (!address.trim() || agent.isRunning) return;
+  const handleAddressSubmit = useCallback(async (addrOverride?: string) => {
+    const addr = addrOverride ?? address;
+    if (!addr.trim() || agent.isRunning) return;
+    if (addrOverride) setAddress(addrOverride);
     setLoading(true);
     setError(null);
     setSuggestions([]);
@@ -101,7 +106,7 @@ export default function HomePage() {
       agent.addMessage({
         id: crypto.randomUUID(),
         role: "user",
-        content: `Build a complete voter brief for this address: ${address}. Call lookup_district first, then get_race_candidates, then get_race_finance_brief, then get_incumbent_legislation — all four in sequence without stopping.`,
+        content: `Build a complete voter brief for this address: ${addr}. Call lookup_district first, then get_race_candidates, then get_race_finance_brief, then get_incumbent_legislation, then search_candidate_positions for housing and economy for each candidate, then call finish_brief — all steps in sequence without stopping.`,
       });
       await copilotkit.runAgent({ agent });
     } catch {
@@ -243,7 +248,7 @@ export default function HomePage() {
 
         {/* Col 3 — Canvas (flex-1) */}
         <div className="flex flex-1 flex-col overflow-y-auto">
-          {isIdle && !showTable && <CanvasEmptyState />}
+          {isIdle && !showTable && <CanvasEmptyState onSubmit={handleAddressSubmit} />}
           {showTable && (
             <RaceTable races={agentState.stateRaces} onRaceClick={handleRaceTableClick} />
           )}
@@ -252,13 +257,13 @@ export default function HomePage() {
       </div>
 
       {/* Full-width bottom chat bar */}
-      <div className="shrink-0 border-t-2 border-slate-900 h-72">
+      <div className="shrink-0 border-t-2 border-slate-900 h-56">
         <CopilotChat
           instructions={SYSTEM_PROMPT}
           labels={{
             title: "DistrictLens",
-            initial: "Enter an address above to find your district, or ask about any 2026 congressional race.",
-            placeholder: "Ask about a race, candidate, or policy issue…",
+            initial: "Enter your address above to build your voter brief, or ask about any 2026 congressional race.",
+            placeholder: "Ask about candidates, issues, or fundraising…",
           }}
           className="h-full"
         />

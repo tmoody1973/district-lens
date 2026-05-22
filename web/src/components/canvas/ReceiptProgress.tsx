@@ -2,14 +2,15 @@
 import { useEffect, useState } from "react";
 import type { BriefStep } from "@/types/agent-state";
 
-const ESTIMATED_TOTAL_MS = 30_000;
+const ESTIMATED_TOTAL_MS = 70_000;
 
 interface Props {
   steps: BriefStep[];
   briefStartedAt: number | null;
+  statusMessage?: string | null;
 }
 
-export function ReceiptProgress({ steps, briefStartedAt }: Props) {
+export function ReceiptProgress({ steps, briefStartedAt, statusMessage }: Props) {
   const [secsLeft, setSecsLeft] = useState<number | null>(null);
   const isComplete = steps.length > 0 && steps.every((s) => s.status === "done");
 
@@ -36,27 +37,32 @@ export function ReceiptProgress({ steps, briefStartedAt }: Props) {
     <div className="space-y-2">
       {/* Header */}
       <div className="flex items-center justify-between">
-        {isComplete ? (
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
-            <span className="text-xs font-semibold text-green-700 uppercase tracking-widest">
-              Brief complete
-            </span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-            <span className="text-xs font-semibold text-blue-700 uppercase tracking-widest">
-              Building brief
-            </span>
-          </div>
-        )}
-        {secsLeft !== null && secsLeft > 0 && (
-          <span className="text-xs text-slate-400">~{secsLeft} sec left</span>
-        )}
-        {secsLeft === 0 && !isComplete && (
-          <span className="text-xs text-slate-400">still working…</span>
-        )}
+        <div className="flex items-center gap-2">
+          {isComplete ? (
+            <>
+              <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+              <span className="text-xs font-semibold text-green-700 uppercase tracking-widest">
+                Brief complete
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+              <span className="text-xs font-semibold text-blue-700 uppercase tracking-widest">
+                Building brief
+              </span>
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          {secsLeft !== null && secsLeft > 0 && (
+            <span className="text-xs text-slate-400">~{secsLeft} sec left</span>
+          )}
+          {secsLeft === 0 && !isComplete && (
+            <span className="text-xs text-slate-400">still working…</span>
+          )}
+          <span className="text-xs font-medium text-green-600">● MongoDB</span>
+        </div>
       </div>
 
       {/* Steps */}
@@ -87,6 +93,16 @@ export function ReceiptProgress({ steps, briefStartedAt }: Props) {
           </div>
         ))}
       </div>
+
+      {/* Agent status voice */}
+      {statusMessage && (
+        <p
+          data-testid="status-message"
+          className="text-xs text-slate-500 italic pt-1"
+        >
+          {statusMessage}
+        </p>
+      )}
     </div>
   );
 }
