@@ -21,7 +21,7 @@ const STATUS_LABELS: Record<string, string> = {
   open_seat: "Open Seat",
 };
 
-function fmtMoney(val: number | null): string {
+export function fmtMoney(val: number | null): string {
   if (val == null) return "—";
   const abs = Math.abs(val);
   if (abs >= 1_000_000) return `$${(val / 1_000_000).toFixed(1)}M`;
@@ -43,7 +43,9 @@ export function CandidateCard({ candidate, finance }: Props) {
 
   const total = finance?.receipts ?? null;
   const pac = finance?.pacContributions ?? null;
-  const pacPct = total && pac ? Math.round((pac / total) * 100) : null;
+  const pacPct = total !== null && total > 0 && pac !== null
+    ? Math.round((pac / total) * 100)
+    : null;
 
   return (
     <div className={`flex items-center gap-4 rounded-[2px] border-2 border-slate-200 border-l-4 ${borderClass} bg-white p-4`}>
