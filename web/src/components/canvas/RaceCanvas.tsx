@@ -34,7 +34,11 @@ export function RaceCanvas({ state }: Props) {
             Candidates · FEC 2026
           </p>
           {state.candidates.map((c) => (
-            <CandidateCard key={c.candidateId} candidate={c} />
+            <CandidateCard
+              key={c.candidateId}
+              candidate={c}
+              finance={state.finance.find((f) => f.candidateId === c.candidateId)}
+            />
           ))}
         </div>
       )}
