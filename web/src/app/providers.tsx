@@ -15,5 +15,5 @@ export function Providers({ children }: ProvidersProps) {
    * Phase 1B: wire the /api/copilotkit route to process.env.AGENT_URL.
    * DECISIONS_LOG §2.2.
    */
-  return <CopilotKit runtimeUrl="/api/copilotkit">{children}</CopilotKit>;
+  return <CopilotKit runtimeUrl="/api/copilotkit" agent="districtlens_root">{children}</CopilotKit>;
 }
