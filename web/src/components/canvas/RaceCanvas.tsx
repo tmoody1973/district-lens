@@ -3,7 +3,8 @@ import type { DistrictLensState } from "@/types/agent-state";
 import { RaceHeader } from "./RaceHeader";
 import { CandidateCard } from "./CandidateCard";
 import { FinanceChart } from "./FinanceChart";
-import { ResearchProgress } from "./ResearchProgress";
+import { ReceiptProgress } from "./ReceiptProgress";
+import { stepsFromStage } from "@/lib/steps";
 import { BillFeed } from "./BillFeed";
 import { NewsCard } from "./NewsCard";
 import { EvidenceCard } from "./EvidenceCard";
@@ -21,7 +22,10 @@ export function RaceCanvas({ state }: Props) {
 
   return (
     <div className="flex flex-col gap-6 p-6 overflow-y-auto">
-      <ResearchProgress stage={state.stage} />
+      <ReceiptProgress
+        steps={stepsFromStage(state.stage)}
+        briefStartedAt={state.briefStartedAt}
+      />
       <RaceHeader raceKey={state.currentRaceKey} />
 
       {state.candidates.length > 0 && (
