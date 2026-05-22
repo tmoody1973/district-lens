@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button } from "@heroui/react";
 import { useCopilotReadable, useCoAgent } from "@copilotkit/react-core";
 import { useAgent, useCopilotKit } from "@copilotkit/react-core/v2";
 import { CopilotSidebar } from "@copilotkit/react-ui";
 import "@copilotkit/react-ui/styles.css";
 import { USMap } from "@/components/map/USMap";
 import { RaceCanvas } from "@/components/canvas/RaceCanvas";
+import { CanvasEmptyState } from "@/components/canvas/CanvasEmptyState";
+import { RaceTable } from "@/components/canvas/RaceTable";
+import { StartPanel } from "@/components/StartPanel";
 import { DEFAULT_STATE, type DistrictLensState, type AppMode } from "@/types/agent-state";
 
 const SYSTEM_PROMPT = `You are DistrictLens, a nonpartisan election-accountability assistant for the 2026 U.S. midterm cycle.
@@ -51,24 +53,33 @@ export default function HomePage() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<AppMode>("voter");
 
   const { agent } = useAgent({ agentId: "districtlens_root" });
   const { copilotkit } = useCopilotKit();
 
   // useCoAgent syncs canvas state from the ADK agent via AG-UI state delta events.
-  const { state: agentState } = useCoAgent<DistrictLensState>({
+  const { state: agentState, setState: setAgentState } = useCoAgent<DistrictLensState>({
     name: "districtlens_root",
     initialState: DEFAULT_STATE,
   });
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const prevStageRef = useRef<string>("idle");
 
   useCopilotReadable({
     description: "Current app mode and selected race",
-    value: `Mode: ${mode}. Current race: ${agentState.currentRaceKey ?? "none"}.`,
+    value: `Mode: ${agentState.mode}. Current race: ${agentState.currentRaceKey ?? "none"}.`,
   });
+
+  // Stamp briefStartedAt the first time research leaves the idle stage so the
+  // receipt progress timer can measure elapsed time.
+  useEffect(() => {
+    if (prevStageRef.current === "idle" && agentState.stage !== "idle") {
+      setAgentState((prev) => ({ ...DEFAULT_STATE, ...prev, briefStartedAt: Date.now() }));
+    }
+    prevStageRef.current = agentState.stage;
+  }, [agentState.stage, setAgentState]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -121,11 +132,48 @@ export default function HomePage() {
     copilotkit.runAgent({ agent });
   }, [agent, copilotkit]);
 
+  const handleRaceTableClick = useCallback(
+    (raceKey: string) => {
+      if (agent.isRunning) return;
+      agent.addMessage({
+        id: crypto.randomUUID(),
+        role: "user",
+        content: `Build a voter brief for race ${raceKey}`,
+      });
+      copilotkit.runAgent({ agent });
+    },
+    [agent, copilotkit]
+  );
+
+  const handleModeChange = useCallback(
+    (m: AppMode) => {
+      setAgentState((prev) => ({ ...DEFAULT_STATE, ...prev, mode: m }));
+    },
+    [setAgentState]
+  );
+
+  const handleShareBrief = useCallback(() => {
+    const text = [
+      `DistrictLens Race Brief — ${agentState.currentRaceKey}`,
+      "",
+      agentState.candidates.map((c) => `• ${c.name} (${c.party} · ${c.status})`).join("\n"),
+      "",
+      agentState.positions
+        .map((p) => `[${p.issue.toUpperCase()}] ${p.candidateName}: ${p.answer.slice(0, 200)}…`)
+        .join("\n\n"),
+    ].join("\n");
+    navigator.clipboard.writeText(text).catch(() => {});
+  }, [agentState]);
+
   function handleSuggestionClick(s: string) {
     setAddress(s);
     setSuggestions([]);
     setShowSuggestions(false);
   }
+
+  const isJournalist = agentState.mode === "journalist";
+  const isIdle = agentState.stage === "idle" || !agentState.currentRaceKey;
+  const showTable = isJournalist && agentState.stateRaces.length > 0 && isIdle;
 
   return (
     <CopilotSidebar
@@ -143,24 +191,6 @@ export default function HomePage() {
           <div className="mx-auto flex max-w-7xl items-center gap-6">
             <span className="text-lg font-bold tracking-tight text-slate-900">DistrictLens</span>
 
-            {/* Mode toggle */}
-            <div className="flex rounded-[2px] border-2 border-slate-900 overflow-hidden">
-              {(["voter", "journalist"] as AppMode[]).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setMode(m)}
-                  className={[
-                    "px-4 py-1.5 text-sm font-semibold capitalize transition-colors",
-                    mode === m
-                      ? "bg-slate-900 text-white"
-                      : "bg-white text-slate-600 hover:bg-slate-100",
-                  ].join(" ")}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-
             {/* Address bar */}
             <div ref={wrapperRef} className="relative flex-1 max-w-md">
               <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); handleAddressSubmit(); }}>
@@ -172,14 +202,13 @@ export default function HomePage() {
                   onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
                   className="flex-1 rounded-[2px] border-2 border-slate-900 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-700"
                 />
-                <Button
+                <button
                   type="submit"
-                  isDisabled={loading || agent.isRunning}
-                  size="sm"
-                  className="rounded-[2px] border-2 border-slate-900 bg-slate-900 px-4 font-semibold text-white"
+                  disabled={loading || agent.isRunning}
+                  className="rounded-[2px] border-2 border-slate-900 bg-slate-900 px-4 text-sm font-semibold text-white disabled:opacity-50 hover:bg-slate-700 transition-colors"
                 >
                   {loading || agent.isRunning ? "…" : "Find"}
-                </Button>
+                </button>
               </form>
 
               {showSuggestions && suggestions.length > 0 && (
@@ -207,10 +236,20 @@ export default function HomePage() {
           </div>
         </header>
 
-        {/* Three-zone body */}
+        {/* Three-column body */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Map zone — 40% */}
-          <div className="w-2/5 border-r-2 border-slate-900 p-4 overflow-y-auto shrink-0">
+          {/* Col 1 — Start panel (22%) */}
+          <div className="w-[22%] shrink-0 overflow-y-auto">
+            <StartPanel
+              mode={agentState.mode}
+              onModeChange={handleModeChange}
+              activeRaceKey={agentState.currentRaceKey}
+              stage={agentState.stage}
+            />
+          </div>
+
+          {/* Col 2 — US map (32%) */}
+          <div className="w-[32%] shrink-0 overflow-y-auto border-x-2 border-slate-900 p-4">
             <USMap
               focusedState={agentState.mapFocus}
               onStateClick={handleStateClick}
@@ -224,9 +263,20 @@ export default function HomePage() {
             )}
           </div>
 
-          {/* Canvas zone — 60% */}
-          <div className="flex-1 overflow-y-auto">
-            <RaceCanvas state={agentState} />
+          {/* Col 3 — Canvas (flex-1) */}
+          <div className="flex flex-1 flex-col overflow-y-auto">
+            {isIdle && !showTable && (
+              <CanvasEmptyState
+                address={address}
+                onAddressChange={(v) => { setAddress(v); setError(null); }}
+                onSubmit={handleAddressSubmit}
+                loading={loading || agent.isRunning}
+              />
+            )}
+            {showTable && (
+              <RaceTable races={agentState.stateRaces} onRaceClick={handleRaceTableClick} />
+            )}
+            {!isIdle && <RaceCanvas state={agentState} onShareBrief={handleShareBrief} />}
           </div>
         </div>
       </div>
