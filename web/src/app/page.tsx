@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useCopilotReadable, useCoAgent } from "@copilotkit/react-core";
-import { useAgent, useCopilotKit } from "@copilotkit/react-core/v2";
+import { useAgent, useCopilotKit, CopilotChatConfigurationProvider } from "@copilotkit/react-core/v2";
 import { CopilotSidebar } from "@copilotkit/react-ui";
 import "@copilotkit/react-ui/styles.css";
 import { USMap } from "@/components/map/USMap";
@@ -176,6 +176,7 @@ export default function HomePage() {
   const showTable = isJournalist && agentState.stateRaces.length > 0 && isIdle;
 
   return (
+    <CopilotChatConfigurationProvider agentId="districtlens_root">
     <CopilotSidebar
       instructions={SYSTEM_PROMPT}
       defaultOpen={true}
@@ -281,5 +282,6 @@ export default function HomePage() {
         </div>
       </div>
     </CopilotSidebar>
+    </CopilotChatConfigurationProvider>
   );
 }
