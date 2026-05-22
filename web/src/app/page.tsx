@@ -62,17 +62,24 @@ export default function HomePage() {
   useEffect(() => {
     const MARKER = "STRUCTURED_DATA:";
     for (const msg of messages) {
-      const typedMsg = msg as { type?: string; id: string; result?: string };
-      if (typedMsg.type !== "ResultMessage" || !typedMsg.result) continue;
+      const typedMsg = msg as { role?: string; id: string; content?: string };
+      if (typedMsg.role !== "tool" || !typedMsg.content) continue;
       if (processedMsgIdsRef.current.has(typedMsg.id)) continue;
 
-      const idx = typedMsg.result.indexOf(MARKER);
+      // Server JSON.stringify's the tool result; unwrap one layer if present
+      let rawContent = typedMsg.content;
+      try {
+        const unwrapped = JSON.parse(typedMsg.content);
+        if (typeof unwrapped === "string") rawContent = unwrapped;
+      } catch { /* not JSON-wrapped, use as-is */ }
+
+      const idx = rawContent.indexOf(MARKER);
       if (idx === -1) continue;
 
       processedMsgIdsRef.current.add(typedMsg.id);
 
       try {
-        const jsonStr = typedMsg.result.slice(idx + MARKER.length).trim();
+        const jsonStr = rawContent.slice(idx + MARKER.length).trim();
         const parsed = JSON.parse(jsonStr) as Partial<DistrictLensState>;
         setAgentState((prev) => ({ ...prev, ...parsed }));
       } catch {

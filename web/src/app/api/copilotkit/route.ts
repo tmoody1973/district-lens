@@ -1,67 +1,96 @@
-/**
- * CopilotKit runtime — Phase 1C.
- *
- * LLM: Vertex AI via ADC (DECISIONS_LOG §2.9), no API key.
- * Tools: server-side CopilotKit actions backed by MongoDB Atlas data.
- *   - lookup_district         → Geocod.io cd120/cd compound request
- *   - get_race_brief          → candidates + finance for a race_key
- *   - get_incumbent_legislation → sponsored bills from the 119th Congress
- *   - find_candidate          → name search across 2026 FEC filers
- *
- * Phase 2B TODO: add Clerk auth for saved features + Upstash rate-limit.
- * Phase 2A TODO: replace VertexServiceAdapter with ADK → AG-UI bridge so
- *   civic-safety middleware (check_input / check_output) is active.
- */
-
 import { createVertex } from "@ai-sdk/google-vertex";
-import type { LanguageModel } from "ai";
+import { CopilotRuntime, copilotRuntimeNextJSAppRouterEndpoint } from "@copilotkit/runtime";
+import { BuiltInAgent, defineTool } from "@copilotkit/runtime/v2";
+import { z } from "zod";
 import {
-  CopilotRuntime,
-  copilotRuntimeNextJSAppRouterEndpoint,
-  type CopilotServiceAdapter,
-  type CopilotRuntimeChatCompletionRequest,
-  type CopilotRuntimeChatCompletionResponse,
-} from "@copilotkit/runtime";
-import { allActions } from "@/lib/server-actions";
+  districtLookupAction,
+  getRaceBriefAction,
+  getIncumbentLegislationAction,
+  findCandidateAction,
+  getStateRacesAction,
+  findCompetitiveRacesAction,
+  getCandidateProfileAction,
+  searchCandidatePositionsAction,
+  searchCurrentNewsAction,
+  getElectionDatesAction,
+} from "@/lib/server-actions";
 
-// ---------------------------------------------------------------------------
-// Vertex AI adapter (ADC, no API key) — DECISIONS_LOG §2.9
-// ---------------------------------------------------------------------------
+const vertex = createVertex({
+  project: process.env.GOOGLE_CLOUD_PROJECT ?? "civicsync-440613",
+  location: process.env.GOOGLE_CLOUD_LOCATION ?? "global",
+});
+const model = vertex("gemini-2.5-pro");
 
-class VertexServiceAdapter implements CopilotServiceAdapter {
-  readonly name = "VertexAdapter";
-  private readonly _lm: LanguageModel;
+const tools = [
+  defineTool({
+    name: districtLookupAction.name,
+    description: districtLookupAction.description,
+    parameters: z.object({ address: z.string() }),
+    execute: ({ address }) => districtLookupAction.handler({ address }),
+  }),
+  defineTool({
+    name: getRaceBriefAction.name,
+    description: getRaceBriefAction.description,
+    parameters: z.object({ race_key: z.string() }),
+    execute: ({ race_key }) => getRaceBriefAction.handler({ race_key }),
+  }),
+  defineTool({
+    name: getIncumbentLegislationAction.name,
+    description: getIncumbentLegislationAction.description,
+    parameters: z.object({ race_key: z.string() }),
+    execute: ({ race_key }) => getIncumbentLegislationAction.handler({ race_key }),
+  }),
+  defineTool({
+    name: findCandidateAction.name,
+    description: findCandidateAction.description,
+    parameters: z.object({ name: z.string(), state: z.string().optional() }),
+    execute: ({ name, state }) => findCandidateAction.handler({ name, state }),
+  }),
+  defineTool({
+    name: getStateRacesAction.name,
+    description: getStateRacesAction.description,
+    parameters: z.object({ state_code: z.string() }),
+    execute: ({ state_code }) => getStateRacesAction.handler({ state_code }),
+  }),
+  defineTool({
+    name: findCompetitiveRacesAction.name,
+    description: findCompetitiveRacesAction.description,
+    parameters: z.object({ state: z.string().optional() }),
+    execute: ({ state }) => findCompetitiveRacesAction.handler({ state }),
+  }),
+  defineTool({
+    name: getCandidateProfileAction.name,
+    description: getCandidateProfileAction.description,
+    parameters: z.object({ race_key: z.string() }),
+    execute: ({ race_key }) => getCandidateProfileAction.handler({ race_key }),
+  }),
+  defineTool({
+    name: searchCandidatePositionsAction.name,
+    description: searchCandidatePositionsAction.description,
+    parameters: z.object({ candidate_name: z.string(), issue: z.string() }),
+    execute: ({ candidate_name, issue }) =>
+      searchCandidatePositionsAction.handler({ candidate_name, issue }),
+  }),
+  defineTool({
+    name: searchCurrentNewsAction.name,
+    description: searchCurrentNewsAction.description,
+    parameters: z.object({ candidate_name: z.string() }),
+    execute: ({ candidate_name }) => searchCurrentNewsAction.handler({ candidate_name }),
+  }),
+  defineTool({
+    name: getElectionDatesAction.name,
+    description: getElectionDatesAction.description,
+    parameters: z.object({ state_code: z.string() }),
+    execute: ({ state_code }) => getElectionDatesAction.handler({ state_code }),
+  }),
+];
 
-  constructor() {
-    const vertex = createVertex({
-      project: process.env.GOOGLE_CLOUD_PROJECT ?? "civicsync-440613",
-      location: process.env.GOOGLE_CLOUD_LOCATION ?? "global",
-    });
-    // gemini-2.5-pro is stable GA and works correctly with the AI SDK tool loop.
-    this._lm = vertex("gemini-2.5-pro");
-  }
-
-  getLanguageModel(): LanguageModel {
-    return this._lm;
-  }
-
-  async process(
-    request: CopilotRuntimeChatCompletionRequest
-  ): Promise<CopilotRuntimeChatCompletionResponse> {
-    return { threadId: request.threadId ?? crypto.randomUUID() };
-  }
-}
-
-// ---------------------------------------------------------------------------
-// CopilotKit runtime — server-side actions registered here.
-// ---------------------------------------------------------------------------
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const runtime = new CopilotRuntime({ actions: allActions as any });
+const runtime = new CopilotRuntime({
+  agents: { default: new BuiltInAgent({ model, tools }) },
+});
 
 const { handleRequest } = copilotRuntimeNextJSAppRouterEndpoint({
   runtime,
-  serviceAdapter: new VertexServiceAdapter(),
   endpoint: "/api/copilotkit",
 });
 
