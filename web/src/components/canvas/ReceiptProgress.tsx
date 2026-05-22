@@ -54,6 +54,9 @@ export function ReceiptProgress({ steps, briefStartedAt }: Props) {
         {secsLeft !== null && secsLeft > 0 && (
           <span className="text-xs text-slate-400">~{secsLeft} sec left</span>
         )}
+        {secsLeft === 0 && !isComplete && (
+          <span className="text-xs text-slate-400">still working…</span>
+        )}
       </div>
 
       {/* Steps */}
