@@ -1,14 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@heroui/react";
-import { useCoAgent, useCopilotReadable, useCopilotMessagesContext } from "@copilotkit/react-core";
+import { useCopilotReadable, useCopilotMessagesContext } from "@copilotkit/react-core";
 import { CopilotSidebar } from "@copilotkit/react-ui";
 import "@copilotkit/react-ui/styles.css";
 import { USMap } from "@/components/map/USMap";
 import { RaceCanvas } from "@/components/canvas/RaceCanvas";
 import { DEFAULT_STATE, type DistrictLensState, type AppMode } from "@/types/agent-state";
-import { useState } from "react";
 
 const SYSTEM_PROMPT = `You are DistrictLens, a nonpartisan election-accountability assistant for the 2026 U.S. midterm cycle.
 
@@ -40,14 +39,10 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<AppMode>("voter");
+  const [agentState, setAgentState] = useState<DistrictLensState>(DEFAULT_STATE);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const processedMsgIdsRef = useRef<Set<string>>(new Set());
-
-  const { state: agentState, setState: setAgentState } = useCoAgent<DistrictLensState>({
-    name: "default",
-    initialState: DEFAULT_STATE,
-  });
 
   useCopilotReadable({
     description: "Current app mode and selected race",
@@ -78,7 +73,7 @@ export default function HomePage() {
       try {
         const jsonStr = rawContent.slice(idx + MARKER.length).trim();
         const parsed = JSON.parse(jsonStr) as Partial<DistrictLensState>;
-        setAgentState((prev) => ({ ...(prev ?? DEFAULT_STATE), ...parsed } as DistrictLensState));
+        setAgentState((prev) => ({ ...prev, ...parsed }));
       } catch {
         // Ignore malformed STRUCTURED_DATA
       }
@@ -107,7 +102,7 @@ export default function HomePage() {
   }, []);
 
   const handleStateClick = useCallback((stateCode: string) => {
-    setAgentState((prev) => ({ ...(prev ?? DEFAULT_STATE), mapFocus: stateCode }));
+    setAgentState((prev) => ({ ...prev, mapFocus: stateCode }));
   }, []);
 
   function handleSuggestionClick(s: string) {
