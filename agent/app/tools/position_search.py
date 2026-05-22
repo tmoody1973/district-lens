@@ -7,6 +7,7 @@ import os
 import time
 
 import httpx
+from google.adk.tools import ToolContext
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ _SYSTEM = (
 
 
 async def search_candidate_positions(
-    candidate_name: str, state: str, issue: str
+    candidate_name: str, state: str, issue: str, tool_context: ToolContext
 ) -> str:
     """Search for a congressional candidate's direct public statements on a policy issue.
 
@@ -122,6 +123,25 @@ async def search_candidate_positions(
     source_lines = "\n".join(
         f"[{i + 1}] {s.get('url', '')}" for i, s in enumerate(sources[:10])
     )
+
+    evidence_card = {
+        "candidateName": candidate_name,
+        "issue": issue or "key positions",
+        "answer": answer,
+        "sources": [
+            {
+                "title": s.get("title", ""),
+                "url": s.get("url", ""),
+                "date": s.get("date"),
+                "snippet": s.get("snippet", ""),
+            }
+            for s in sources[:10]
+        ],
+    }
+    existing_positions = list(tool_context.state.get("positions", []))
+    existing_positions.append(evidence_card)
+    tool_context.state["positions"] = existing_positions
+    tool_context.state["stage"] = "news"
 
     return (
         f"{prefix} ({source_count} sources, {elapsed:.1f}s)\n\n"

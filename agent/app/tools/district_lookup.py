@@ -18,6 +18,8 @@ from datetime import UTC, datetime, timedelta
 import pymongo
 import pymongo.errors
 
+from google.adk.tools import ToolContext
+
 from app.services.geocodio import GeocodioClient, GeocodioError
 from app.services.geocodio.models import DistrictResult
 
@@ -93,7 +95,42 @@ def _format_response(result: DistrictResult) -> str:
     )
 
 
-def lookup_district(address_or_zip: str) -> str:
+def _extract_race_key_from_text(text: str) -> str | None:
+    """Extract a race key like '2026-H-WI-04' from a formatted response string."""
+    import re
+    match = re.search(r"(2026-[HS]-[A-Z]{2}-\d{2})", text)
+    return match.group(1) if match else None
+
+
+def _extract_state_from_race_key(race_key: str) -> str | None:
+    """Extract two-letter state code from '2026-H-WI-04' → 'WI'."""
+    parts = race_key.split("-")
+    return parts[2] if len(parts) >= 3 else None
+
+
+def _push_district_state(tool_context: ToolContext, response_text: str) -> None:
+    """Push district stage to canvas from a cached response string."""
+    race_key = _extract_race_key_from_text(response_text)
+    if race_key:
+        state_code = _extract_state_from_race_key(race_key)
+        tool_context.state["stage"] = "district"
+        tool_context.state["currentRaceKey"] = race_key
+        if state_code:
+            tool_context.state["mapFocus"] = state_code
+
+
+def _push_district_state_from_result(tool_context: ToolContext, result: DistrictResult) -> None:
+    """Push district stage to canvas from a live DistrictResult."""
+    primary = result.primary_district
+    if primary and not result.is_zip_ambiguous:
+        state_code = _extract_state_from_race_key(primary.race_key)
+        tool_context.state["stage"] = "district"
+        tool_context.state["currentRaceKey"] = primary.race_key
+        if state_code:
+            tool_context.state["mapFocus"] = state_code
+
+
+def lookup_district(address_or_zip: str, tool_context: ToolContext) -> str:
     """Resolve a street address or ZIP code to a congressional district.
 
     Returns the district race key (e.g. "WI-04"), geocode details, and
@@ -114,6 +151,7 @@ def lookup_district(address_or_zip: str) -> str:
             )
             if cached:
                 logger.info("district_lookup.cache_hit", extra={"hash": lookup_hash[:8]})
+                _push_district_state(tool_context, cached.get("response_text", ""))
                 return cached["response_text"]
         except pymongo.errors.PyMongoError as exc:
             logger.warning("district_lookup.cache_read_error: %s", exc)
@@ -140,6 +178,7 @@ def lookup_district(address_or_zip: str) -> str:
 
     result = results[0]
     response_text = _format_response(result)
+    _push_district_state_from_result(tool_context, result)
 
     # Write to cache (DECISIONS_LOG §4.3 R3, R6)
     if collection is not None:

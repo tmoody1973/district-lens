@@ -23,6 +23,7 @@ from typing import Any
 
 import pymongo
 import pymongo.errors
+from google.adk.tools import ToolContext
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ def _not_found(message: str, source: str = "") -> dict[str, Any]:
     return {"status": "not_found", "data": None, "warnings": [message], "source": source}
 
 
-def get_race_candidates(race_key: str) -> dict[str, Any]:
+def get_race_candidates(race_key: str, tool_context: ToolContext) -> dict[str, Any]:
     """Look up all 2026 candidates for a congressional race by race key.
 
     Use this after resolve_district (which returns a race key like '2026-H-WI-04')
@@ -92,6 +93,22 @@ def get_race_candidates(race_key: str) -> dict[str, Any]:
             FEC_SOURCE,
         )
 
+    candidate_cards = [
+        {
+            "candidateId": c["candidate_id"],
+            "name": c["name"],
+            "party": c["party"],
+            "status": c.get("incumbent_challenge_status", "unknown"),
+            "photoUrl": "",
+            "photoSource": "placeholder",
+            "raceKey": race_key,
+        }
+        for c in cands
+    ]
+    tool_context.state["currentRaceKey"] = race_key
+    tool_context.state["stage"] = "candidates"
+    tool_context.state["candidates"] = candidate_cards
+
     return {
         "status": "success",
         "data": {
@@ -112,7 +129,7 @@ def get_race_candidates(race_key: str) -> dict[str, Any]:
     }
 
 
-def get_race_finance_brief(race_key: str) -> dict[str, Any]:
+def get_race_finance_brief(race_key: str, tool_context: ToolContext) -> dict[str, Any]:
     """Get a finance summary for all candidates in a race in one call.
 
     Returns fundraising totals, disbursements, cash on hand, and the
@@ -188,6 +205,38 @@ def get_race_finance_brief(race_key: str) -> dict[str, Any]:
         warnings.append(
             f"No FEC financial filing on record for: {', '.join(missing_finance)}."
         )
+
+    # Push canvas state so the frontend receipt updates in real time.
+    candidate_cards = [
+        {
+            "candidateId": c["candidate_id"],
+            "name": c["name"],
+            "party": c["party"],
+            "status": c.get("incumbent_challenge_status", "unknown"),
+            "photoUrl": "",
+            "photoSource": "placeholder",
+            "raceKey": race_key,
+        }
+        for c in cands
+    ]
+    finance_summaries = [
+        {
+            "candidateId": c["candidate_id"],
+            "name": c["name"],
+            "party": c["party"],
+            "receipts": fins.get(c["candidate_id"], {}).get("receipts") if fins.get(c["candidate_id"]) else None,
+            "disbursements": fins.get(c["candidate_id"], {}).get("disbursements") if fins.get(c["candidate_id"]) else None,
+            "cashOnHand": fins.get(c["candidate_id"], {}).get("cash_on_hand") if fins.get(c["candidate_id"]) else None,
+            "individualContributions": fins.get(c["candidate_id"], {}).get("individual_contributions") if fins.get(c["candidate_id"]) else None,
+            "pacContributions": fins.get(c["candidate_id"], {}).get("pac_contributions") if fins.get(c["candidate_id"]) else None,
+            "coverageEndDate": fins.get(c["candidate_id"], {}).get("coverage_end_date") if fins.get(c["candidate_id"]) else None,
+        }
+        for c in cands
+    ]
+    tool_context.state["currentRaceKey"] = race_key
+    tool_context.state["stage"] = "finance"
+    tool_context.state["candidates"] = candidate_cards
+    tool_context.state["finance"] = finance_summaries
 
     return {
         "status": "success",
@@ -334,7 +383,7 @@ def find_candidate(name: str, state: str = "") -> dict[str, Any]:
     }
 
 
-def get_incumbent_legislation(race_key: str, limit: int = 8) -> dict[str, Any]:
+def get_incumbent_legislation(race_key: str, tool_context: ToolContext, limit: int = 8) -> dict[str, Any]:
     """Get recent sponsored legislation for the incumbent in a 2026 congressional race.
 
     Returns bills the incumbent has introduced in the current 119th Congress
@@ -373,6 +422,19 @@ def get_incumbent_legislation(race_key: str, limit: int = 8) -> dict[str, Any]:
         )
 
     member = bills[0].get("member_name", "The incumbent")
+    bill_records = [
+        {
+            "billId": b["bill_id"],
+            "title": b.get("title", "")[:200],
+            "introducedDate": b.get("introduced_date"),
+            "latestAction": b.get("latest_action", "")[:150],
+            "memberName": b.get("member_name", member),
+        }
+        for b in bills
+    ]
+    tool_context.state["legislation"] = bill_records
+    tool_context.state["stage"] = "legislation"
+
     return {
         "status": "success",
         "data": {

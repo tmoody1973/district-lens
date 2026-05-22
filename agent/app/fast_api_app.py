@@ -61,18 +61,18 @@ _adk_ui_agent = ADKAgent(
     predict_state=[
         PredictStateMapping(
             state_key="currentRaceKey",
-            tool="get_race_brief",
+            tool="get_race_finance_brief",
+            tool_argument="race_key",
+        ),
+        PredictStateMapping(
+            state_key="currentRaceKey",
+            tool="get_race_candidates",
             tool_argument="race_key",
         ),
         PredictStateMapping(
             state_key="currentRaceKey",
             tool="get_incumbent_legislation",
             tool_argument="race_key",
-        ),
-        PredictStateMapping(
-            state_key="mapFocus",
-            tool="get_state_races",
-            tool_argument="state_code",
         ),
     ],
 )
