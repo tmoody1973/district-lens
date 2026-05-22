@@ -11,11 +11,11 @@ const STEP_LABELS = [
 
 const STAGE_DONE_COUNT: Record<ResearchStage, number> = {
   idle: 0,
-  district: 1,
-  candidates: 2,
-  finance: 3,
-  legislation: 4,
-  news: 4,
+  district: 0,
+  candidates: 1,
+  finance: 2,
+  legislation: 3,
+  news: 3,
   complete: 6,
 };
 
