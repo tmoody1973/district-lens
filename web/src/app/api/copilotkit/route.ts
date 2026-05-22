@@ -86,7 +86,7 @@ const tools = [
 ];
 
 const runtime = new CopilotRuntime({
-  agents: { default: new BuiltInAgent({ model, tools }) },
+  agents: { default: new BuiltInAgent({ model, tools, maxSteps: 10 }) },
 });
 
 const { handleRequest } = copilotRuntimeNextJSAppRouterEndpoint({
