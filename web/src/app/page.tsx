@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@heroui/react";
-import { useCoAgent, useCopilotChat, useCopilotReadable } from "@copilotkit/react-core";
-import { TextMessage, MessageRole } from "@copilotkit/runtime-client-gql";
+import { useCopilotReadable, useCoAgent } from "@copilotkit/react-core";
+import { useAgent, useCopilotKit } from "@copilotkit/react-core/v2";
 import { CopilotSidebar } from "@copilotkit/react-ui";
 import "@copilotkit/react-ui/styles.css";
 import { USMap } from "@/components/map/USMap";
@@ -22,14 +22,14 @@ Hard rules:
 - Only cover federal 2026 congressional races.
 
 CANVAS STATE RULE — MANDATORY:
-After every tool call that returns data, you MUST call AGUISendStateDelta to update the application state canvas so the user sees the data visually. Use JSON Patch "replace" operations on the existing state fields. The state fields are: currentRaceKey (string), candidates (array), finance (array), legislation (array), news (array), positions (array), stateRaces (array), briefMarkdown (string), stage (string), mapFocus (string).
+After every tool call that returns data, you MUST call AGUISendStateDelta to update the application state canvas so the user sees the data visually. Use JSON Patch "add" operations — "add" works for both new and existing fields. The state fields are: currentRaceKey (string), candidates (array), finance (array), legislation (array), news (array), positions (array), stateRaces (array), briefMarkdown (string), stage (string), mapFocus (string).
 
 Examples:
-- After get_race_brief → replace /currentRaceKey, /candidates, /finance with the returned data
-- After get_state_races → replace /stateRaces with the returned rows
-- After get_incumbent_legislation → replace /legislation with the returned bills
-- After search_candidate_positions → replace /positions with the evidence cards
-- After search_current_news → replace /news with the news items
+- After get_race_brief → add /currentRaceKey, /candidates, /finance with the returned data
+- After get_state_races → add /stateRaces with the returned rows
+- After get_incumbent_legislation → add /legislation with the returned bills
+- After search_candidate_positions → add /positions with the evidence cards
+- After search_current_news → add /news with the news items
 
 Always update the state before writing your text response.
 
@@ -53,19 +53,21 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<AppMode>("voter");
 
-  const { state: agentState, setState: setAgentState } = useCoAgent<DistrictLensState>({
-    name: "default",
+  const { agent } = useAgent({ agentId: "districtlens_root" });
+  const { copilotkit } = useCopilotKit();
+
+  // useCoAgent syncs canvas state from the ADK agent via AG-UI state delta events.
+  const { state: agentState } = useCoAgent<DistrictLensState>({
+    name: "districtlens_root",
     initialState: DEFAULT_STATE,
   });
-
-  const { appendMessage } = useCopilotChat();
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   useCopilotReadable({
     description: "Current app mode and selected race",
-    value: `Mode: ${mode}. Current race: ${agentState?.currentRaceKey ?? "none"}.`,
+    value: `Mode: ${mode}. Current race: ${agentState.currentRaceKey ?? "none"}.`,
   });
 
   useEffect(() => {
@@ -90,24 +92,34 @@ export default function HomePage() {
   }, []);
 
   const handleAddressSubmit = useCallback(async () => {
-    if (!address.trim()) return;
+    if (!address.trim() || agent.isRunning) return;
     setLoading(true);
     setError(null);
     setSuggestions([]);
     setShowSuggestions(false);
     try {
-      await appendMessage(new TextMessage({ role: MessageRole.User, content: `Look up my congressional district for this address: ${address}` }));
+      agent.addMessage({
+        id: crypto.randomUUID(),
+        role: "user",
+        content: `Look up my congressional district for this address: ${address}`,
+      });
+      await copilotkit.runAgent({ agent });
     } catch {
       setError("Failed to send message. Please try again.");
     } finally {
       setLoading(false);
     }
-  }, [address, appendMessage]);
+  }, [address, agent, copilotkit]);
 
   const handleStateClick = useCallback((stateCode: string) => {
-    setAgentState((prev) => ({ ...(prev ?? DEFAULT_STATE), mapFocus: stateCode }));
-    appendMessage(new TextMessage({ role: MessageRole.User, content: `Show me all 2026 congressional races in ${stateCode}.` }));
-  }, [setAgentState, appendMessage]);
+    if (agent.isRunning) return;
+    agent.addMessage({
+      id: crypto.randomUUID(),
+      role: "user",
+      content: `Show me all 2026 congressional races in ${stateCode}.`,
+    });
+    copilotkit.runAgent({ agent });
+  }, [agent, copilotkit]);
 
   function handleSuggestionClick(s: string) {
     setAddress(s);
@@ -162,11 +174,11 @@ export default function HomePage() {
                 />
                 <Button
                   type="submit"
-                  isDisabled={loading}
+                  isDisabled={loading || agent.isRunning}
                   size="sm"
                   className="rounded-[2px] border-2 border-slate-900 bg-slate-900 px-4 font-semibold text-white"
                 >
-                  {loading ? "…" : "Find"}
+                  {loading || agent.isRunning ? "…" : "Find"}
                 </Button>
               </form>
 
@@ -200,10 +212,10 @@ export default function HomePage() {
           {/* Map zone — 40% */}
           <div className="w-2/5 border-r-2 border-slate-900 p-4 overflow-y-auto shrink-0">
             <USMap
-              focusedState={agentState?.mapFocus}
+              focusedState={agentState.mapFocus}
               onStateClick={handleStateClick}
             />
-            {agentState?.mapFocus && (
+            {agentState.mapFocus && (
               <p className="mt-3 text-sm text-slate-600">
                 <span className="font-semibold">{agentState.mapFocus}</span> selected &mdash; asking agent about races in this state.
               </p>
@@ -212,7 +224,7 @@ export default function HomePage() {
 
           {/* Canvas zone — 60% */}
           <div className="flex-1 overflow-y-auto">
-            <RaceCanvas state={agentState ?? DEFAULT_STATE} />
+            <RaceCanvas state={agentState} />
           </div>
         </div>
       </div>

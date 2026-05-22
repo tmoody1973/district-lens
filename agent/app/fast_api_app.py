@@ -15,10 +15,12 @@
 import os
 
 import google.auth
+from ag_ui_adk import ADKAgent, PredictStateMapping, add_adk_fastapi_endpoint
 from fastapi import FastAPI
 from google.adk.cli.fast_api import get_fast_api_app
 from google.cloud import logging as google_cloud_logging
 
+from app.agent import root_agent
 from app.app_utils.telemetry import setup_telemetry
 from app.app_utils.typing import Feedback
 
@@ -49,6 +51,32 @@ app: FastAPI = get_fast_api_app(
 )
 app.title = "districtlens-agent"
 app.description = "API for interacting with the Agent districtlens-agent"
+
+# AG-UI endpoint: wraps the ADK root_agent for CopilotKit frontend integration.
+# PredictStateMapping provides optimistic state hints to the UI before tool
+# results come back, improving perceived responsiveness.
+_adk_ui_agent = ADKAgent(
+    adk_agent=root_agent,
+    app_name="districtlens",
+    predict_state=[
+        PredictStateMapping(
+            state_key="currentRaceKey",
+            tool="get_race_brief",
+            tool_argument="race_key",
+        ),
+        PredictStateMapping(
+            state_key="currentRaceKey",
+            tool="get_incumbent_legislation",
+            tool_argument="race_key",
+        ),
+        PredictStateMapping(
+            state_key="mapFocus",
+            tool="get_state_races",
+            tool_argument="state_code",
+        ),
+    ],
+)
+add_adk_fastapi_endpoint(app, _adk_ui_agent, path="/copilotkit")
 
 
 @app.post("/feedback")

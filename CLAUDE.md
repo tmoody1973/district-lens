@@ -20,7 +20,8 @@ DistrictLens must be **evidence-first**, **nonpartisan**, and **citation-driven*
 
 Before implementing, read these files in order:
 
-1. `docs/HACKATHON_REQUIREMENTS.md`
+1. `docs/AGENT_CAPABILITIES_RESEARCH.md` ← **Read first for current Gemini models, Perplexity API options, and known capability gaps**
+2. `docs/HACKATHON_REQUIREMENTS.md`
 2. `docs/HACKATHON_TECHNICAL_ARCHITECTURE.md`
 3. `docs/HACKATHON_REQUIREMENTS_AUDIT.md`
 4. `docs/PRD.md`
@@ -59,6 +60,10 @@ Use TypeScript for frontend and backend unless the repository already has a diff
 | Tests | Add unit tests for race key construction, candidate classification, claim validation, and citation formatting. |
 | UI | Show citations, confidence labels, and source dates in the user interface. |
 | Logs | Log retrieval and extraction outcomes, including safe MCP trace events, but do not log secrets. |
+
+## Gemini model — MANDATORY
+
+**Always use `gemini-3.1-pro-preview` with `location="global"`.** Never use `gemini-2.5-pro`, `gemini-2.5-flash`, or any other Gemini model string. This applies to every file in the project: `agent.py`, any tool that calls `genai.Client`, `route.ts`, and any test script. If you see a different model string in any file, fix it immediately.
 
 ## Claude Code operating instructions
 
