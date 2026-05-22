@@ -7,6 +7,13 @@ export type ResearchStage =
   | "news"
   | "complete";
 
+export type StepStatus = "pending" | "running" | "done";
+
+export interface BriefStep {
+  label: string;
+  status: StepStatus;
+}
+
 export type AppMode = "voter" | "journalist";
 
 export type PartyCode = "DEM" | "REP" | "IND" | string;
@@ -83,6 +90,7 @@ export interface DistrictLensState {
   mapFocus: string | null;
   currentRaceKey: string | null;
   stage: ResearchStage;
+  briefStartedAt: number | null;   // ms timestamp, set when stage leaves idle
   candidates: CandidateCard[];
   finance: FinanceSummary[];
   legislation: BillRecord[];
@@ -99,6 +107,7 @@ export const DEFAULT_STATE: DistrictLensState = {
   mapFocus: null,
   currentRaceKey: null,
   stage: "idle",
+  briefStartedAt: null,
   candidates: [],
   finance: [],
   legislation: [],
