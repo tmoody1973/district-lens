@@ -214,6 +214,8 @@ export default function HomePage() {
             <USMap
               focusedState={agentState.mapFocus}
               onStateClick={handleStateClick}
+              mode={agentState.mode}
+              heatmapData={agentState.stateRaces}
             />
             {agentState.mapFocus && (
               <p className="mt-3 text-sm text-slate-600">
