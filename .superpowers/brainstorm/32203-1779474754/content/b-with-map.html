@@ -1,0 +1,186 @@
+<h2>Layout B + Map + Chat</h2>
+<p class="subtitle">Here's how B looks with the map and chat input added. Two arrangements to consider.</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="b1" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0f172a;border-radius:6px;padding:10px;font-family:system-ui,sans-serif;font-size:10px;color:#94a3b8">
+
+        <!-- Header -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #1e293b">
+          <span style="color:#f8fafc;font-weight:700;font-size:11px">DistrictLens</span>
+          <span style="background:#1e293b;color:#60a5fa;padding:2px 8px;border-radius:99px;font-size:9px">Voter</span>
+          <span style="color:#475569;font-size:9px">Journalist</span>
+        </div>
+
+        <!-- 3-col body -->
+        <div style="display:flex;gap:6px;height:155px">
+
+          <!-- Col 1: Mission panel -->
+          <div style="width:26%;background:#1e293b;border-radius:4px;padding:7px;display:flex;flex-direction:column;gap:4px">
+            <div style="color:#64748b;font-size:8px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Mission</div>
+            <div style="background:#3b82f6;color:white;border-radius:3px;padding:4px 6px;font-size:9px;font-weight:600">📋 Race Brief</div>
+            <div style="background:#0f172a;color:#64748b;border-radius:3px;padding:4px 6px;font-size:9px">🔍 Candidate</div>
+            <div style="background:#0f172a;color:#64748b;border-radius:3px;padding:4px 6px;font-size:9px">📰 Journalist</div>
+            <div style="flex:1"></div>
+            <div style="background:#0f172a;border-radius:3px;padding:5px 6px">
+              <div style="color:#64748b;font-size:8px">RACE</div>
+              <div style="color:#60a5fa;font-size:9px;margin-top:1px">WI-04 Moore</div>
+            </div>
+            <div style="background:#22c55e;color:#052e16;border-radius:3px;padding:5px 6px;font-size:9px;font-weight:700;text-align:center">BEGIN →</div>
+          </div>
+
+          <!-- Col 2: Map -->
+          <div style="width:34%;background:#1e293b;border-radius:4px;display:flex;flex-direction:column">
+            <div style="padding:5px 7px;color:#64748b;font-size:8px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Map</div>
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;color:#334155;font-size:22px">🗺️</div>
+            <div style="padding:5px 7px;background:#0f172a;border-radius:0 0 4px 4px;color:#64748b;font-size:8px">Click a state to browse races</div>
+          </div>
+
+          <!-- Col 3: Canvas -->
+          <div style="flex:1;background:#1e293b;border-radius:4px;padding:7px;overflow:hidden">
+            <div style="color:#60a5fa;font-size:8px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Live Research ●</div>
+            <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
+              <span style="color:#22c55e;font-size:10px">✓</span><span style="color:#94a3b8;font-size:9px">Candidates loaded</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
+              <span style="color:#22c55e;font-size:10px">✓</span><span style="color:#94a3b8;font-size:9px">Finance pulled</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
+              <span style="color:#f59e0b;font-size:10px">⟳</span><span style="color:#f59e0b;font-size:9px">Searching positions…</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
+              <span style="color:#334155;font-size:10px">○</span><span style="color:#475569;font-size:9px">Build brief</span>
+            </div>
+            <div style="margin-top:6px;background:#0f172a;border-radius:3px;padding:5px">
+              <div style="color:#334155;font-size:8px">CANDIDATE CARDS</div>
+              <div style="color:#475569;font-size:8px;margin-top:2px">building…</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat bar -->
+        <div style="display:flex;gap:5px;margin-top:7px;align-items:center">
+          <div style="flex:1;background:#1e293b;border-radius:3px;padding:5px 8px;color:#475569;font-size:9px">Ask a follow-up question…</div>
+          <div style="background:#3b82f6;color:white;border-radius:3px;padding:5px 10px;font-size:9px;font-weight:600">↑</div>
+        </div>
+
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B1 — Three Columns</h3>
+      <p>Mission panel | Map | Canvas side by side. Chat bar runs full-width at the bottom. All three surfaces always visible.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b2" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0f172a;border-radius:6px;padding:10px;font-family:system-ui,sans-serif;font-size:10px;color:#94a3b8">
+
+        <!-- Header -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #1e293b">
+          <span style="color:#f8fafc;font-weight:700;font-size:11px">DistrictLens</span>
+          <span style="background:#1e293b;color:#60a5fa;padding:2px 8px;border-radius:99px;font-size:9px">Voter</span>
+          <span style="color:#475569;font-size:9px">Journalist</span>
+          <div style="margin-left:auto;background:#1e293b;border-radius:3px;padding:3px 8px;color:#94a3b8;font-size:8px">Milwaukee, WI &nbsp;🔍</div>
+        </div>
+
+        <!-- 2-col body -->
+        <div style="display:flex;gap:6px;height:155px">
+
+          <!-- Left: Mission + Map stacked -->
+          <div style="width:38%;display:flex;flex-direction:column;gap:5px">
+
+            <!-- Mini map -->
+            <div style="background:#1e293b;border-radius:4px;flex:1;display:flex;flex-direction:column">
+              <div style="padding:4px 7px;color:#64748b;font-size:8px;font-weight:600;text-transform:uppercase">Map</div>
+              <div style="flex:1;display:flex;align-items:center;justify-content:center;color:#334155;font-size:20px">🗺️</div>
+              <div style="padding:4px 7px;background:#0f172a;border-radius:0 0 4px 4px">
+                <span style="color:#60a5fa;font-size:8px">WI selected</span>
+              </div>
+            </div>
+
+            <!-- Mission pills -->
+            <div style="background:#1e293b;border-radius:4px;padding:6px;display:flex;gap:4px">
+              <div style="background:#3b82f6;color:white;border-radius:3px;padding:3px 6px;font-size:8px;font-weight:600">📋 Brief</div>
+              <div style="background:#0f172a;color:#64748b;border-radius:3px;padding:3px 6px;font-size:8px">🔍 Research</div>
+              <div style="background:#0f172a;color:#64748b;border-radius:3px;padding:3px 6px;font-size:8px">📰 Press</div>
+            </div>
+          </div>
+
+          <!-- Right: Canvas full height -->
+          <div style="flex:1;background:#1e293b;border-radius:4px;padding:7px;display:flex;flex-direction:column;gap:4px">
+            <div style="color:#60a5fa;font-size:8px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">WI-04 Race Brief ●</div>
+
+            <!-- Candidate cards -->
+            <div style="background:#0f172a;border-radius:3px;padding:5px">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <div>
+                  <div style="color:#e2e8f0;font-size:9px;font-weight:600">Gwen Moore</div>
+                  <div style="color:#64748b;font-size:8px">DEM · Incumbent</div>
+                </div>
+                <div style="color:#22c55e;font-size:9px">$844K</div>
+              </div>
+            </div>
+            <div style="background:#0f172a;border-radius:3px;padding:5px">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <div>
+                  <div style="color:#e2e8f0;font-size:9px;font-weight:600">Purnima Nath</div>
+                  <div style="color:#64748b;font-size:8px">REP · Challenger</div>
+                </div>
+                <div style="color:#ef4444;font-size:9px">$0</div>
+              </div>
+            </div>
+
+            <!-- Progress -->
+            <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:2px">
+              <div style="display:flex;align-items:center;gap:4px"><span style="color:#22c55e;font-size:9px">✓</span><span style="color:#64748b;font-size:8px">Finance</span></div>
+              <div style="display:flex;align-items:center;gap:4px"><span style="color:#f59e0b;font-size:9px">⟳</span><span style="color:#f59e0b;font-size:8px">Searching housing positions…</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat bar -->
+        <div style="display:flex;gap:5px;margin-top:7px;align-items:center">
+          <div style="flex:1;background:#1e293b;border-radius:3px;padding:5px 8px;color:#475569;font-size:9px">Ask a follow-up question…</div>
+          <div style="background:#3b82f6;color:white;border-radius:3px;padding:5px 10px;font-size:9px;font-weight:600">↑</div>
+        </div>
+
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B2 — Map + Mission Left, Canvas Right</h3>
+      <p>Left column: mini map on top, mission pills below. Right column: full-height canvas. Address search in header. Chat at bottom.</p>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:16px;background:#0f172a;border-radius:6px;padding:14px;border:1px solid #1e293b">
+  <div class="label">How it works (plain English)</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-top:10px">
+    <div style="text-align:center">
+      <div style="font-size:18px;margin-bottom:4px">1️⃣</div>
+      <div style="color:#e2e8f0;font-size:9px;font-weight:600">Locate</div>
+      <div style="color:#64748b;font-size:8px;margin-top:2px">Type address or click map state → agent finds your race</div>
+    </div>
+    <div style="text-align:center">
+      <div style="font-size:18px;margin-bottom:4px">2️⃣</div>
+      <div style="color:#e2e8f0;font-size:9px;font-weight:600">Pick Mission</div>
+      <div style="color:#64748b;font-size:8px;margin-top:2px">Choose Race Brief, Candidate Research, or Journalist mode</div>
+    </div>
+    <div style="text-align:center">
+      <div style="font-size:18px;margin-bottom:4px">3️⃣</div>
+      <div style="color:#e2e8f0;font-size:9px;font-weight:600">Watch it run</div>
+      <div style="color:#64748b;font-size:8px;margin-top:2px">Canvas builds live — candidates → finance → legislation → positions</div>
+    </div>
+    <div style="text-align:center">
+      <div style="font-size:18px;margin-bottom:4px">4️⃣</div>
+      <div style="color:#e2e8f0;font-size:9px;font-weight:600">Ask follow-ups</div>
+      <div style="color:#64748b;font-size:8px;margin-top:2px">Chat at bottom for deeper questions after brief is built</div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:14px">B1 = equal three-column split. B2 = map+mission compressed left, canvas gets more room. Which feels right?</p>

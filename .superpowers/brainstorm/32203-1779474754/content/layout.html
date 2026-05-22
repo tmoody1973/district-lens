@@ -1,0 +1,98 @@
+<h2>DistrictLens — Overall Layout</h2>
+<p class="subtitle">What's the first thing a user sees and how do they kick off a research mission?</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0f172a;border-radius:6px;padding:12px;font-family:monospace;font-size:11px;color:#94a3b8;line-height:1.6">
+        <div style="color:#f8fafc;font-weight:bold;margin-bottom:8px;font-size:12px">DistrictLens &nbsp;|&nbsp; <span style="color:#60a5fa">Voter</span> &nbsp; Journalist</div>
+        <div style="display:flex;gap:8px;height:140px">
+          <div style="width:50%;background:#1e293b;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#64748b;font-size:10px">
+            🗺️ US Map<br/>click a state
+          </div>
+          <div style="width:50%;background:#1e293b;border-radius:4px;padding:8px">
+            <div style="color:#60a5fa;font-size:10px;margin-bottom:4px">RACE CANVAS</div>
+            <div style="color:#475569;font-size:9px">→ Enter address to start</div>
+            <div style="color:#475569;font-size:9px;margin-top:4px">→ Or click map</div>
+          </div>
+        </div>
+        <div style="margin-top:8px;background:#1e293b;border-radius:4px;padding:6px;display:flex;gap:6px;align-items:center">
+          <div style="flex:1;background:#0f172a;border-radius:3px;padding:4px 6px;color:#64748b;font-size:9px">Ask about a race, candidate, or issue…</div>
+          <div style="background:#3b82f6;color:white;border-radius:3px;padding:4px 8px;font-size:9px">Send</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Map + Canvas + Chat (current direction)</h3>
+      <p>Map on left, canvas on right, chat bar at bottom. User types or clicks map to start. Agent builds canvas as it works.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0f172a;border-radius:6px;padding:12px;font-family:monospace;font-size:11px;color:#94a3b8;line-height:1.6">
+        <div style="color:#f8fafc;font-weight:bold;margin-bottom:8px;font-size:12px">DistrictLens</div>
+        <div style="display:flex;gap:8px;height:140px">
+          <div style="width:38%;background:#1e293b;border-radius:4px;padding:8px">
+            <div style="color:#60a5fa;font-size:9px;margin-bottom:6px">MISSION</div>
+            <div style="background:#0f172a;border-radius:3px;padding:4px 6px;margin-bottom:4px;font-size:9px;color:#e2e8f0;cursor:pointer">📋 Build Race Brief</div>
+            <div style="background:#0f172a;border-radius:3px;padding:4px 6px;margin-bottom:4px;font-size:9px;color:#94a3b8">🔍 Research Candidate</div>
+            <div style="background:#0f172a;border-radius:3px;padding:4px 6px;font-size:9px;color:#94a3b8">📰 Journalist Mode</div>
+            <div style="margin-top:8px;background:#0f172a;border-radius:3px;padding:4px 6px;font-size:9px">
+              <div style="color:#64748b;font-size:8px;margin-bottom:2px">RACE</div>
+              <div style="color:#60a5fa">WI-04 Gwen Moore</div>
+            </div>
+          </div>
+          <div style="flex:1;background:#1e293b;border-radius:4px;padding:8px">
+            <div style="color:#60a5fa;font-size:9px;margin-bottom:4px">LIVE RESEARCH ●</div>
+            <div style="color:#22c55e;font-size:9px">✓ Candidates loaded</div>
+            <div style="color:#22c55e;font-size:9px">✓ Finance data pulled</div>
+            <div style="color:#f59e0b;font-size:9px">⟳ Searching positions…</div>
+            <div style="color:#475569;font-size:9px">○ Building brief</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Mission Panel + Live Research</h3>
+      <p>Left panel: pick a mission + a race. Right side: watch the agent execute each step in real-time. Explicit "Build Race Brief" button.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0f172a;border-radius:6px;padding:12px;font-family:monospace;font-size:11px;color:#94a3b8;line-height:1.6">
+        <div style="color:#f8fafc;font-weight:bold;margin-bottom:8px;font-size:12px">DistrictLens &nbsp;— &nbsp;<span style="color:#64748b;font-size:10px">What race do you want to understand?</span></div>
+        <div style="background:#1e293b;border-radius:4px;padding:6px;margin-bottom:8px;display:flex;gap:6px;align-items:center">
+          <div style="flex:1;background:#0f172a;border-radius:3px;padding:4px 8px;color:#60a5fa;font-size:10px">Milwaukee, WI</div>
+          <div style="background:#3b82f6;color:white;border-radius:3px;padding:4px 10px;font-size:9px;font-weight:bold">BUILD BRIEF →</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+          <div style="background:#1e293b;border-radius:4px;padding:6px">
+            <div style="color:#22c55e;font-size:8px">WI-04</div>
+            <div style="color:#e2e8f0;font-size:9px">Gwen Moore</div>
+            <div style="color:#64748b;font-size:8px">vs Nath</div>
+          </div>
+          <div style="background:#1e293b;border-radius:4px;padding:6px">
+            <div style="color:#ef4444;font-size:8px">WI-01</div>
+            <div style="color:#e2e8f0;font-size:9px">Bryan Steil</div>
+            <div style="color:#64748b;font-size:8px">vs Open</div>
+          </div>
+          <div style="background:#1e293b;border-radius:4px;padding:6px">
+            <div style="color:#f59e0b;font-size:8px">WI-03</div>
+            <div style="color:#e2e8f0;font-size:9px">Derrick Van Orden</div>
+            <div style="color:#64748b;font-size:8px">vs TBD</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Search-First + Brief Button</h3>
+      <p>Big search bar up top. Type address or name → matching races appear as cards. Pick one, hit "Build Brief" → full-screen agent execution begins.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:16px">Click your preferred layout direction. You can pick more than one if you want to combine elements.</p>

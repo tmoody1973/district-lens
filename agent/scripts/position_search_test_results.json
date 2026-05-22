@@ -1,0 +1,86 @@
+[
+  {
+    "candidate": "Mike Quigley",
+    "state": "IL",
+    "issue": "healthcare",
+    "model": "gemini-search-grounding",
+    "direct_statement": true,
+    "total_sources": 6,
+    "civic_sources": 0,
+    "fresh_sources": 0,
+    "latency_s": 26.98,
+    "answer_preview": "Based on verifiable public records, including his official House website, campaign website, and public appearances, Representative Mike Quigley has made several direct statements regarding healthcare."
+  },
+  {
+    "candidate": "Mike Quigley",
+    "state": "IL",
+    "issue": "housing affordability",
+    "model": "gemini-search-grounding",
+    "direct_statement": true,
+    "total_sources": 6,
+    "civic_sources": 0,
+    "fresh_sources": 0,
+    "latency_s": 24.09,
+    "answer_preview": "Representative Mike Quigley has made several direct statements and taken legislative actions regarding housing affordability, focusing on federal funding, regulatory reform, and the national housing s"
+  },
+  {
+    "candidate": "Kevin Hern",
+    "state": "OK",
+    "issue": "immigration",
+    "model": "gemini-search-grounding",
+    "direct_statement": true,
+    "total_sources": 9,
+    "civic_sources": 0,
+    "fresh_sources": 0,
+    "latency_s": 35.9,
+    "answer_preview": "Based on verifiable sources, Representative Kevin Hern has made several direct statements and taken specific legislative actions regarding immigration.   **Direct Statements** *   **On Legal Immigrati"
+  },
+  {
+    "candidate": "Markwayne Mullin",
+    "state": "OK",
+    "issue": "healthcare",
+    "model": "gemini-search-grounding",
+    "direct_statement": true,
+    "total_sources": 7,
+    "civic_sources": 0,
+    "fresh_sources": 0,
+    "latency_s": 30.01,
+    "answer_preview": "Markwayne Mullin has made several direct public statements regarding healthcare, focusing primarily on the Affordable Care Act (ACA), Medicaid, prescription drug pricing, and reproductive healthcare. "
+  },
+  {
+    "candidate": "Hillary Scholten",
+    "state": "MI",
+    "issue": "climate change",
+    "model": "gemini-search-grounding",
+    "direct_statement": true,
+    "total_sources": 5,
+    "civic_sources": 0,
+    "fresh_sources": 0,
+    "latency_s": 33.79,
+    "answer_preview": "Representative Hillary Scholten has made several public statements regarding climate change, clean energy, and environmental protection across her campaign materials, questionnaires, and press release"
+  },
+  {
+    "candidate": "Hillary Scholten",
+    "state": "MI",
+    "issue": "housing affordability",
+    "model": "gemini-search-grounding",
+    "direct_statement": true,
+    "total_sources": 4,
+    "civic_sources": 0,
+    "fresh_sources": 0,
+    "latency_s": 23.97,
+    "answer_preview": "Representative Hillary Scholten has made several direct statements and taken legislative actions regarding housing affordability.   **Direct Statements** *   **On expanding local housing supply:** In "
+  },
+  {
+    "candidate": "Mark Tedford",
+    "state": "OK",
+    "issue": "healthcare",
+    "model": "gemini-search-grounding",
+    "direct_statement": true,
+    "total_sources": 6,
+    "civic_sources": 0,
+    "fresh_sources": 0,
+    "latency_s": 23.44,
+    "answer_preview": "Mark Tedford, a current state representative and candidate for U.S. Congress in Oklahoma's 1st District, has made several direct public statements regarding healthcare through his campaign website and"
+  }
+]

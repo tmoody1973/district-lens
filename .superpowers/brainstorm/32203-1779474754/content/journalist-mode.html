@@ -1,0 +1,184 @@
+<h2>Journalist Mode</h2>
+<p class="subtitle">Switch from Voter → Journalist. The map and canvas both change. What should they show?</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="heatmap-table" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0f172a;border-radius:6px;padding:10px;font-family:system-ui,sans-serif;font-size:10px;color:#94a3b8">
+
+        <!-- Header with mode toggle -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #1e293b">
+          <span style="color:#f8fafc;font-weight:700;font-size:11px">DistrictLens</span>
+          <span style="color:#475569;font-size:9px">Voter</span>
+          <span style="background:#f59e0b;color:#000;padding:2px 8px;border-radius:99px;font-size:9px;font-weight:700">Journalist</span>
+        </div>
+
+        <div style="display:flex;gap:6px;height:160px">
+          <!-- Mission col -->
+          <div style="width:26%;background:#1e293b;border-radius:4px;padding:7px;display:flex;flex-direction:column;gap:4px">
+            <div style="color:#64748b;font-size:8px;font-weight:600;text-transform:uppercase;margin-bottom:2px">Mission</div>
+            <div style="background:#f59e0b;color:#000;border-radius:3px;padding:4px 6px;font-size:9px;font-weight:600">📰 Investigate</div>
+            <div style="background:#0f172a;color:#64748b;border-radius:3px;padding:4px 6px;font-size:9px">💰 Finance</div>
+            <div style="background:#0f172a;color:#64748b;border-radius:3px;padding:4px 6px;font-size:9px">⚡ Competitive</div>
+            <div style="flex:1"></div>
+            <div style="background:#0f172a;border-radius:3px;padding:5px 6px">
+              <div style="color:#64748b;font-size:8px">FILTER</div>
+              <div style="color:#f59e0b;font-size:9px;margin-top:1px">All states</div>
+            </div>
+            <div style="background:#f59e0b;color:#000;border-radius:3px;padding:5px 6px;font-size:9px;font-weight:700;text-align:center">RUN →</div>
+          </div>
+
+          <!-- Map col — heatmap -->
+          <div style="width:34%;background:#1e293b;border-radius:4px;display:flex;flex-direction:column">
+            <div style="padding:5px 7px;display:flex;justify-content:space-between;align-items:center">
+              <span style="color:#64748b;font-size:8px;font-weight:600;text-transform:uppercase">Finance Gap</span>
+              <span style="color:#f59e0b;font-size:7px">heatmap</span>
+            </div>
+            <!-- Fake heatmap states -->
+            <div style="flex:1;padding:4px;display:grid;grid-template-columns:repeat(8,1fr);gap:2px;align-content:center">
+              <div style="height:8px;border-radius:1px;background:#166534;opacity:.9"></div>
+              <div style="height:8px;border-radius:1px;background:#166534;opacity:.7"></div>
+              <div style="height:8px;border-radius:1px;background:#854d0e;opacity:.9"></div>
+              <div style="height:8px;border-radius:1px;background:#166534;opacity:.5"></div>
+              <div style="height:8px;border-radius:1px;background:#991b1b;opacity:.9"></div>
+              <div style="height:8px;border-radius:1px;background:#166534;opacity:.8"></div>
+              <div style="height:8px;border-radius:1px;background:#854d0e;opacity:.7"></div>
+              <div style="height:8px;border-radius:1px;background:#991b1b;opacity:.8"></div>
+              <div style="height:8px;border-radius:1px;background:#166534;opacity:.6"></div>
+              <div style="height:8px;border-radius:1px;background:#854d0e;opacity:.8"></div>
+              <div style="height:8px;border-radius:1px;background:#991b1b;opacity:.7"></div>
+              <div style="height:8px;border-radius:1px;background:#166534;opacity:.9"></div>
+              <div style="height:8px;border-radius:1px;background:#854d0e;opacity:.9"></div>
+              <div style="height:8px;border-radius:1px;background:#166534;opacity:.4"></div>
+              <div style="height:8px;border-radius:1px;background:#991b1b;opacity:.9"></div>
+              <div style="height:8px;border-radius:1px;background:#854d0e;opacity:.6"></div>
+            </div>
+            <!-- Legend -->
+            <div style="padding:4px 7px;background:#0f172a;border-radius:0 0 4px 4px;display:flex;gap:8px;align-items:center">
+              <span style="display:inline-block;width:8px;height:8px;background:#166534;border-radius:1px"></span><span style="font-size:7px;color:#64748b">Safe</span>
+              <span style="display:inline-block;width:8px;height:8px;background:#854d0e;border-radius:1px"></span><span style="font-size:7px;color:#64748b">Lean</span>
+              <span style="display:inline-block;width:8px;height:8px;background:#991b1b;border-radius:1px"></span><span style="font-size:7px;color:#64748b">Competitive</span>
+            </div>
+          </div>
+
+          <!-- Canvas col — race table -->
+          <div style="flex:1;background:#1e293b;border-radius:4px;padding:7px;overflow:hidden">
+            <div style="color:#f59e0b;font-size:8px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Competitive Races ↓ Finance Gap</div>
+            <!-- Table header -->
+            <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:4px;margin-bottom:3px">
+              <div style="color:#475569;font-size:7px;text-transform:uppercase">Race</div>
+              <div style="color:#475569;font-size:7px;text-transform:uppercase">Gap</div>
+              <div style="color:#475569;font-size:7px;text-transform:uppercase">PAC%</div>
+            </div>
+            <!-- Table rows -->
+            <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:4px;padding:4px 0;border-bottom:1px solid #0f172a">
+              <div style="color:#e2e8f0;font-size:8px">OH-01 Chabot</div>
+              <div style="color:#ef4444;font-size:8px">$2.1M</div>
+              <div style="color:#f59e0b;font-size:8px">78%</div>
+            </div>
+            <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:4px;padding:4px 0;border-bottom:1px solid #0f172a">
+              <div style="color:#e2e8f0;font-size:8px">PA-07 Wild</div>
+              <div style="color:#ef4444;font-size:8px">$1.8M</div>
+              <div style="color:#f59e0b;font-size:8px">54%</div>
+            </div>
+            <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:4px;padding:4px 0;border-bottom:1px solid #0f172a;background:#172554">
+              <div style="color:#60a5fa;font-size:8px">WI-03 Van Orden</div>
+              <div style="color:#ef4444;font-size:8px">$900K</div>
+              <div style="color:#22c55e;font-size:8px">12%</div>
+            </div>
+            <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:4px;padding:4px 0">
+              <div style="color:#e2e8f0;font-size:8px">MI-08 Kildee</div>
+              <div style="color:#f59e0b;font-size:8px">$440K</div>
+              <div style="color:#64748b;font-size:8px">31%</div>
+            </div>
+            <div style="color:#64748b;font-size:7px;margin-top:4px">Click a row → full brief →</div>
+          </div>
+        </div>
+
+        <!-- Chat -->
+        <div style="display:flex;gap:5px;margin-top:7px;align-items:center">
+          <div style="flex:1;background:#1e293b;border-radius:3px;padding:5px 8px;color:#475569;font-size:9px">Find incumbents being outraised in swing states…</div>
+          <div style="background:#f59e0b;color:#000;border-radius:3px;padding:5px 10px;font-size:9px;font-weight:600">↑</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Heatmap + Race Table</h3>
+      <p>Map goes amber — states colored by finance competitiveness. Canvas shows a sortable race table. Click any row to drill into that race's full brief.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="list-only" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0f172a;border-radius:6px;padding:10px;font-family:system-ui,sans-serif;font-size:10px;color:#94a3b8">
+
+        <!-- Header -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #1e293b">
+          <span style="color:#f8fafc;font-weight:700;font-size:11px">DistrictLens</span>
+          <span style="color:#475569;font-size:9px">Voter</span>
+          <span style="background:#f59e0b;color:#000;padding:2px 8px;border-radius:99px;font-size:9px;font-weight:700">Journalist</span>
+        </div>
+
+        <div style="display:flex;gap:6px;height:160px">
+          <!-- Mission col -->
+          <div style="width:26%;background:#1e293b;border-radius:4px;padding:7px;display:flex;flex-direction:column;gap:4px">
+            <div style="color:#64748b;font-size:8px;font-weight:600;text-transform:uppercase;margin-bottom:2px">Query</div>
+            <div style="background:#f59e0b;color:#000;border-radius:3px;padding:4px 6px;font-size:9px;font-weight:600">⚡ Competitive</div>
+            <div style="background:#0f172a;color:#64748b;border-radius:3px;padding:4px 6px;font-size:9px">💰 PAC-heavy</div>
+            <div style="background:#0f172a;color:#64748b;border-radius:3px;padding:4px 6px;font-size:9px">🔄 Outraised</div>
+            <div style="flex:1"></div>
+            <div style="background:#f59e0b;color:#000;border-radius:3px;padding:5px 6px;font-size:9px;font-weight:700;text-align:center">FIND RACES →</div>
+          </div>
+
+          <!-- Map col — same neutral map, no heatmap -->
+          <div style="width:34%;background:#1e293b;border-radius:4px;display:flex;flex-direction:column">
+            <div style="padding:5px 7px;color:#64748b;font-size:8px;font-weight:600;text-transform:uppercase">Map</div>
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;color:#334155;font-size:20px">🗺️</div>
+            <div style="padding:4px 7px;background:#0f172a;border-radius:0 0 4px 4px;color:#64748b;font-size:8px">Click to filter by state</div>
+          </div>
+
+          <!-- Canvas — stacked race cards -->
+          <div style="flex:1;background:#1e293b;border-radius:4px;padding:7px;overflow:hidden;display:flex;flex-direction:column;gap:4px">
+            <div style="color:#f59e0b;font-size:8px;font-weight:600;text-transform:uppercase;margin-bottom:2px">5 competitive races found</div>
+            <div style="background:#0f172a;border-radius:3px;padding:5px;display:flex;justify-content:space-between">
+              <div>
+                <div style="color:#e2e8f0;font-size:8px;font-weight:600">OH-01 Chabot</div>
+                <div style="color:#64748b;font-size:7px">Challenger outraising incumbent</div>
+              </div>
+              <div style="color:#ef4444;font-size:8px;font-weight:600">$2.1M gap</div>
+            </div>
+            <div style="background:#0f172a;border-radius:3px;padding:5px;display:flex;justify-content:space-between">
+              <div>
+                <div style="color:#e2e8f0;font-size:8px;font-weight:600">PA-07 Wild</div>
+                <div style="color:#64748b;font-size:7px">PAC funding 54%</div>
+              </div>
+              <div style="color:#f59e0b;font-size:8px;font-weight:600">$1.8M gap</div>
+            </div>
+            <div style="background:#0f172a;border-radius:3px;padding:5px;display:flex;justify-content:space-between">
+              <div>
+                <div style="color:#e2e8f0;font-size:8px;font-weight:600">WI-03 Van Orden</div>
+                <div style="color:#64748b;font-size:7px">Low PAC ratio · unusual</div>
+              </div>
+              <div style="color:#22c55e;font-size:8px;font-weight:600">12% PAC</div>
+            </div>
+            <div style="color:#64748b;font-size:7px;margin-top:2px">+ 2 more · click any to brief →</div>
+          </div>
+        </div>
+
+        <!-- Chat -->
+        <div style="display:flex;gap:5px;margin-top:7px;align-items:center">
+          <div style="flex:1;background:#1e293b;border-radius:3px;padding:5px 8px;color:#475569;font-size:9px">Which swing-state incumbent is most at risk?</div>
+          <div style="background:#f59e0b;color:#000;border-radius:3px;padding:5px 10px;font-size:9px;font-weight:600">↑</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Query + Race Cards (no heatmap)</h3>
+      <p>Map stays neutral. Left panel has query presets (competitive, PAC-heavy, outraised). Canvas shows stacked race cards. Simpler but less visual impact.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:16px">A adds the heatmap and a sortable table — more visual, better for demos. B is simpler to build. Both let you click a race and drill into a full brief.</p>
