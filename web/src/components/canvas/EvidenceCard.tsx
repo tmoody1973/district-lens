@@ -3,25 +3,43 @@ import type { EvidenceCard as EvidenceCardType } from "@/types/agent-state";
 
 interface Props { evidence: EvidenceCardType; }
 
+function confidenceLabel(answer: string): string {
+  if (answer.length < 80 || answer.toLowerCase().includes("no direct statement")) {
+    return "no statement found";
+  }
+  if (answer.includes('"') || answer.includes("“")) return "direct quote";
+  return "paraphrase";
+}
+
 export function EvidenceCard({ evidence }: Props) {
+  const confidence = confidenceLabel(evidence.answer);
+  const confidenceColor =
+    confidence === "direct quote"
+      ? "text-green-700"
+      : confidence === "paraphrase"
+      ? "text-amber-700"
+      : "text-slate-500";
+
   return (
-    <div className="rounded-[2px] border-2 border-amber-400 bg-amber-50 p-4 space-y-3">
-      <div className="flex items-baseline justify-between">
-        <p className="text-xs font-medium uppercase tracking-widest text-amber-700">
-          Position Evidence · Perplexity Sonar
-        </p>
-        <span className="text-xs text-amber-600 font-medium">{evidence.issue}</span>
+    <div className="rounded-[2px] border-l-4 border-l-purple-500 border border-slate-200 bg-white p-4 space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700 uppercase tracking-wider">
+          {evidence.issue.toUpperCase()}
+        </span>
+        <span className={`text-xs font-medium ${confidenceColor}`}>{confidence}</span>
       </div>
+
       <p className="text-sm font-semibold text-slate-900">{evidence.candidateName}</p>
-      <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+
+      <p className="text-sm text-slate-700 leading-relaxed italic whitespace-pre-wrap">
         {evidence.answer}
       </p>
+
       {evidence.sources.length > 0 && (
-        <div className="space-y-1 border-t border-amber-200 pt-2">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Sources</p>
-          {evidence.sources.slice(0, 4).map((s, i) => (
+        <div className="space-y-1 border-t border-slate-100 pt-2">
+          {evidence.sources.slice(0, 3).map((s, i) => (
             <div key={i} className="flex items-start gap-1.5">
-              <span className="text-xs font-mono text-amber-600 shrink-0">[{i + 1}]</span>
+              <span className="text-xs font-mono text-purple-400 shrink-0">[{i + 1}]</span>
               <div>
                 <a
                   href={s.url}
@@ -37,9 +55,9 @@ export function EvidenceCard({ evidence }: Props) {
           ))}
         </div>
       )}
-      <p className="text-xs text-amber-700 border-t border-amber-200 pt-2">
-        Evidence from public sources. Direct statements distinguished from characterizations.
-        DistrictLens never recommends how to vote.
+
+      <p className="text-xs text-slate-400 border-t border-slate-100 pt-2">
+        Evidence from public sources only. DistrictLens never recommends how to vote.
       </p>
     </div>
   );
