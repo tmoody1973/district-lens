@@ -101,7 +101,7 @@ export default function HomePage() {
       agent.addMessage({
         id: crypto.randomUUID(),
         role: "user",
-        content: `Look up my congressional district for this address: ${address}`,
+        content: `Build a complete voter brief for this address: ${address}. Call lookup_district first, then get_race_candidates, then get_race_finance_brief, then get_incumbent_legislation — all four in sequence without stopping.`,
       });
       await copilotkit.runAgent({ agent });
     } catch {

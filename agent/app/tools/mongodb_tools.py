@@ -28,6 +28,14 @@ from google.adk.tools import ToolContext
 logger = logging.getLogger(__name__)
 
 CONGRESS_GOV_URL = "https://www.congress.gov"
+_BIOGUIDE_PHOTO_BASE = "https://bioguide.congress.gov/bioguide/photo"
+
+
+def _bioguide_photo_url(bioguide_id: str) -> str:
+    if not bioguide_id:
+        return ""
+    bid = bioguide_id.upper()
+    return f"{_BIOGUIDE_PHOTO_BASE}/{bid[0]}/{bid}.jpg"
 FEC_SOURCE = "FEC bulk import (fec.gov), 2026 cycle, imported 2026-05-14"
 CONGRESS_SOURCE = "Congress.gov official records, 119th Congress"
 
@@ -79,7 +87,8 @@ def get_race_candidates(race_key: str, tool_context: ToolContext) -> dict[str, A
             db.candidates.find(
                 {"race_key": race_key},
                 {"_id": 0, "candidate_id": 1, "name": 1, "party": 1,
-                 "incumbent_challenge_status": 1, "primary_committee_id": 1},
+                 "incumbent_challenge_status": 1, "primary_committee_id": 1,
+                 "bioguide_id": 1},
             ).sort("incumbent_challenge_status", 1)
         )
     except pymongo.errors.PyMongoError as exc:
@@ -99,8 +108,8 @@ def get_race_candidates(race_key: str, tool_context: ToolContext) -> dict[str, A
             "name": c["name"],
             "party": c["party"],
             "status": c.get("incumbent_challenge_status", "unknown"),
-            "photoUrl": "",
-            "photoSource": "placeholder",
+            "photoUrl": _bioguide_photo_url(c.get("bioguide_id", "")),
+            "photoSource": "bioguide" if c.get("bioguide_id") else "placeholder",
             "raceKey": race_key,
         }
         for c in cands
@@ -146,7 +155,7 @@ def get_race_finance_brief(race_key: str, tool_context: ToolContext) -> dict[str
             db.candidates.find(
                 {"race_key": race_key},
                 {"_id": 0, "candidate_id": 1, "name": 1, "party": 1,
-                 "incumbent_challenge_status": 1},
+                 "incumbent_challenge_status": 1, "bioguide_id": 1},
             )
         )
         if not cands:
@@ -213,8 +222,8 @@ def get_race_finance_brief(race_key: str, tool_context: ToolContext) -> dict[str
             "name": c["name"],
             "party": c["party"],
             "status": c.get("incumbent_challenge_status", "unknown"),
-            "photoUrl": "",
-            "photoSource": "placeholder",
+            "photoUrl": _bioguide_photo_url(c.get("bioguide_id", "")),
+            "photoSource": "bioguide" if c.get("bioguide_id") else "placeholder",
             "raceKey": race_key,
         }
         for c in cands

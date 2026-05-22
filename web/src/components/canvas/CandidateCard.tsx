@@ -35,7 +35,9 @@ interface Props {
 }
 
 export function CandidateCard({ candidate, finance }: Props) {
-  const [imgSrc, setImgSrc] = useState(candidate.photoUrl);
+  const [imgSrc, setImgSrc] = useState(() =>
+    candidate.photoUrl || placeholderAvatarUrl(candidate.name, candidate.party)
+  );
   const partyKey = candidate.party.toUpperCase();
   const borderClass = PARTY_BORDER[partyKey] ?? "border-l-slate-400";
   const badgeClass = PARTY_BADGE[partyKey] ?? PARTY_BADGE.IND;
