@@ -3,11 +3,15 @@ import type { EvidenceCard as EvidenceCardType } from "@/types/agent-state";
 
 interface Props { evidence: EvidenceCardType; }
 
+const SHORT_ANSWER_THRESHOLD = 80;
+
 function confidenceLabel(answer: string): string {
-  if (answer.length < 80 || answer.toLowerCase().includes("no direct statement")) {
+  if (answer.includes('"') || answer.includes('\u201C') || answer.includes('\u201D')) {
+    return "direct quote";
+  }
+  if (answer.length < SHORT_ANSWER_THRESHOLD || answer.toLowerCase().includes("no direct statement")) {
     return "no statement found";
   }
-  if (answer.includes('"') || answer.includes("“")) return "direct quote";
   return "paraphrase";
 }
 
