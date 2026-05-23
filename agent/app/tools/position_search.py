@@ -349,7 +349,6 @@ async def search_candidate_positions(
     existing_positions = list(tool_context.state.get("positions", []))
     existing_positions.append(evidence_card)
     tool_context.state["positions"] = existing_positions
-    tool_context.state["stage"] = "news"
 
     return (
         f"{prefix} ({source_count} sources, {elapsed:.1f}s)\n\n"
