@@ -4,7 +4,7 @@ export type ResearchStage =
   | "candidates"
   | "finance"
   | "legislation"
-  | "news"
+  | "positions"
   | "complete";
 
 export type StepStatus = "pending" | "running" | "done";

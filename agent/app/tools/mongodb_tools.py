@@ -17,6 +17,7 @@ Race key format: 2026-{H|S}-{STATE}-{DISTRICT:02d}
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from typing import Any
@@ -70,6 +71,124 @@ def _not_found(message: str, source: str = "") -> dict[str, Any]:
     return {"status": "not_found", "data": None, "warnings": [message], "source": source}
 
 
+_CANDIDATE_PROJECTION = {
+    "_id": 0, "candidate_id": 1, "name": 1, "party": 1,
+    "incumbent_challenge_status": 1, "primary_committee_id": 1, "bioguide_id": 1,
+}
+
+# Deterministic candidate ordering, shared by every candidate query so the
+# candidates/finance stages never reorder rows (candidate_id breaks status ties).
+_CANDIDATE_SORT = [("incumbent_challenge_status", 1), ("candidate_id", 1)]
+
+_FINANCE_PROJECTION = {
+    "_id": 0, "candidate_id": 1, "receipts": 1, "disbursements": 1,
+    "cash_on_hand": 1, "individual_contributions": 1,
+    "pac_contributions": 1, "coverage_end_date": 1,
+}
+
+
+def _to_candidate_card(candidate: dict, race_key: str) -> dict[str, Any]:
+    """Build the camelCase CandidateCard shape the frontend canvas reads."""
+    return {
+        "candidateId": candidate["candidate_id"],
+        "name": candidate["name"],
+        "party": candidate["party"],
+        "status": candidate.get("incumbent_challenge_status", "unknown"),
+        "photoUrl": _bioguide_photo_url(candidate.get("bioguide_id", "")),
+        "photoSource": "bioguide" if candidate.get("bioguide_id") else "placeholder",
+        "raceKey": race_key,
+    }
+
+
+def _to_finance_summary(candidate: dict, finance: dict | None) -> dict[str, Any]:
+    """Build the camelCase FinanceSummary shape the frontend canvas reads."""
+    finance = finance or {}
+    return {
+        "candidateId": candidate["candidate_id"],
+        "name": candidate["name"],
+        "party": candidate["party"],
+        "receipts": finance.get("receipts"),
+        "disbursements": finance.get("disbursements"),
+        "cashOnHand": finance.get("cash_on_hand"),
+        "individualContributions": finance.get("individual_contributions"),
+        "pacContributions": finance.get("pac_contributions"),
+        "coverageEndDate": finance.get("coverage_end_date"),
+    }
+
+
+def _to_bill_record(bill: dict, fallback_member: str) -> dict[str, Any]:
+    """Build the camelCase BillRecord shape the frontend canvas reads."""
+    return {
+        "billId": bill["bill_id"],
+        "title": bill.get("title", "")[:200],
+        "introducedDate": bill.get("introduced_date"),
+        "latestAction": bill.get("latest_action", "")[:150],
+        "memberName": bill.get("member_name", fallback_member),
+    }
+
+
+def _query_candidate_cards(race_key: str) -> list[dict[str, Any]]:
+    db = _get_db()
+    candidates = list(
+        db.candidates.find({"race_key": race_key}, _CANDIDATE_PROJECTION).sort(
+            _CANDIDATE_SORT
+        )
+    )
+    return [_to_candidate_card(c, race_key) for c in candidates]
+
+
+def _query_finance_summaries(race_key: str) -> list[dict[str, Any]]:
+    db = _get_db()
+    candidates = list(
+        db.candidates.find({"race_key": race_key}, _CANDIDATE_PROJECTION).sort(
+            _CANDIDATE_SORT
+        )
+    )
+    candidate_ids = [c["candidate_id"] for c in candidates]
+    finance_by_id = {
+        f["candidate_id"]: f
+        for f in db.finance_summaries.find(
+            {"candidate_id": {"$in": candidate_ids}}, _FINANCE_PROJECTION
+        )
+    }
+    return [
+        _to_finance_summary(c, finance_by_id.get(c["candidate_id"]))
+        for c in candidates
+    ]
+
+
+def _query_legislation_records(race_key: str, limit: int = 8) -> list[dict[str, Any]]:
+    db = _get_db()
+    bills = list(
+        db.legislative_actions.find(
+            {"race_key_2026": race_key, "action_type": "sponsored_bill"},
+            {"_id": 0, "bill_id": 1, "title": 1, "introduced_date": 1,
+             "latest_action": 1, "latest_action_date": 1, "url": 1, "member_name": 1},
+        )
+        .sort("introduced_date", -1)
+        .limit(min(limit, 20))
+    )
+    if not bills:
+        return []
+    fallback_member = bills[0].get("member_name", "The incumbent")
+    return [_to_bill_record(b, fallback_member) for b in bills]
+
+
+async def fetch_candidate_cards(race_key: str) -> list[dict[str, Any]]:
+    """Async data core: candidate cards for a race (used by the brief pipeline)."""
+    return await asyncio.to_thread(_query_candidate_cards, race_key)
+
+
+async def fetch_finance_summaries(race_key: str) -> list[dict[str, Any]]:
+    """Async data core: finance summaries for a race (used by the brief pipeline)."""
+    return await asyncio.to_thread(_query_finance_summaries, race_key)
+
+
+async def fetch_legislation_records(race_key: str) -> list[dict[str, Any]]:
+    """Async data core: incumbent legislation for a race (used by the brief pipeline)."""
+    return await asyncio.to_thread(_query_legislation_records, race_key)
+
+
 def get_race_candidates(race_key: str, tool_context: ToolContext) -> dict[str, Any]:
     """Look up all 2026 candidates for a congressional race by race key.
 
@@ -86,11 +205,8 @@ def get_race_candidates(race_key: str, tool_context: ToolContext) -> dict[str, A
         db = _get_db()
         cands = list(
             db.candidates.find(
-                {"race_key": race_key},
-                {"_id": 0, "candidate_id": 1, "name": 1, "party": 1,
-                 "incumbent_challenge_status": 1, "primary_committee_id": 1,
-                 "bioguide_id": 1},
-            ).sort("incumbent_challenge_status", 1)
+                {"race_key": race_key}, _CANDIDATE_PROJECTION
+            ).sort(_CANDIDATE_SORT)
         )
     except pymongo.errors.PyMongoError as exc:
         logger.error("mongodb.get_race_candidates: %s", exc)
@@ -103,18 +219,7 @@ def get_race_candidates(race_key: str, tool_context: ToolContext) -> dict[str, A
             FEC_SOURCE,
         )
 
-    candidate_cards = [
-        {
-            "candidateId": c["candidate_id"],
-            "name": c["name"],
-            "party": c["party"],
-            "status": c.get("incumbent_challenge_status", "unknown"),
-            "photoUrl": _bioguide_photo_url(c.get("bioguide_id", "")),
-            "photoSource": "bioguide" if c.get("bioguide_id") else "placeholder",
-            "raceKey": race_key,
-        }
-        for c in cands
-    ]
+    candidate_cards = [_to_candidate_card(c, race_key) for c in cands]
     tool_context.state["currentRaceKey"] = race_key
     tool_context.state["stage"] = "candidates"
     tool_context.state["candidates"] = candidate_cards
@@ -154,10 +259,8 @@ def get_race_finance_brief(race_key: str, tool_context: ToolContext) -> dict[str
     try:
         db = _get_db()
         cands = list(
-            db.candidates.find(
-                {"race_key": race_key},
-                {"_id": 0, "candidate_id": 1, "name": 1, "party": 1,
-                 "incumbent_challenge_status": 1, "bioguide_id": 1},
+            db.candidates.find({"race_key": race_key}, _CANDIDATE_PROJECTION).sort(
+                _CANDIDATE_SORT
             )
         )
         if not cands:
@@ -167,10 +270,7 @@ def get_race_finance_brief(race_key: str, tool_context: ToolContext) -> dict[str
         fins = {
             f["candidate_id"]: f
             for f in db.finance_summaries.find(
-                {"candidate_id": {"$in": cand_ids}},
-                {"_id": 0, "candidate_id": 1, "receipts": 1, "disbursements": 1,
-                 "cash_on_hand": 1, "individual_contributions": 1,
-                 "pac_contributions": 1, "coverage_end_date": 1},
+                {"candidate_id": {"$in": cand_ids}}, _FINANCE_PROJECTION
             )
         }
     except pymongo.errors.PyMongoError as exc:
@@ -218,31 +318,9 @@ def get_race_finance_brief(race_key: str, tool_context: ToolContext) -> dict[str
         )
 
     # Push canvas state so the frontend receipt updates in real time.
-    candidate_cards = [
-        {
-            "candidateId": c["candidate_id"],
-            "name": c["name"],
-            "party": c["party"],
-            "status": c.get("incumbent_challenge_status", "unknown"),
-            "photoUrl": _bioguide_photo_url(c.get("bioguide_id", "")),
-            "photoSource": "bioguide" if c.get("bioguide_id") else "placeholder",
-            "raceKey": race_key,
-        }
-        for c in cands
-    ]
+    candidate_cards = [_to_candidate_card(c, race_key) for c in cands]
     finance_summaries = [
-        {
-            "candidateId": c["candidate_id"],
-            "name": c["name"],
-            "party": c["party"],
-            "receipts": fins.get(c["candidate_id"], {}).get("receipts") if fins.get(c["candidate_id"]) else None,
-            "disbursements": fins.get(c["candidate_id"], {}).get("disbursements") if fins.get(c["candidate_id"]) else None,
-            "cashOnHand": fins.get(c["candidate_id"], {}).get("cash_on_hand") if fins.get(c["candidate_id"]) else None,
-            "individualContributions": fins.get(c["candidate_id"], {}).get("individual_contributions") if fins.get(c["candidate_id"]) else None,
-            "pacContributions": fins.get(c["candidate_id"], {}).get("pac_contributions") if fins.get(c["candidate_id"]) else None,
-            "coverageEndDate": fins.get(c["candidate_id"], {}).get("coverage_end_date") if fins.get(c["candidate_id"]) else None,
-        }
-        for c in cands
+        _to_finance_summary(c, fins.get(c["candidate_id"])) for c in cands
     ]
     tool_context.state["currentRaceKey"] = race_key
     tool_context.state["stage"] = "finance"
@@ -398,7 +476,7 @@ def get_incumbent_legislation(race_key: str, tool_context: ToolContext, limit: i
     """Get recent sponsored legislation for the incumbent in a 2026 congressional race.
 
     Returns bills the incumbent has introduced in the current 119th Congress
-    (Jan 2025 – present), with bill IDs, titles, and latest committee status.
+    (Jan 2025 to present), with bill IDs, titles, and latest committee status.
     Use this to describe an incumbent's legislative priorities and activity.
 
     Civic safety: bill sponsorship shows legislative priorities, not personal
@@ -434,16 +512,7 @@ def get_incumbent_legislation(race_key: str, tool_context: ToolContext, limit: i
         )
 
     member = bills[0].get("member_name", "The incumbent")
-    bill_records = [
-        {
-            "billId": b["bill_id"],
-            "title": b.get("title", "")[:200],
-            "introducedDate": b.get("introduced_date"),
-            "latestAction": b.get("latest_action", "")[:150],
-            "memberName": b.get("member_name", member),
-        }
-        for b in bills
-    ]
+    bill_records = [_to_bill_record(b, member) for b in bills]
     tool_context.state["legislation"] = bill_records
     tool_context.state["stage"] = "legislation"
 

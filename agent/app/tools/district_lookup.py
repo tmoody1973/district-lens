@@ -9,6 +9,7 @@ Replaces the lookup_district_placeholder stub. Wires GeocodioClient with:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import logging
@@ -17,7 +18,6 @@ from datetime import UTC, datetime, timedelta
 
 import pymongo
 import pymongo.errors
-
 from google.adk.tools import ToolContext
 
 from app.services.geocodio import GeocodioClient, GeocodioError
@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 # Cache TTLs per DECISIONS_LOG §4.3
 _FRESH_TTL = timedelta(days=30)
 _CD120_EMPTY_TTL = timedelta(days=7)
+
+# Sentinel opening phrase of an ambiguous-ZIP response. Such a response lists
+# several race keys, so no single definitive key may be extracted from it.
+_ZIP_AMBIGUOUS_MARKER = "ZIP code spans multiple districts"
 
 _mongo_client: pymongo.MongoClient | None = None  # type: ignore[type-arg]
 _geocodio_client: GeocodioClient | None = None
@@ -65,7 +69,7 @@ def _format_response(result: DistrictResult) -> str:
     primary = result.primary_district
 
     if result.is_zip_ambiguous:
-        lines = [f"ZIP code spans multiple districts for {result.formatted_address}:"]
+        lines = [f"{_ZIP_AMBIGUOUS_MARKER} for {result.formatted_address}:"]
         for d in sorted(result.districts, key=lambda x: -x.proportion):
             lines.append(f"  {d.race_key} — {d.proportion * 100:.0f}% coverage")
         lines.append(
@@ -96,7 +100,13 @@ def _format_response(result: DistrictResult) -> str:
 
 
 def _extract_race_key_from_text(text: str) -> str | None:
-    """Extract a race key like '2026-H-WI-04' from a formatted response string."""
+    """Extract a *definitive* race key like '2026-H-WI-04' from a response string.
+
+    Returns None for ambiguous-ZIP responses: they list several districts, so
+    extracting the first match would pin the wrong race key downstream.
+    """
+    if _ZIP_AMBIGUOUS_MARKER in text:
+        return None
     import re
     match = re.search(r"(2026-[HS]-[A-Z]{2}-\d{2})", text)
     return match.group(1) if match else None
@@ -128,6 +138,52 @@ def _push_district_state_from_result(tool_context: ToolContext, result: District
         tool_context.state["currentRaceKey"] = primary.race_key
         if state_code:
             tool_context.state["mapFocus"] = state_code
+
+
+def _resolve_race_sync(address_or_zip: str) -> dict[str, str | None]:
+    """Resolve an address to a race key + state code. Returns {raceKey, stateCode}.
+
+    Used by the deterministic brief pipeline. Reuses the same geocode + cache
+    path as lookup_district but returns structured data instead of prose. On any
+    failure or ambiguous result, raceKey/stateCode are None so the pipeline can
+    continue and report the gap rather than aborting.
+    """
+    lookup_hash = _hash_address(address_or_zip)
+
+    collection = _get_mongo_collection()
+    if collection is not None:
+        try:
+            cached = collection.find_one(
+                {"lookup_hash": lookup_hash, "expires_at": {"$gt": datetime.now(UTC)}}
+            )
+            if cached:
+                race_key = _extract_race_key_from_text(cached.get("response_text", ""))
+                return {
+                    "raceKey": race_key,
+                    "stateCode": _extract_state_from_race_key(race_key) if race_key else None,
+                }
+        except pymongo.errors.PyMongoError as exc:
+            logger.warning("resolve_race.cache_read_error: %s", exc)
+
+    client = _get_geocodio_client()
+    results = client.geocode(address_or_zip)
+    if not results:
+        return {"raceKey": None, "stateCode": None}
+
+    result = results[0]
+    primary = result.primary_district
+    if primary is None or result.is_zip_ambiguous:
+        return {"raceKey": None, "stateCode": None}
+
+    return {
+        "raceKey": primary.race_key,
+        "stateCode": _extract_state_from_race_key(primary.race_key),
+    }
+
+
+async def resolve_race_from_address(address_or_zip: str) -> dict[str, str | None]:
+    """Async data core: resolve an address to {raceKey, stateCode} for the pipeline."""
+    return await asyncio.to_thread(_resolve_race_sync, address_or_zip)
 
 
 def lookup_district(address_or_zip: str, tool_context: ToolContext) -> str:

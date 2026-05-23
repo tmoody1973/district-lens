@@ -6,7 +6,6 @@ const STEP_LABELS = [
   "Finance pulled",
   "Legislation loaded",
   "Positions searched",
-  "News loading",
   "Brief complete",
 ] as const;
 
@@ -16,8 +15,8 @@ const STAGE_DONE_COUNT: Record<ResearchStage, number> = {
   candidates: 1,
   finance: 2,
   legislation: 3,
-  news: 4,
-  complete: 7,
+  positions: 4,
+  complete: 6,
 };
 
 const STAGE_RUNNING_INDEX: Record<ResearchStage, number | null> = {
@@ -26,7 +25,7 @@ const STAGE_RUNNING_INDEX: Record<ResearchStage, number | null> = {
   candidates: 1,
   finance: 2,
   legislation: 3,
-  news: 4,
+  positions: 4,
   complete: null,
 };
 

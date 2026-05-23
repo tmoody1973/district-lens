@@ -1,7 +1,12 @@
 "use client";
 import type { EvidenceCard as EvidenceCardType } from "@/types/agent-state";
 
-interface Props { evidence: EvidenceCardType; }
+interface Props {
+  evidence: EvidenceCardType;
+  // Inside an IssueAccordion the issue badge and disclaimer are shown once at the
+  // section level, so each column suppresses them to avoid repetition.
+  compact?: boolean;
+}
 
 const SHORT_ANSWER_THRESHOLD = 80;
 
@@ -15,7 +20,7 @@ function confidenceLabel(answer: string): string {
   return "paraphrase";
 }
 
-export function EvidenceCard({ evidence }: Props) {
+export function EvidenceCard({ evidence, compact = false }: Props) {
   const confidence = confidenceLabel(evidence.answer);
   const confidenceColor =
     confidence === "direct quote"
@@ -27,9 +32,11 @@ export function EvidenceCard({ evidence }: Props) {
   return (
     <div className="rounded-[2px] border-l-4 border-l-purple-500 border border-slate-200 bg-white p-4 space-y-2">
       <div className="flex items-center gap-2">
-        <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700 uppercase tracking-wider">
-          {evidence.issue.toUpperCase()}
-        </span>
+        {!compact && (
+          <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700 uppercase tracking-wider">
+            {evidence.issue.toUpperCase()}
+          </span>
+        )}
         <span className={`text-xs font-medium ${confidenceColor}`}>{confidence}</span>
       </div>
 
@@ -60,9 +67,11 @@ export function EvidenceCard({ evidence }: Props) {
         </div>
       )}
 
-      <p className="text-xs text-slate-400 border-t border-slate-100 pt-2">
-        Evidence from public sources only. DistrictLens never recommends how to vote.
-      </p>
+      {!compact && (
+        <p className="text-xs text-slate-400 border-t border-slate-100 pt-2">
+          Evidence from public sources only. DistrictLens never recommends how to vote.
+        </p>
+      )}
     </div>
   );
 }

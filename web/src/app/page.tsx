@@ -15,33 +15,32 @@ import { DEFAULT_STATE, type DistrictLensState, type AppMode } from "@/types/age
 
 const SYSTEM_PROMPT = `You are DistrictLens, a nonpartisan election-accountability assistant for the 2026 U.S. midterm cycle.
 
-Your job: answer questions about congressional races, candidates, campaign finance, incumbent legislative records, and candidate policy positions. Always cite stored sources.
+Your job: answer questions about congressional races, candidates, campaign finance, incumbent legislative records, and candidate policy positions. Always cite stored sources. When evidence is missing, say so directly.
 
 Hard rules:
 - NEVER recommend how to vote. If asked, decline and offer to compare candidates on a specific issue instead.
 - NEVER write campaign content (ads, talking points, fundraising, persuasion).
 - NEVER infer a candidate's position from donors or party affiliation alone.
 - NEVER fabricate positions. If evidence is missing say "I found no direct statement in the indexed sources."
-- Only cover federal 2026 congressional races.
+- Only cover federal 2026 congressional races. For state, county, municipal, or ballot-measure contests, say the tool's scope is federal and decline gracefully.
 
-WORKFLOW — follow this sequence for any address or race query:
-1. Call lookup_district(address_or_zip) first to resolve the race key.
-2. Call get_race_candidates(race_key) to load who is running.
-3. Call get_race_finance_brief(race_key) to get FEC finance data for all candidates.
-4. Call get_incumbent_legislation(race_key) to get the incumbent's sponsored bills.
-5. For each candidate, call search_candidate_positions(candidate_name, state, "housing") to find their housing position.
-6. For each candidate, call search_candidate_positions(candidate_name, state, "economy") to find their economic position.
-7. Call finish_brief(race_key) to mark the brief complete and signal the UI.
+Voter brief — do NOT orchestrate it yourself:
+The full voter brief runs as a deterministic server-side pipeline. When the user submits an address, the frontend sends "Build a complete voter brief for: <address>" and that pipeline resolves the district, candidates, finance, incumbent legislation, and every candidate's stances in a fixed order, streaming each step to the live progress tracker. Do NOT chain lookup_district, get_race_candidates, get_race_finance_brief, get_incumbent_legislation, or search_candidate_positions to assemble a brief — the pipeline owns that path.
 
-Available tools:
-- lookup_district(address_or_zip) → resolves to a race key like "2026-H-WI-04"
-- get_race_candidates(race_key) → list of candidates with party and status
-- get_race_finance_brief(race_key) → FEC fundraising totals and PAC breakdown for all candidates
-- get_candidate_finance(candidate_id) → detailed finance for one candidate
-- get_incumbent_legislation(race_key) → bills sponsored by the incumbent in the 119th Congress
-- find_candidate(name, state) → search FEC filings by candidate name
-- search_candidate_positions(candidate_name, state, issue) → Perplexity web search for candidate statements on a policy issue
-- finish_brief(race_key) → marks the brief as complete, shows green status bar`;
+Targeted follow-ups (use these for specific chat questions, not to rebuild a brief):
+- search_candidate_positions(candidate_name, state, issue) → one candidate's stance on one issue the user names
+- get_candidate_finance(candidate_id) → finance detail for a single candidate
+- find_candidate(name, state) → look up a candidate in FEC filings
+
+Journalist mode:
+When the user asks to see all races in a state, or selects a state on the map (e.g. "Show me all 2026 congressional races in WI"), call get_state_races(state_code) once, then summarize in one sentence how many races there are and any notable fundraising gaps. Do NOT start the voter-brief workflow for this.`;
+
+const CHAT_LABELS = {
+  title: "DistrictLens",
+  initial:
+    "Enter your address above to build your voter brief, or ask about any 2026 congressional race.",
+  placeholder: "Ask about candidates, issues, or fundraising…",
+};
 
 export default function HomePage() {
   const [address, setAddress] = useState("");
@@ -49,6 +48,7 @@ export default function HomePage() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const { agent } = useAgent({ agentId: "districtlens_root" });
   const { copilotkit } = useCopilotKit();
@@ -107,7 +107,7 @@ export default function HomePage() {
       agent.addMessage({
         id: crypto.randomUUID(),
         role: "user",
-        content: `Build a complete voter brief for this address: ${addr}. Call lookup_district first, then get_race_candidates, then get_race_finance_brief, then get_incumbent_legislation, then search_candidate_positions for housing and economy for each candidate, then call finish_brief — all steps in sequence without stopping.`,
+        content: `Build a complete voter brief for: ${addr}`,
       });
       await copilotkit.runAgent({ agent });
     } catch {
@@ -174,20 +174,21 @@ export default function HomePage() {
   return (
     <div className="flex flex-col h-screen overflow-hidden">
       {/* Header */}
-      <header className="border-b-2 border-slate-900 bg-white px-6 py-3 shrink-0">
-        <div className="mx-auto flex max-w-7xl items-center gap-6">
-          <span className="text-lg font-bold tracking-tight text-slate-900">DistrictLens</span>
+      <header className="border-b-2 border-slate-900 bg-white px-4 py-3 shrink-0 lg:px-6">
+        <div className="mx-auto flex max-w-7xl items-center gap-3 lg:gap-6">
+          <span className="shrink-0 text-lg font-bold tracking-tight text-slate-900">DistrictLens</span>
 
-          {/* Address bar */}
-          <div ref={wrapperRef} className="relative flex-1 max-w-md">
+          {/* Address bar — min-w-0 lets the input shrink below its placeholder so the Find button stays on-screen at narrow widths */}
+          <div ref={wrapperRef} className="relative min-w-0 flex-1 max-w-md">
             <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); handleAddressSubmit(); }}>
               <input
                 type="text"
                 placeholder="Street address or ZIP code"
+                aria-label="Street address or ZIP code"
                 value={address}
                 onChange={(e) => { setAddress(e.target.value); setError(null); }}
                 onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                className="flex-1 rounded-[2px] border-2 border-slate-900 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-700"
+                className="min-w-0 flex-1 rounded-[2px] border-2 border-slate-900 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-700"
               />
               <button
                 type="submit"
@@ -224,8 +225,8 @@ export default function HomePage() {
       {/* Three-column body */}
       <div className="flex flex-1 overflow-hidden min-h-0">
 
-        {/* Col 1 — Agent activity sidebar (192px) */}
-        <div className="w-48 shrink-0 border-r-2 border-slate-900 flex flex-col bg-white">
+        {/* Col 1 — Agent activity sidebar (192px) — desktop only */}
+        <div className="hidden lg:flex w-48 shrink-0 border-r-2 border-slate-900 flex-col bg-white">
           {/* Mode switcher */}
           <div className="p-3 border-b border-slate-200">
             <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2">Mode</p>
@@ -292,6 +293,17 @@ export default function HomePage() {
 
         {/* Col 2 — Center canvas (flex-1) */}
         <div className="flex flex-1 flex-col overflow-hidden min-h-0">
+          {/* Mobile-only slim progress strip (sidebar is hidden below lg) */}
+          {steps.length > 0 && (
+            <div className="lg:hidden shrink-0 border-b-2 border-slate-900 bg-white px-3 py-2">
+              <ReceiptProgress
+                steps={steps}
+                briefStartedAt={agentState.briefStartedAt}
+                statusMessage={agentState.status_message}
+                horizontal
+              />
+            </div>
+          )}
           {isJournalist && isIdle ? (
             <div className="flex flex-1 flex-col overflow-y-auto">
               <div className="p-4 shrink-0">
@@ -320,20 +332,45 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* Col 3 — Chat sidebar (320px) */}
-        <div className="w-80 shrink-0 border-l-2 border-slate-900 flex flex-col">
-          <CopilotChat
-            instructions={SYSTEM_PROMPT}
-            labels={{
-              title: "DistrictLens",
-              initial: "Enter your address above to build your voter brief, or ask about any 2026 congressional race.",
-              placeholder: "Ask about candidates, issues, or fundraising…",
-            }}
-            className="h-full"
-          />
+        {/* Col 3 — Chat sidebar (320px) — desktop only */}
+        <div className="hidden lg:flex w-80 shrink-0 border-l-2 border-slate-900 flex-col">
+          <CopilotChat instructions={SYSTEM_PROMPT} labels={CHAT_LABELS} className="h-full" />
         </div>
 
       </div>
+
+      {/* Mobile chat: floating trigger + slide-up bottom sheet (below lg) */}
+      <button
+        onClick={() => setChatOpen(true)}
+        className="lg:hidden fixed bottom-4 right-4 z-30 rounded-full border-2 border-slate-900 bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-lg"
+      >
+        Ask
+      </button>
+
+      {chatOpen && (
+        <div className="lg:hidden fixed inset-0 z-40 flex flex-col justify-end">
+          <div
+            className="absolute inset-0 bg-black/30"
+            onClick={() => setChatOpen(false)}
+            aria-hidden
+          />
+          <div className="relative flex h-[80vh] flex-col rounded-t-xl border-t-2 border-slate-900 bg-white">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3">
+              <span className="text-sm font-bold text-slate-900">DistrictLens</span>
+              <button
+                onClick={() => setChatOpen(false)}
+                aria-label="Close chat"
+                className="text-slate-400 hover:text-slate-700"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="min-h-0 flex-1">
+              <CopilotChat instructions={SYSTEM_PROMPT} labels={CHAT_LABELS} className="h-full" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
