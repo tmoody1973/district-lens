@@ -8,9 +8,10 @@ interface Props {
   steps: BriefStep[];
   briefStartedAt: number | null;
   statusMessage?: string | null;
+  compact?: boolean;
 }
 
-export function ReceiptProgress({ steps, briefStartedAt, statusMessage }: Props) {
+export function ReceiptProgress({ steps, briefStartedAt, statusMessage, compact }: Props) {
   const [secsLeft, setSecsLeft] = useState<number | null>(null);
   const isComplete = steps.length > 0 && steps.every((s) => s.status === "done");
 
@@ -35,35 +36,37 @@ export function ReceiptProgress({ steps, briefStartedAt, statusMessage }: Props)
 
   return (
     <div className="space-y-2">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {isComplete ? (
-            <>
-              <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
-              <span className="text-xs font-semibold text-green-700 uppercase tracking-widest">
-                Brief complete
-              </span>
-            </>
-          ) : (
-            <>
-              <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-              <span className="text-xs font-semibold text-blue-700 uppercase tracking-widest">
-                Building brief
-              </span>
-            </>
-          )}
+      {/* Header row — hidden in compact (sidebar) mode */}
+      {!compact && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {isComplete ? (
+              <>
+                <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+                <span className="text-xs font-semibold text-green-700 uppercase tracking-widest">
+                  Brief complete
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                <span className="text-xs font-semibold text-blue-700 uppercase tracking-widest">
+                  Building brief
+                </span>
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {secsLeft !== null && secsLeft > 0 && (
+              <span className="text-xs text-slate-400">~{secsLeft} sec left</span>
+            )}
+            {secsLeft === 0 && !isComplete && (
+              <span className="text-xs text-slate-400">still working…</span>
+            )}
+            <span className="text-xs font-medium text-green-600">● MongoDB</span>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          {secsLeft !== null && secsLeft > 0 && (
-            <span className="text-xs text-slate-400">~{secsLeft} sec left</span>
-          )}
-          {secsLeft === 0 && !isComplete && (
-            <span className="text-xs text-slate-400">still working…</span>
-          )}
-          <span className="text-xs font-medium text-green-600">● MongoDB</span>
-        </div>
-      </div>
+      )}
 
       {/* Steps */}
       <div className="space-y-1">

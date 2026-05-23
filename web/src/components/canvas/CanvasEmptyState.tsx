@@ -61,7 +61,7 @@ export function CanvasEmptyState({ onSubmit }: Props) {
         </button>
       </form>
 
-      <p className="text-xs text-slate-400">or ask anything in the chat below ↓</p>
+      <p className="text-xs text-slate-400">or ask anything in the chat →</p>
     </div>
   );
 }

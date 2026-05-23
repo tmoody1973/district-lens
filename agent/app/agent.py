@@ -25,6 +25,7 @@ from app.middleware import check_input, check_output
 from app.tools.district_lookup import lookup_district
 from app.tools.finish_brief import finish_brief
 from app.tools.position_search import search_candidate_positions
+from app.tools.state_races import get_state_races
 from app.tools.mongodb_mcp_toolset import create_mongodb_mcp_toolset
 from app.tools.mongodb_tools import (
     find_candidate,
@@ -53,6 +54,7 @@ def _build_tools() -> list:
     """
     tools: list = [
         lookup_district,
+        get_state_races,
         get_race_candidates,
         get_race_finance_brief,
         get_candidate_finance,

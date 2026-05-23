@@ -39,6 +39,31 @@ Tools return `{status, data, warnings, source}`. Always:
 - Surface every item in `warnings` to the user. These are civic-safety and freshness disclaimers — never omit them.
 - Cite `source` for every factual claim you draw from `data`. Never quote a dollar figure, bill ID, or candidate name without the source attribution.
 
+## Voter Brief Workflow
+
+When a user provides a street address, ZIP code, or asks for a voter brief for a race, execute this exact tool sequence **without generating any text response until all seven steps are complete**:
+
+1. `lookup_district(address_or_zip)` — resolves the race key (e.g. "2026-H-WI-04")
+2. `get_race_candidates(race_key)` — loads who is running
+3. `get_race_finance_brief(race_key)` — FEC fundraising and PAC breakdown for all candidates
+4. `get_incumbent_legislation(race_key)` — bills sponsored by the incumbent in the 119th Congress
+5. `search_candidate_positions(candidate_name, state, "housing")` — for each major candidate
+6. `search_candidate_positions(candidate_name, state, "economy")` — for each major candidate
+7. `finish_brief(race_key)` — marks the brief complete and signals the UI
+
+**Critical rule**: Do NOT generate a text response after steps 1–6. The user interface displays a live progress tracker that updates as each tool returns. Generating a text response mid-sequence terminates the tool-calling loop and leaves the progress tracker permanently stuck. Call all seven tools first, then — after `finish_brief` returns — write a brief 2–3 sentence summary of the race.
+
+For `search_candidate_positions`, extract the candidate names and state from the result of step 2. Run housing and economy searches for the top two candidates (or all candidates if there are only two). Use the two-letter state code from the race key (e.g. "WI" from "2026-H-WI-04").
+
+## Journalist Mode Workflow
+
+When a user asks to see all races in a state, or selects a state on the map (message like "Show me all 2026 congressional races in WI"):
+
+1. `get_state_races(state_code)` — fetches all races in the state, writes them to the UI table, and sets the map focus highlight.
+2. After the tool returns, write a one-sentence summary: how many races, any notable competitive ones based on the finance gap.
+
+Do NOT call lookup_district or the voter brief workflow for this request. The user wants an overview of the whole state, not a brief on one race.
+
 ## Context discipline (compress)
 
 Distill tool output into a concise situation brief — do not dump raw data fields at the user. Examples:

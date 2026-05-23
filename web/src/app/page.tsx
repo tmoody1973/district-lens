@@ -9,7 +9,8 @@ import { USMap } from "@/components/map/USMap";
 import { RaceCanvas } from "@/components/canvas/RaceCanvas";
 import { CanvasEmptyState } from "@/components/canvas/CanvasEmptyState";
 import { RaceTable } from "@/components/canvas/RaceTable";
-import { StartPanel } from "@/components/StartPanel";
+import { ReceiptProgress } from "@/components/canvas/ReceiptProgress";
+import { stepsFromStage } from "@/lib/steps";
 import { DEFAULT_STATE, type DistrictLensState, type AppMode } from "@/types/agent-state";
 
 const SYSTEM_PROMPT = `You are DistrictLens, a nonpartisan election-accountability assistant for the 2026 U.S. midterm cycle.
@@ -167,7 +168,8 @@ export default function HomePage() {
 
   const isJournalist = agentState.mode === "journalist";
   const isIdle = agentState.stage === "idle" || !agentState.currentRaceKey;
-  const showTable = isJournalist && agentState.stateRaces.length > 0 && isIdle;
+  const steps = stepsFromStage(agentState.stage);
+  const isComplete = agentState.stage === "complete";
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -221,52 +223,116 @@ export default function HomePage() {
 
       {/* Three-column body */}
       <div className="flex flex-1 overflow-hidden min-h-0">
-        {/* Col 1 — Start panel (26%) */}
-        <div className="w-[26%] shrink-0 overflow-y-auto border-r-2 border-slate-900">
-          <StartPanel
-            mode={agentState.mode}
-            onModeChange={handleModeChange}
-            activeRaceKey={agentState.currentRaceKey}
-            stage={agentState.stage}
-          />
-        </div>
 
-        {/* Col 2 — US map (34%) */}
-        <div className="w-[34%] shrink-0 overflow-y-auto border-r-2 border-slate-900 p-4">
-          <USMap
-            focusedState={agentState.mapFocus}
-            onStateClick={handleStateClick}
-            mode={agentState.mode}
-            heatmapData={agentState.stateRaces}
-          />
-          {agentState.mapFocus && (
-            <p className="mt-3 text-sm text-slate-600">
-              <span className="font-semibold">{agentState.mapFocus}</span> selected &mdash; asking agent about races in this state.
-            </p>
+        {/* Col 1 — Agent activity sidebar (192px) */}
+        <div className="w-48 shrink-0 border-r-2 border-slate-900 flex flex-col bg-white">
+          {/* Mode switcher */}
+          <div className="p-3 border-b border-slate-200">
+            <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2">Mode</p>
+            {(["voter", "journalist"] as AppMode[]).map((m) => (
+              <button
+                key={m}
+                onClick={() => handleModeChange(m)}
+                className={[
+                  "block w-full text-left rounded-[2px] border-2 px-2.5 py-1.5 text-xs font-semibold mb-1 transition-colors",
+                  agentState.mode === m
+                    ? "border-slate-900 bg-slate-900 text-white"
+                    : "border-slate-200 bg-white text-slate-500 hover:border-slate-400",
+                ].join(" ")}
+              >
+                {m === "voter" ? "📋 Voter Brief" : "📰 Journalist"}
+              </button>
+            ))}
+          </div>
+
+          {/* Brief progress */}
+          <div className="p-3 flex-1 overflow-y-auto">
+            {steps.length > 0 ? (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Brief progress</p>
+                  <span className="text-[10px] font-medium text-green-600">● MongoDB</span>
+                </div>
+                <ReceiptProgress
+                  steps={steps}
+                  briefStartedAt={agentState.briefStartedAt}
+                  statusMessage={agentState.status_message}
+                  compact
+                />
+              </>
+            ) : (
+              <>
+                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2">Brief progress</p>
+                <p className="text-[10px] text-slate-400">Enter an address to begin</p>
+              </>
+            )}
+          </div>
+
+          {/* Active race + share brief */}
+          {agentState.currentRaceKey && (
+            <div className="p-3 border-t border-slate-200 space-y-2">
+              <div>
+                <p className="text-[9px] uppercase tracking-widest text-slate-400">Active race</p>
+                <p className="text-xs font-bold text-slate-900 truncate">{agentState.currentRaceKey}</p>
+                <p className="text-[10px] text-slate-400 capitalize">
+                  {isComplete ? "complete" : "running…"}
+                </p>
+              </div>
+              {isComplete && (
+                <button
+                  onClick={handleShareBrief}
+                  className="w-full rounded-[2px] border-2 border-slate-900 bg-slate-900 px-2 py-1.5 text-[10px] font-semibold text-white transition-colors hover:bg-slate-700"
+                >
+                  Share brief
+                </button>
+              )}
+            </div>
           )}
         </div>
 
-        {/* Col 3 — Canvas (flex-1) */}
-        <div className="flex flex-1 flex-col overflow-y-auto">
-          {isIdle && !showTable && <CanvasEmptyState onSubmit={handleAddressSubmit} />}
-          {showTable && (
-            <RaceTable races={agentState.stateRaces} onRaceClick={handleRaceTableClick} />
+        {/* Col 2 — Center canvas (flex-1) */}
+        <div className="flex flex-1 flex-col overflow-hidden min-h-0">
+          {isJournalist && isIdle ? (
+            <div className="flex flex-1 flex-col overflow-y-auto">
+              <div className="p-4 shrink-0">
+                <USMap
+                  focusedState={agentState.mapFocus}
+                  onStateClick={handleStateClick}
+                  mode={agentState.mode}
+                  heatmapData={agentState.stateRaces}
+                />
+                {agentState.mapFocus && (
+                  <p className="mt-3 text-sm text-slate-600">
+                    <span className="font-semibold">{agentState.mapFocus}</span> selected &mdash; loading races…
+                  </p>
+                )}
+              </div>
+              {agentState.stateRaces.length > 0 ? (
+                <RaceTable races={agentState.stateRaces} onRaceClick={handleRaceTableClick} />
+              ) : (
+                <p className="px-4 text-sm text-slate-400">Click a state on the map to explore its 2026 races.</p>
+              )}
+            </div>
+          ) : isIdle ? (
+            <CanvasEmptyState onSubmit={handleAddressSubmit} />
+          ) : (
+            <RaceCanvas state={agentState} />
           )}
-          {!isIdle && <RaceCanvas state={agentState} onShareBrief={handleShareBrief} />}
         </div>
-      </div>
 
-      {/* Full-width bottom chat bar */}
-      <div className="shrink-0 border-t-2 border-slate-900 h-56">
-        <CopilotChat
-          instructions={SYSTEM_PROMPT}
-          labels={{
-            title: "DistrictLens",
-            initial: "Enter your address above to build your voter brief, or ask about any 2026 congressional race.",
-            placeholder: "Ask about candidates, issues, or fundraising…",
-          }}
-          className="h-full"
-        />
+        {/* Col 3 — Chat sidebar (320px) */}
+        <div className="w-80 shrink-0 border-l-2 border-slate-900 flex flex-col">
+          <CopilotChat
+            instructions={SYSTEM_PROMPT}
+            labels={{
+              title: "DistrictLens",
+              initial: "Enter your address above to build your voter brief, or ask about any 2026 congressional race.",
+              placeholder: "Ask about candidates, issues, or fundraising…",
+            }}
+            className="h-full"
+          />
+        </div>
+
       </div>
     </div>
   );
