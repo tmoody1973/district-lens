@@ -16,7 +16,8 @@ const STAGE_DONE_COUNT: Record<ResearchStage, number> = {
   candidates: 1,
   finance: 2,
   legislation: 3,
-  news: 4,
+  positions: 4,
+  news: 5,
   complete: 7,
 };
 
@@ -26,7 +27,8 @@ const STAGE_RUNNING_INDEX: Record<ResearchStage, number | null> = {
   candidates: 1,
   finance: 2,
   legislation: 3,
-  news: 4,
+  positions: 4,
+  news: 5,
   complete: null,
 };
 

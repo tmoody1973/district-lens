@@ -174,12 +174,12 @@ export default function HomePage() {
   return (
     <div className="flex flex-col h-screen overflow-hidden">
       {/* Header */}
-      <header className="border-b-2 border-slate-900 bg-white px-6 py-3 shrink-0">
-        <div className="mx-auto flex max-w-7xl items-center gap-6">
-          <span className="text-lg font-bold tracking-tight text-slate-900">DistrictLens</span>
+      <header className="border-b-2 border-slate-900 bg-white px-4 py-3 shrink-0 lg:px-6">
+        <div className="mx-auto flex max-w-7xl items-center gap-3 lg:gap-6">
+          <span className="shrink-0 text-lg font-bold tracking-tight text-slate-900">DistrictLens</span>
 
-          {/* Address bar */}
-          <div ref={wrapperRef} className="relative flex-1 max-w-md">
+          {/* Address bar — min-w-0 lets the input shrink below its placeholder so the Find button stays on-screen at narrow widths */}
+          <div ref={wrapperRef} className="relative min-w-0 flex-1 max-w-md">
             <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); handleAddressSubmit(); }}>
               <input
                 type="text"

@@ -28,8 +28,13 @@ const COLOR_GAP_MEDIUM = "#a78bfa"; // violet-400
 const COLOR_GAP_LARGE = "#6d28d9"; // violet-700 — one candidate far out-raises the other
 
 function receiptsRatio(race: RaceRow): number | null {
-  if (!race.incumbentReceipts || !race.topChallengerReceipts) return null;
-  return race.incumbentReceipts / race.topChallengerReceipts;
+  const incumbent = race.incumbentReceipts;
+  const challenger = race.topChallengerReceipts;
+  // Only null/undefined means "missing"; $0 is a real, meaningful value.
+  if (incumbent == null || challenger == null) return null;
+  if (incumbent === 0 && challenger === 0) return 1; // no money either side → no gap
+  if (challenger === 0) return Infinity; // one side raised nothing → maximal gap
+  return incumbent / challenger;
 }
 
 // Direction-agnostic gap magnitude: how lopsided the fundraising is, either way.

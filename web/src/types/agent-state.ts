@@ -4,6 +4,7 @@ export type ResearchStage =
   | "candidates"
   | "finance"
   | "legislation"
+  | "positions"
   | "news"
   | "complete";
 
