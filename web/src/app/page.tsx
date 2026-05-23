@@ -107,7 +107,7 @@ export default function HomePage() {
       agent.addMessage({
         id: crypto.randomUUID(),
         role: "user",
-        content: `Build a complete voter brief for this address: ${addr}. Call lookup_district first, then get_race_candidates, then get_race_finance_brief, then get_incumbent_legislation, then search_candidate_positions for housing and economy for each candidate, then call finish_brief — all steps in sequence without stopping.`,
+        content: `Build a complete voter brief for: ${addr}`,
       });
       await copilotkit.runAgent({ agent });
     } catch {
