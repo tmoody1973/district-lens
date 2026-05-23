@@ -17,37 +17,40 @@ const FIPS_TO_STATE: Record<string, string> = {
   "51": "VA", "53": "WA", "54": "WV", "55": "WI", "56": "WY",
 };
 
-// Finance ratio classifies RACE COMPETITIVENESS only — never a candidate position signal.
-const COMPETITIVE_RATIO_MAX = 1.5;
-const LEAN_RATIO_MAX = 3;
+// Single-hue intensity ramp keyed to the SIZE of the fundraising gap.
+// This shows money, never a prediction or a candidate-position signal.
+const SMALL_GAP_MAX = 1.5; // within ~1.5x receipts = roughly even money
+const MEDIUM_GAP_MAX = 3; // up to 3x = moderate gap
 
 const COLOR_NO_DATA = "#e2e8f0"; // slate-200
-const COLOR_COMPETITIVE = "#fca5a5"; // red-300
-const COLOR_LEAN = "#fcd34d"; // amber-300
-const COLOR_SAFE = "#86efac"; // green-300
+const COLOR_GAP_SMALL = "#ddd6fe"; // violet-200 — fundraising near parity
+const COLOR_GAP_MEDIUM = "#a78bfa"; // violet-400
+const COLOR_GAP_LARGE = "#6d28d9"; // violet-700 — one candidate far out-raises the other
 
 function receiptsRatio(race: RaceRow): number | null {
   if (!race.incumbentReceipts || !race.topChallengerReceipts) return null;
   return race.incumbentReceipts / race.topChallengerReceipts;
 }
 
-function heatmapColor(stateCode: string, races: RaceRow[]): string {
-  const stateRaces = races.filter((race) => race.state === stateCode);
-  if (stateRaces.length === 0) return COLOR_NO_DATA;
+// Direction-agnostic gap magnitude: how lopsided the fundraising is, either way.
+function fundraisingGap(race: RaceRow): number | null {
+  const ratio = receiptsRatio(race);
+  if (ratio === null) return null;
+  return ratio >= 1 ? ratio : 1 / ratio;
+}
 
-  const ratios = stateRaces
-    .map(receiptsRatio)
-    .filter((ratio): ratio is number => ratio !== null);
+function fundraisingAdvantageColor(stateCode: string, races: RaceRow[]): string {
+  const gaps = races
+    .filter((race) => race.state === stateCode)
+    .map(fundraisingGap)
+    .filter((gap): gap is number => gap !== null);
 
-  const hasCompetitive = ratios.some((ratio) => ratio < COMPETITIVE_RATIO_MAX);
-  if (hasCompetitive) return COLOR_COMPETITIVE;
+  if (gaps.length === 0) return COLOR_NO_DATA;
 
-  const hasLean = ratios.some(
-    (ratio) => ratio >= COMPETITIVE_RATIO_MAX && ratio < LEAN_RATIO_MAX,
-  );
-  if (hasLean) return COLOR_LEAN;
-
-  return COLOR_SAFE;
+  const maxGap = Math.max(...gaps);
+  if (maxGap < SMALL_GAP_MAX) return COLOR_GAP_SMALL;
+  if (maxGap < MEDIUM_GAP_MAX) return COLOR_GAP_MEDIUM;
+  return COLOR_GAP_LARGE;
 }
 
 interface Props {
@@ -80,7 +83,7 @@ export function USMap({
               const fill = isFocused
                 ? "#1d4ed8"
                 : isHeatmap
-                  ? heatmapColor(stateCode, heatmapData)
+                  ? fundraisingAdvantageColor(stateCode, heatmapData)
                   : COLOR_NO_DATA;
               return (
                 <Geography
@@ -113,19 +116,20 @@ export function USMap({
         </Geographies>
       </ComposableMap>
       {isHeatmap && (
-        <div className="flex gap-4 justify-center px-3 pb-2 text-xs text-slate-500">
-          <span>
-            <span className="inline-block w-3 h-3 rounded-sm bg-red-300 mr-1" />
-            Competitive
-          </span>
-          <span>
-            <span className="inline-block w-3 h-3 rounded-sm bg-amber-300 mr-1" />
-            Lean
-          </span>
-          <span>
-            <span className="inline-block w-3 h-3 rounded-sm bg-green-300 mr-1" />
-            Safe
-          </span>
+        <div className="space-y-1 px-3 pb-2">
+          <p className="text-center text-xs font-medium uppercase tracking-widest text-slate-500">
+            Fundraising Advantage
+          </p>
+          <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+            <span>Smaller gap</span>
+            <span className="inline-block h-3 w-4 rounded-sm" style={{ background: COLOR_GAP_SMALL }} />
+            <span className="inline-block h-3 w-4 rounded-sm" style={{ background: COLOR_GAP_MEDIUM }} />
+            <span className="inline-block h-3 w-4 rounded-sm" style={{ background: COLOR_GAP_LARGE }} />
+            <span>Larger gap</span>
+          </div>
+          <p className="text-center text-[11px] text-slate-400">
+            Fundraising, not a prediction. Most seats are safe regardless of money.
+          </p>
         </div>
       )}
     </div>
