@@ -1,6 +1,7 @@
 import pytest
 
 from app.services.geocodio.race_key import build_race_key
+from app.tools.district_lookup import _full_house_race_key
 
 
 @pytest.mark.parametrize(
@@ -27,3 +28,18 @@ def test_build_race_key(state: str, district_number: int, expected: str) -> None
 def test_zero_district_number() -> None:
     # district_number=0 is technically invalid but should not crash
     assert build_race_key("WI", 0) == "WI-00"
+
+
+@pytest.mark.parametrize(
+    "short_key, expected_full",
+    [
+        ("WI-04", "2026-H-WI-04"),
+        ("DC-00", "2026-H-DC-00"),
+        ("CA-53", "2026-H-CA-53"),
+    ],
+)
+def test_full_house_race_key_matches_mongodb_format(short_key: str, expected_full: str) -> None:
+    # Regression: the deterministic brief pipeline must query MongoDB with the
+    # full FEC key (2026-H-WI-04), not the geocodio short key (WI-04), or every
+    # candidate/finance/position lookup returns empty (blank voter brief).
+    assert _full_house_race_key(short_key) == expected_full

@@ -118,6 +118,17 @@ def _extract_state_from_race_key(race_key: str) -> str | None:
     return parts[2] if len(parts) >= 3 else None
 
 
+def _full_house_race_key(short_race_key: str) -> str:
+    """Convert a geocodio short key ('WI-04') to the full FEC race key
+    ('2026-H-WI-04') the MongoDB collections are keyed on.
+
+    Address geocoding only ever resolves House districts, so the office is
+    always 'H'. Without this the pipeline queries with the short key and every
+    candidate/finance/position lookup returns nothing.
+    """
+    return f"2026-H-{short_race_key}"
+
+
 def _push_district_state(tool_context: ToolContext, response_text: str) -> None:
     """Push district stage to canvas from a cached response string."""
     race_key = _extract_race_key_from_text(response_text)
@@ -176,8 +187,8 @@ def _resolve_race_sync(address_or_zip: str) -> dict[str, str | None]:
         return {"raceKey": None, "stateCode": None}
 
     return {
-        "raceKey": primary.race_key,
-        "stateCode": _extract_state_from_race_key(primary.race_key),
+        "raceKey": _full_house_race_key(primary.race_key),
+        "stateCode": primary.state_abbreviation.upper(),
     }
 
 
