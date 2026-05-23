@@ -103,7 +103,8 @@ def _parse_zip(path: str, inner_name: str, columns: list[str]) -> list[dict]:
             reader = csv.reader(io.TextIOWrapper(f, encoding="utf-8", errors="replace"), delimiter="|")
             for raw in reader:
                 if len(raw) >= len(columns) - 2:  # allow minor trailing-column variance
-                    rows.append(dict(zip(columns, raw)))
+                    # strict=False: row length intentionally varies; zip truncates to the shorter.
+                    rows.append(dict(zip(columns, raw, strict=False)))
     return rows
 
 

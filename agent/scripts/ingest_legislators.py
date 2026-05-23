@@ -10,7 +10,7 @@ TIER 1 (no API key, free, instant):
 TIER 2 (requires CONGRESS_API_KEY, free registration at api.congress.gov):
   Congress.gov API  — sponsored bills, cosponsorships for each member
   Writes: legislative_actions (sponsorship records)
-  Rate limit: 5,000 req/hr. For 535 members × ~5 calls = ~2,675 calls = ~32 min.
+  Rate limit: 5,000 req/hr. For 535 members x ~5 calls = ~2,675 calls = ~32 min.
 
 Run:
   cd agent && uv run python scripts/ingest_legislators.py
@@ -20,7 +20,6 @@ Set CONGRESS_API_KEY in agent/app/.env to enable Tier 2.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import os
 import sys
@@ -167,7 +166,8 @@ def ingest_profiles(db: pymongo.database.Database, batch_id: str) -> dict[str, i
     profiles_col.create_index([("race_key_2026", 1)])
     profiles_col.create_index([("fec_ids", 1)])
 
-    profiles_result = profiles_col.bulk_write(profile_ops, ordered=False) if profile_ops else None
+    if profile_ops:
+        profiles_col.bulk_write(profile_ops, ordered=False)
     cand_result = candidates_col.bulk_write(candidate_updates, ordered=False) if candidate_updates else None
 
     counts = {
@@ -203,10 +203,10 @@ def ingest_sponsored_legislation(db: pymongo.database.Database, batch_id: str, a
     logger.info("Fetching sponsored legislation for %d 2026-relevant incumbents", len(profiles))
 
     # Skip members already fetched in this or a prior run
-    already_done = set(
+    already_done = {
         doc["bioguide_id"]
         for doc in actions_col.find({}, {"_id": 0, "bioguide_id": 1})
-    )
+    }
     pending = [p for p in profiles if p["bioguide_id"] not in already_done]
     logger.info("  %d already imported, %d remaining", len(already_done), len(pending))
 

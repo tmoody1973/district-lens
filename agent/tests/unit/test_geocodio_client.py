@@ -1,9 +1,7 @@
 """Unit tests for GeocodioClient._parse_result (no real HTTP calls)."""
 
-import pytest
 
-from app.services.geocodio.client import GeocodioClient, GeocodioError
-
+from app.services.geocodio.client import GeocodioClient
 
 # Minimal raw Geocod.io result matching the White House test from the A3 session
 _WHITE_HOUSE_RAW = {
