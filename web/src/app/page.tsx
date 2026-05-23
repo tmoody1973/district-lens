@@ -184,6 +184,7 @@ export default function HomePage() {
               <input
                 type="text"
                 placeholder="Street address or ZIP code"
+                aria-label="Street address or ZIP code"
                 value={address}
                 onChange={(e) => { setAddress(e.target.value); setError(null); }}
                 onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
