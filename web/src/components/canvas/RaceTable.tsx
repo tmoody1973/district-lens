@@ -42,7 +42,7 @@ export function RaceTable({ races, onRaceClick }: Props) {
     sortKey === key ? (sortDir === "desc" ? " ↓" : " ↑") : "";
 
   return (
-    <div className="flex flex-col h-full overflow-auto p-4">
+    <div className="flex flex-col shrink-0 p-4">
       <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-3">
         {races.length} races · click to build brief
       </p>
