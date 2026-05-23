@@ -14,9 +14,25 @@ import pytest
 
 from app.tools import position_search
 from app.tools.position_search import (
+    _search_name,
     gather_candidate_positions,
     structure_positions,
 )
+
+
+@pytest.mark.parametrize(
+    "fec_name, expected",
+    [
+        ("Donahue, Amy", "Amy Donahue"),
+        ("Keith, Purnima", "Purnima Keith"),
+        ("Moore, Gwen S", "Gwen S Moore"),
+        ("Gwen Moore", "Gwen Moore"),  # already natural, unchanged
+    ],
+)
+def test_search_name_normalizes_fec_format(fec_name: str, expected: str) -> None:
+    # Regression: FEC "Last, First" names search Perplexity poorly; normalize
+    # to natural order so stance/news lookups actually find the candidate.
+    assert _search_name(fec_name) == expected
 
 _SOURCES = [
     {"title": "Campaign site", "url": "https://x", "date": "2026-03-01", "snippet": "a"},

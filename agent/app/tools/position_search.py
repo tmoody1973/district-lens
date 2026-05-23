@@ -26,13 +26,6 @@ _MODEL = "sonar-pro"
 _GEMINI_MODEL = "gemini-3.1-pro-preview"
 _DEFAULT_LOCATION = "global"
 _MAX_BROAD_SOURCES = 10
-_CIVIC_DOMAINS = [
-    "congress.gov", "fec.gov", "ballotpedia.org", "opensecrets.org",
-    "votesmart.org", "govtrack.us", "house.gov", "senate.gov", "gpo.gov",
-    "politifact.com", "factcheck.org", "apnews.com", "reuters.com",
-    "npr.org", "pbs.org", "nytimes.com", "washingtonpost.com",
-    "wsj.com", "thehill.com", "rollcall.com",
-]
 _SYSTEM = (
     "You are a nonpartisan civic research assistant. "
     "Report only what verifiable sources say. "
@@ -82,19 +75,32 @@ def _is_broad(issue: str) -> bool:
     return issue.strip().lower() in _BROAD_TRIGGERS
 
 
+def _search_name(candidate_name: str) -> str:
+    """Convert an FEC 'Last, First Middle' name to natural 'First Middle Last'.
+
+    Perplexity matches a natural name ('Amy Donahue') far better than the
+    comma-inverted FEC form ('Donahue, Amy'), which yields sparse or wrong hits.
+    """
+    if "," in candidate_name:
+        last, first = candidate_name.split(",", 1)
+        return f"{first.strip()} {last.strip()}".strip()
+    return candidate_name.strip()
+
+
 def _build_prompt(candidate_name: str, state_code: str, issue: str) -> str:
     """Build the Perplexity user prompt for a broad sweep or a single issue."""
+    name = _search_name(candidate_name)
     if _is_broad(issue):
         return (
-            f"What are {candidate_name}'s positions and stances on key policy issues? "
-            f"{candidate_name} is a congressional candidate from {state_code}. "
+            f"What are {name}'s positions and stances on key policy issues? "
+            f"{name} is a 2026 U.S. congressional candidate from {state_code}. "
             "Cover as many issues as possible using only direct statements from their "
             "campaign website, press releases, floor speeches, voting record, and "
             "verified questionnaires. For each issue where no direct statement exists, "
             "say 'NO DIRECT STATEMENT FOUND' for that issue specifically."
         )
     return (
-        f"What has {candidate_name}, congressional candidate from {state_code}, "
+        f"What has {name}, a 2026 U.S. congressional candidate from {state_code}, "
         f"publicly said about {issue}? "
         "Prioritize direct statements from: campaign website, press releases, "
         "floor speeches, voting record, debate transcripts, verified questionnaires. "
@@ -135,7 +141,9 @@ async def _perplexity_search(prompt: str) -> tuple[str, list[dict]]:
         "max_tokens": 1500,
         "return_related_questions": False,
         "return_images": False,
-        "search_domain_filter": _CIVIC_DOMAINS,
+        # No domain allowlist: non-incumbents' positions live on their campaign
+        # sites and local news, which an allowlist excludes. The evidence-first
+        # system prompt + Gemini structuring keep results grounded.
         "search_recency_filter": "year",
         "web_search_options": {"search_context_size": "high"},
     }
