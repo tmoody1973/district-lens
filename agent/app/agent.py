@@ -8,14 +8,14 @@
 #
 # DistrictLens root agent.
 # Civic-safety system prompt: app/prompts/civic_safety.md (Layer 1).
-# Refusal architecture: before/after model callbacks (Layers 2–3).
+# Refusal architecture: before/after model callbacks (Layers 2-3).
 # See docs/REFUSAL_DESIGN.md for the full layered design.
 
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import AsyncGenerator
 
 from google.adk.agents import Agent, BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
@@ -28,13 +28,11 @@ from google.genai import types
 from app.middleware import check_input, check_output
 from app.tools.brief_pipeline import (
     VoterBriefPipeline,
-    extract_brief_address,
     _latest_user_text,
+    extract_brief_address,
 )
 from app.tools.district_lookup import lookup_district
 from app.tools.finish_brief import finish_brief
-from app.tools.position_search import search_candidate_positions
-from app.tools.state_races import get_state_races
 from app.tools.mongodb_mcp_toolset import create_mongodb_mcp_toolset
 from app.tools.mongodb_tools import (
     find_candidate,
@@ -43,6 +41,8 @@ from app.tools.mongodb_tools import (
     get_race_candidates,
     get_race_finance_brief,
 )
+from app.tools.position_search import search_candidate_positions
+from app.tools.state_races import get_state_races
 
 logger = logging.getLogger(__name__)
 

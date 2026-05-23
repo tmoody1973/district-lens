@@ -7,8 +7,8 @@ to the chat LlmAgent. Both paths must stream the chosen sub-agent's events.
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from types import SimpleNamespace
-from typing import AsyncGenerator
 
 import pytest
 from google.adk.agents import BaseAgent

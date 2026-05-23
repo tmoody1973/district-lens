@@ -228,10 +228,14 @@ async def structure_positions(
     falls back to a single "key positions" card so stances still render.
     """
     try:
-        raw_json = _structure_with_gemini(candidate_name, broad_answer, sources)
+        # _structure_with_gemini is a blocking SDK call; offload it so it does not
+        # stall the event loop and actually runs concurrently under asyncio.gather.
+        raw_json = await asyncio.to_thread(
+            _structure_with_gemini, candidate_name, broad_answer, sources
+        )
         parsed = json.loads(raw_json)
         positions = parsed.get("positions", [])
-    except Exception as exc:  # noqa: BLE001 — any failure must fall back, never abort
+    except Exception as exc:  # any failure must fall back, never abort
         logger.warning("structure_positions fallback for %s: %s", candidate_name, exc)
         return [_fallback_card(candidate_name, broad_answer, sources)]
 
@@ -270,7 +274,7 @@ async def gather_candidate_positions(
     )
 
     cards: list[dict] = []
-    for candidate, result in zip(candidates, results):
+    for candidate, result in zip(candidates, results, strict=True):
         if isinstance(result, Exception):
             logger.warning(
                 "gather_candidate_positions skipped %s: %s",

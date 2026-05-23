@@ -15,7 +15,8 @@ and the complete signal still reach the canvas.
 from __future__ import annotations
 
 import logging
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from google.adk.agents import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
@@ -94,6 +95,17 @@ class VoterBriefPipeline(BaseAgent):
             {"stage": "legislation", "legislation": legislation, "status_message": ""},
         )
 
+        # Announce the slow positions phase as its own running step before the
+        # ~25s gather, so the live receipt shows it active rather than stalling
+        # on "legislation" and then jumping straight to "complete".
+        yield self._delta(
+            ctx,
+            {
+                "stage": "positions",
+                "status_message": "Searching candidate positions across the web…",
+            },
+        )
+
         positions = await self._fetch_positions(candidates, state_code)
         yield self._delta(
             ctx,
@@ -114,7 +126,7 @@ class VoterBriefPipeline(BaseAgent):
         try:
             resolved = await resolve_race_from_address(address)
             return resolved.get("raceKey"), resolved.get("stateCode")
-        except Exception as exc:  # noqa: BLE001 — never abort the brief
+        except Exception as exc:  # any failure must not abort the brief
             logger.warning("voter_brief district step failed: %s", exc)
             return None, None
 
@@ -123,7 +135,7 @@ class VoterBriefPipeline(BaseAgent):
             return []
         try:
             return await fetcher(race_key)
-        except Exception as exc:  # noqa: BLE001 — never abort the brief
+        except Exception as exc:  # any failure must not abort the brief
             logger.warning("voter_brief %s step failed: %s", step, exc)
             return []
 
@@ -134,6 +146,6 @@ class VoterBriefPipeline(BaseAgent):
             return []
         try:
             return await gather_candidate_positions(candidates, state_code)
-        except Exception as exc:  # noqa: BLE001 — never abort the brief
+        except Exception as exc:  # any failure must not abort the brief
             logger.warning("voter_brief positions step failed: %s", exc)
             return []

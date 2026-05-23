@@ -18,7 +18,6 @@ from datetime import UTC, datetime, timedelta
 
 import pymongo
 import pymongo.errors
-
 from google.adk.tools import ToolContext
 
 from app.services.geocodio import GeocodioClient, GeocodioError
@@ -29,6 +28,10 @@ logger = logging.getLogger(__name__)
 # Cache TTLs per DECISIONS_LOG §4.3
 _FRESH_TTL = timedelta(days=30)
 _CD120_EMPTY_TTL = timedelta(days=7)
+
+# Sentinel opening phrase of an ambiguous-ZIP response. Such a response lists
+# several race keys, so no single definitive key may be extracted from it.
+_ZIP_AMBIGUOUS_MARKER = "ZIP code spans multiple districts"
 
 _mongo_client: pymongo.MongoClient | None = None  # type: ignore[type-arg]
 _geocodio_client: GeocodioClient | None = None
@@ -66,7 +69,7 @@ def _format_response(result: DistrictResult) -> str:
     primary = result.primary_district
 
     if result.is_zip_ambiguous:
-        lines = [f"ZIP code spans multiple districts for {result.formatted_address}:"]
+        lines = [f"{_ZIP_AMBIGUOUS_MARKER} for {result.formatted_address}:"]
         for d in sorted(result.districts, key=lambda x: -x.proportion):
             lines.append(f"  {d.race_key} — {d.proportion * 100:.0f}% coverage")
         lines.append(
@@ -97,7 +100,13 @@ def _format_response(result: DistrictResult) -> str:
 
 
 def _extract_race_key_from_text(text: str) -> str | None:
-    """Extract a race key like '2026-H-WI-04' from a formatted response string."""
+    """Extract a *definitive* race key like '2026-H-WI-04' from a response string.
+
+    Returns None for ambiguous-ZIP responses: they list several districts, so
+    extracting the first match would pin the wrong race key downstream.
+    """
+    if _ZIP_AMBIGUOUS_MARKER in text:
+        return None
     import re
     match = re.search(r"(2026-[HS]-[A-Z]{2}-\d{2})", text)
     return match.group(1) if match else None

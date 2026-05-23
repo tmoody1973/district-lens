@@ -67,7 +67,9 @@ async def test_pipeline_runs_every_step_in_fixed_order(monkeypatch):
     deltas = await _collect_deltas(pipeline, ctx)
 
     stages = [d["stage"] for d in deltas if "stage" in d]
-    assert stages == ["district", "candidates", "finance", "legislation", "complete"]
+    assert stages == [
+        "district", "candidates", "finance", "legislation", "positions", "complete"
+    ]
 
 
 @pytest.mark.unit
