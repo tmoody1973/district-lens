@@ -5,6 +5,7 @@ import { CandidateCard } from "./CandidateCard";
 import { FinanceChart } from "./FinanceChart";
 import { BillFeed } from "./BillFeed";
 import { NewsCard } from "./NewsCard";
+import { NewsAccordion } from "./NewsAccordion";
 import { IssueAccordion } from "./IssueAccordion";
 
 interface Props {
@@ -82,6 +83,17 @@ export function RaceCanvas({ state }: Props) {
       )}
 
       {state.news.length > 0 && <NewsCard news={state.news} />}
+
+      {state.candidates.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium uppercase tracking-widest text-slate-500">
+            Recent News · Perplexity
+          </p>
+          {state.candidates.map((candidate) => (
+            <NewsAccordion key={candidate.candidateId} candidateName={candidate.name} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
