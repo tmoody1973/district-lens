@@ -7,6 +7,8 @@ import { BillFeed } from "./BillFeed";
 import { NewsCard } from "./NewsCard";
 import { NewsAccordion } from "./NewsAccordion";
 import { IssueAccordion } from "./IssueAccordion";
+import { CanVoteStrip } from "./CanVoteStrip";
+import { stateCodeFromRaceKey } from "@/lib/states";
 
 interface Props {
   state: DistrictLensState;
@@ -35,10 +37,13 @@ export function RaceCanvas({ state }: Props) {
   );
 
   const issueGroups = groupByIssue(state.positions);
+  const stateCode = stateCodeFromRaceKey(state.currentRaceKey);
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-5">
       <RaceHeader raceKey={state.currentRaceKey} />
+
+      {stateCode && <CanVoteStrip stateCode={stateCode} />}
 
       {/* Evidence FIRST */}
       {issueGroups.length > 0 && (
