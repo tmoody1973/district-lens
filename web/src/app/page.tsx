@@ -305,7 +305,7 @@ export default function HomePage() {
             </div>
           )}
           {isJournalist && isIdle ? (
-            <div className="flex flex-1 flex-col overflow-y-auto">
+            <div className="flex flex-1 flex-col overflow-y-auto min-h-0">
               <div className="p-4 shrink-0">
                 <USMap
                   focusedState={agentState.mapFocus}

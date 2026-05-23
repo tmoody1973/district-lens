@@ -42,11 +42,25 @@ export function buildPositionPrompt(candidateName: string, issue: string): strin
   );
 }
 
+/** FEC stores names as "Last, First Middle"; web search matches "First Last" far better. */
+export function normalizeCandidateName(candidateName: string): string {
+  if (candidateName.includes(",")) {
+    const [last, first] = candidateName.split(",", 2);
+    return `${first.trim()} ${last.trim()}`.trim();
+  }
+  return candidateName.trim();
+}
+
 export function buildNewsPrompt(candidateName: string): string {
+  const name = normalizeCandidateName(candidateName);
   return (
-    `Summarize news coverage of ${candidateName} from the last 7 days. ` +
-    `Focus on campaign activities, public statements, debate appearances, ` +
-    `polling, endorsements, and significant controversies. Cite each claim.`
+    `Summarize recent news coverage of ${name}, a 2026 U.S. congressional ` +
+    `candidate, from the last 7 days. Only include coverage about this person as ` +
+    `a political candidate or officeholder: campaign activities, public ` +
+    `statements, debates, polling, endorsements, fundraising, or controversies. ` +
+    `Ignore unrelated results that merely match the name (films, businesses, ` +
+    `other people). If there is no election-related coverage, reply exactly ` +
+    `"No recent campaign coverage found." Cite each claim.`
   );
 }
 
