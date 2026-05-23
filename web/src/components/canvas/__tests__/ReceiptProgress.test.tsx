@@ -49,3 +49,15 @@ test("shows MongoDB badge when steps are present", () => {
   render(<ReceiptProgress steps={steps} briefStartedAt={Date.now()} />);
   expect(screen.getByText(/MongoDB/)).toBeInTheDocument();
 });
+
+test("horizontal mode renders a condensed strip with step labels", () => {
+  const steps = [
+    { label: "District resolved", status: "done" as const },
+    { label: "Candidates loaded", status: "running" as const },
+  ];
+  render(<ReceiptProgress steps={steps} briefStartedAt={Date.now() - 5000} horizontal />);
+  expect(screen.getByText("Building")).toBeInTheDocument();
+  expect(screen.getByText("Candidates loaded")).toBeInTheDocument();
+  // The verbose "Building brief" header and MongoDB badge are desktop-only.
+  expect(screen.queryByText(/MongoDB/)).not.toBeInTheDocument();
+});

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import type { BriefStep } from "@/types/agent-state";
+import type { BriefStep, StepStatus } from "@/types/agent-state";
 
 const ESTIMATED_TOTAL_MS = 70_000;
 
@@ -9,9 +9,17 @@ interface Props {
   briefStartedAt: number | null;
   statusMessage?: string | null;
   compact?: boolean;
+  horizontal?: boolean;
 }
 
-export function ReceiptProgress({ steps, briefStartedAt, statusMessage, compact }: Props) {
+function StepIcon({ status }: { status: StepStatus }) {
+  if (status === "done") return <span className="text-green-600 text-xs w-4 shrink-0">✓</span>;
+  if (status === "running")
+    return <span className="text-amber-500 text-xs w-4 shrink-0 animate-spin">⟳</span>;
+  return <span className="text-slate-300 text-xs w-4 shrink-0">○</span>;
+}
+
+export function ReceiptProgress({ steps, briefStartedAt, statusMessage, compact, horizontal }: Props) {
   const [secsLeft, setSecsLeft] = useState<number | null>(null);
   const isComplete = steps.length > 0 && steps.every((s) => s.status === "done");
 
@@ -33,6 +41,51 @@ export function ReceiptProgress({ steps, briefStartedAt, statusMessage, compact 
   }, [briefStartedAt, isComplete]);
 
   if (steps.length === 0) return null;
+
+  // Slim single-line strip for the mobile shell: status + steps scroll horizontally
+  // so nothing wraps or overflows at narrow widths.
+  if (horizontal) {
+    return (
+      <div className="flex items-center gap-3 overflow-x-auto whitespace-nowrap">
+        <span className="flex shrink-0 items-center gap-1.5">
+          <span
+            className={[
+              "inline-block h-2 w-2 rounded-full",
+              isComplete ? "bg-green-500" : "bg-blue-500 animate-pulse",
+            ].join(" ")}
+          />
+          <span
+            className={[
+              "text-xs font-semibold uppercase tracking-widest",
+              isComplete ? "text-green-700" : "text-blue-700",
+            ].join(" ")}
+          >
+            {isComplete ? "Complete" : "Building"}
+          </span>
+        </span>
+        {steps.map((step) => (
+          <span key={step.label} className="flex shrink-0 items-center gap-1">
+            <StepIcon status={step.status} />
+            <span
+              className={[
+                "text-xs",
+                step.status === "done" && "text-slate-400",
+                step.status === "running" && "text-amber-600 font-medium",
+                step.status === "pending" && "text-slate-400",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              {step.label}
+            </span>
+          </span>
+        ))}
+        {secsLeft !== null && secsLeft > 0 && (
+          <span className="shrink-0 text-xs text-slate-400">~{secsLeft}s</span>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
@@ -72,15 +125,7 @@ export function ReceiptProgress({ steps, briefStartedAt, statusMessage, compact 
       <div className="space-y-1">
         {steps.map((step) => (
           <div key={step.label} className="flex items-center gap-2">
-            {step.status === "done" && (
-              <span className="text-green-600 text-xs w-4 shrink-0">✓</span>
-            )}
-            {step.status === "running" && (
-              <span className="text-amber-500 text-xs w-4 shrink-0 animate-spin">⟳</span>
-            )}
-            {step.status === "pending" && (
-              <span className="text-slate-300 text-xs w-4 shrink-0">○</span>
-            )}
+            <StepIcon status={step.status} />
             <span
               className={[
                 "text-xs",

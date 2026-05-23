@@ -43,12 +43,20 @@ Available tools:
 - search_candidate_positions(candidate_name, state, issue) → Perplexity web search for candidate statements on a policy issue
 - finish_brief(race_key) → marks the brief as complete, shows green status bar`;
 
+const CHAT_LABELS = {
+  title: "DistrictLens",
+  initial:
+    "Enter your address above to build your voter brief, or ask about any 2026 congressional race.",
+  placeholder: "Ask about candidates, issues, or fundraising…",
+};
+
 export default function HomePage() {
   const [address, setAddress] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const { agent } = useAgent({ agentId: "districtlens_root" });
   const { copilotkit } = useCopilotKit();
@@ -224,8 +232,8 @@ export default function HomePage() {
       {/* Three-column body */}
       <div className="flex flex-1 overflow-hidden min-h-0">
 
-        {/* Col 1 — Agent activity sidebar (192px) */}
-        <div className="w-48 shrink-0 border-r-2 border-slate-900 flex flex-col bg-white">
+        {/* Col 1 — Agent activity sidebar (192px) — desktop only */}
+        <div className="hidden lg:flex w-48 shrink-0 border-r-2 border-slate-900 flex-col bg-white">
           {/* Mode switcher */}
           <div className="p-3 border-b border-slate-200">
             <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2">Mode</p>
@@ -292,6 +300,17 @@ export default function HomePage() {
 
         {/* Col 2 — Center canvas (flex-1) */}
         <div className="flex flex-1 flex-col overflow-hidden min-h-0">
+          {/* Mobile-only slim progress strip (sidebar is hidden below lg) */}
+          {steps.length > 0 && (
+            <div className="lg:hidden shrink-0 border-b-2 border-slate-900 bg-white px-3 py-2">
+              <ReceiptProgress
+                steps={steps}
+                briefStartedAt={agentState.briefStartedAt}
+                statusMessage={agentState.status_message}
+                horizontal
+              />
+            </div>
+          )}
           {isJournalist && isIdle ? (
             <div className="flex flex-1 flex-col overflow-y-auto">
               <div className="p-4 shrink-0">
@@ -320,20 +339,45 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* Col 3 — Chat sidebar (320px) */}
-        <div className="w-80 shrink-0 border-l-2 border-slate-900 flex flex-col">
-          <CopilotChat
-            instructions={SYSTEM_PROMPT}
-            labels={{
-              title: "DistrictLens",
-              initial: "Enter your address above to build your voter brief, or ask about any 2026 congressional race.",
-              placeholder: "Ask about candidates, issues, or fundraising…",
-            }}
-            className="h-full"
-          />
+        {/* Col 3 — Chat sidebar (320px) — desktop only */}
+        <div className="hidden lg:flex w-80 shrink-0 border-l-2 border-slate-900 flex-col">
+          <CopilotChat instructions={SYSTEM_PROMPT} labels={CHAT_LABELS} className="h-full" />
         </div>
 
       </div>
+
+      {/* Mobile chat: floating trigger + slide-up bottom sheet (below lg) */}
+      <button
+        onClick={() => setChatOpen(true)}
+        className="lg:hidden fixed bottom-4 right-4 z-30 rounded-full border-2 border-slate-900 bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-lg"
+      >
+        Ask
+      </button>
+
+      {chatOpen && (
+        <div className="lg:hidden fixed inset-0 z-40 flex flex-col justify-end">
+          <div
+            className="absolute inset-0 bg-black/30"
+            onClick={() => setChatOpen(false)}
+            aria-hidden
+          />
+          <div className="relative flex h-[80vh] flex-col rounded-t-xl border-t-2 border-slate-900 bg-white">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3">
+              <span className="text-sm font-bold text-slate-900">DistrictLens</span>
+              <button
+                onClick={() => setChatOpen(false)}
+                aria-label="Close chat"
+                className="text-slate-400 hover:text-slate-700"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="min-h-0 flex-1">
+              <CopilotChat instructions={SYSTEM_PROMPT} labels={CHAT_LABELS} className="h-full" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
