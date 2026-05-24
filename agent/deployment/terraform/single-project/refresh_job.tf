@@ -120,14 +120,25 @@ resource "google_cloud_scheduler_job" "refresh_fec_weekly" {
   ]
 }
 
-variable "alert_notification_channels" {
-  description = "Monitoring notification channel IDs for refresh-job failure alerts. Empty disables the alert."
-  type        = list(string)
-  default     = []
+variable "alert_email" {
+  description = "Email for 'FEC refresh job failed' alerts. Empty disables the alert + channel."
+  type        = string
+  default     = ""
+}
+
+resource "google_monitoring_notification_channel" "refresh_alert_email" {
+  count        = var.alert_email != "" ? 1 : 0
+  project      = var.project_id
+  display_name = "DistrictLens refresh alerts"
+  type         = "email"
+
+  labels = {
+    email_address = var.alert_email
+  }
 }
 
 resource "google_monitoring_alert_policy" "refresh_fec_failed" {
-  count        = length(var.alert_notification_channels) > 0 ? 1 : 0
+  count        = var.alert_email != "" ? 1 : 0
   project      = var.project_id
   display_name = "FEC refresh job failed"
   combiner     = "OR"
@@ -148,5 +159,5 @@ resource "google_monitoring_alert_policy" "refresh_fec_failed" {
     }
   }
 
-  notification_channels = var.alert_notification_channels
+  notification_channels = google_monitoring_notification_channel.refresh_alert_email[*].id
 }
