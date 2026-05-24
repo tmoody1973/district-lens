@@ -328,3 +328,27 @@ async def test_fetch_results_page_publisher_is_hostname():
         client_factory=_fake_factory(fake_resp),
     )
     assert publisher == "apnews.com"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://sos.evil.com/results",
+        "https://sos.attacker.net/x",
+    ],
+)
+def test_sos_prefix_on_non_gov_host_is_not_authoritative(url):
+    """A bare 'sos.' prefix on a non-.gov host must NOT qualify (spoof guard)."""
+    assert cf.pick_authoritative_url([{"url": url}]) is None
+
+
+@pytest.mark.unit
+def test_legit_sos_gov_host_wins_over_spoof_and_aggregator():
+    """Real Secretary-of-State .gov host still wins over a spoof + aggregator."""
+    sources = [
+        {"url": "https://sos.evil.com/results"},
+        {"url": "https://ballotpedia.org/x"},
+        {"url": "https://sos.ga.gov/elections/results"},
+    ]
+    assert cf.pick_authoritative_url(sources) == "https://sos.ga.gov/elections/results"

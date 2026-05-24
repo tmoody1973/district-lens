@@ -148,7 +148,10 @@ def _score_url(url: str) -> int:
         score += _GOV_HOST_SCORE
     if host == "apnews.com" or host.endswith(".apnews.com"):
         score += _APNEWS_HOST_SCORE
-    if host.startswith("sos.") or ".sos." in host:
+    # SoS bonus only stacks on an already-.gov host (legit Secretary-of-State
+    # sites are .gov). A bare "sos." prefix on a non-gov host (e.g.
+    # "sos.evil.com") must NOT earn authority on its own.
+    if host.endswith(".gov") and (host.startswith("sos.") or ".sos." in host):
         score += _SOS_HOST_SCORE
 
     # PATH bonus ONLY — additive, cannot clear the threshold by itself.
