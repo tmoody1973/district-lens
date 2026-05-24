@@ -27,28 +27,34 @@ logger = logging.getLogger(__name__)
 # URL scoring constants
 # ---------------------------------------------------------------------------
 
-# Hints that indicate an authoritative primary-results source.
-# Each hint that matches the URL's netloc or path adds _HINT_SCORE points.
+# Hints that indicate an authoritative primary-results source. Documentary
+# reference only — scoring is done by _score_url with anchored host matching,
+# NOT by naive substring search (which is spoofable; see _score_url).
 AUTHORITATIVE_HINTS: tuple[str, ...] = (
     ".gov",
     "sos.",
     "apnews.com",
-    "/elections",
-    "secretary of state",  # unlikely in a URL, but kept for completeness
+    "/election",
+    "secretary of state",
 )
 
-# Each hint match earns this score.
-_HINT_SCORE = 10
+# HOST authoritative signals (anchored against the hostname, never the path).
+# A government .gov host is the gold standard for official election results;
+# its score is kept strictly above any non-gov host signal PLUS the path bonus
+# so a bare .gov always outranks AP-news-with-an-/elections-path.
+_GOV_HOST_SCORE = 25
+# AP Elections is an authoritative wire service.
+_APNEWS_HOST_SCORE = 15
+# A Secretary-of-State subdomain (sos.*). Most are also .gov, so this stacks.
+_SOS_HOST_SCORE = 10
 
-# Extra bonus for a .gov domain — state/federal government sources outrank
-# wire services and other authoritative-but-non-government sources.
-_GOV_DOMAIN_BONUS = 15
+# PATH bonus ONLY — strictly additive, must NEVER alone clear the threshold.
+# An "/election" path on a non-authoritative host must still fail.
+_ELECTION_PATH_BONUS = 5
 
-# A .gov domain AND an /elections path is a particularly strong signal.
-_GOV_ELECTIONS_BONUS = 5
-
-# Minimum total score required to be considered authoritative.
-# A single hint match (score = 10) qualifies; a score of 0 does not.
+# Minimum total score to be considered authoritative. Set ABOVE the path-only
+# bonus so that path text alone (e.g. "/elections" on a random blog) never
+# qualifies — a HOST signal is required.
 _MIN_AUTHORITATIVE_SCORE = 10
 
 # Aggregators / secondary sources that should be denied even if they happen
@@ -93,42 +99,65 @@ _HEADERS = {
 # ---------------------------------------------------------------------------
 
 
+def _host_of(url: str) -> str:
+    """Return the lowercased hostname (no port) of a URL, or '' on parse error."""
+    try:
+        netloc = urlparse(url).netloc.lower()
+    except Exception:
+        return ""
+    # Strip any port suffix (urlparse keeps it on netloc, e.g. "host:8080").
+    return netloc.split(":", 1)[0]
+
+
 def _score_url(url: str) -> int:
     """Return an integer authority score for a single URL.
 
-    Higher is more authoritative.  0 means clearly not authoritative.
-    Negative scores are not used — denied URLs simply score 0.
+    Authority credit comes from the HOST (hostname), with matches anchored so
+    they cannot be spoofed by attacker-controlled path or subdomain text:
+
+    - ``host.endswith(".gov")`` (or host == "gov") — a real government TLD,
+      NOT ".gov" appearing inside a path like ``evil.com/.gov/fake``.
+    - ``host == "apnews.com"`` or ``host.endswith(".apnews.com")`` — AP, NOT
+      ``apnews.com`` embedded in some other registrable domain.
+    - Secretary-of-State subdomain: ``host.startswith("sos.")`` or
+      ``".sos." in host`` — an actual subdomain label, NOT "sos." floating
+      anywhere in the netloc (which ``notarealsos.com.attacker.net`` exploited).
+
+    The PATH only contributes a small additive bonus (``/election``) that is
+    strictly below ``_MIN_AUTHORITATIVE_SCORE`` on its own, so path text never
+    qualifies a non-authoritative host.
+
+    Returns 0 (not authoritative) for denied hosts and anything without a HOST
+    signal.
     """
-    try:
-        parsed = urlparse(url)
-    except Exception:
+    host = _host_of(url)
+    if not host:
         return 0
 
-    netloc = parsed.netloc.lower()
-    path = parsed.path.lower()
-
-    # Deny aggregators / low-quality sources outright.
-    if netloc in _DENY_LIST:
+    # Deny aggregators / low-quality sources outright (host-based).
+    if host in _DENY_LIST:
         return 0
     for substring in _DENY_SUBSTRINGS:
-        if substring in netloc:
+        if substring in host:
             return 0
 
     score = 0
 
-    # Check each authoritative hint against both netloc and path.
-    for hint in AUTHORITATIVE_HINTS:
-        if hint in netloc or hint in path:
-            score += _HINT_SCORE
+    # HOST signals — anchored, never substring-anywhere.
+    if host == "gov" or host.endswith(".gov"):
+        score += _GOV_HOST_SCORE
+    if host == "apnews.com" or host.endswith(".apnews.com"):
+        score += _APNEWS_HOST_SCORE
+    if host.startswith("sos.") or ".sos." in host:
+        score += _SOS_HOST_SCORE
 
-    # Extra bonus for .gov TLD — government domains are the gold standard
-    # for official state election results and must outscore wire services.
-    if ".gov" in netloc:
-        score += _GOV_DOMAIN_BONUS
-
-    # Additional bonus for .gov + /elections combination.
-    if ".gov" in netloc and "/elections" in path:
-        score += _GOV_ELECTIONS_BONUS
+    # PATH bonus ONLY — additive, cannot clear the threshold by itself.
+    try:
+        path = urlparse(url).path.lower()
+    except Exception:
+        path = ""
+    if "/election" in path:
+        score += _ELECTION_PATH_BONUS
 
     return score
 

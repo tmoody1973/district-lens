@@ -105,7 +105,7 @@ def test_pick_authoritative_gov_beats_apnews():
 
 @pytest.mark.unit
 def test_pick_authoritative_sos_subdomain_is_authoritative():
-    """A URL with 'sos.' in the hostname must qualify as authoritative."""
+    """A URL with 'sos.' as a hostname subdomain must qualify as authoritative."""
     srcs = [
         {"url": "https://www.somesite.com/news"},
         {"url": "https://sos.nc.gov/elections/results"},
@@ -113,6 +113,76 @@ def test_pick_authoritative_sos_subdomain_is_authoritative():
     result = cf.pick_authoritative_url(srcs)
     assert result is not None
     assert "sos.nc.gov" in result
+
+
+# ---------------------------------------------------------------------------
+# Adversarial: URL-spoofing must NOT be accepted (civic-safety)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_pick_authoritative_rejects_gov_in_path_spoof():
+    """'.gov' in the PATH of an attacker host must not confer authority."""
+    srcs = [{"url": "https://evil.com/.gov/fake"}]
+    assert cf.pick_authoritative_url(srcs) is None
+
+
+@pytest.mark.unit
+def test_pick_authoritative_rejects_sos_substring_spoof():
+    """'sos.' as a bare substring (not a real subdomain) must not confer authority."""
+    srcs = [{"url": "https://notarealsos.com.attacker.net/x"}]
+    assert cf.pick_authoritative_url(srcs) is None
+
+
+@pytest.mark.unit
+def test_pick_authoritative_rejects_aggregator_with_sos_query_param():
+    """A denied aggregator must stay denied regardless of a 'sos.gov' query param."""
+    srcs = [{"url": "https://ballotpedia.org/results?ref=sos.gov"}]
+    assert cf.pick_authoritative_url(srcs) is None
+
+
+@pytest.mark.unit
+def test_pick_authoritative_rejects_election_path_only():
+    """A non-gov host with an '/elections' path alone must NOT qualify.
+
+    The path bonus is strictly additive and below the threshold, so a HOST
+    signal is required — path text can never qualify a source by itself.
+    """
+    srcs = [{"url": "https://randomblog.com/elections/2026"}]
+    assert cf.pick_authoritative_url(srcs) is None
+
+
+@pytest.mark.unit
+def test_pick_authoritative_rejects_apnews_embedded_in_other_domain():
+    """'apnews.com' embedded as a label in another registrable domain must fail."""
+    srcs = [{"url": "https://apnews.com.attacker.net/results"}]
+    assert cf.pick_authoritative_url(srcs) is None
+
+
+@pytest.mark.unit
+def test_pick_authoritative_positive_regressions_still_qualify():
+    """Genuine authoritative hosts must still be accepted after the spoof fixes."""
+    assert (
+        cf.pick_authoritative_url([{"url": "https://apnews.com/article/x"}])
+        == "https://apnews.com/article/x"
+    )
+    assert (
+        cf.pick_authoritative_url([{"url": "https://elections.maryland.gov/results"}])
+        == "https://elections.maryland.gov/results"
+    )
+
+
+@pytest.mark.unit
+def test_pick_authoritative_gov_wins_over_spoof_and_aggregator():
+    """Among a real .gov, a .gov-in-path spoof, and an aggregator, the .gov wins."""
+    srcs = [
+        {"url": "https://evil.com/.gov/fake"},
+        {"url": "https://ballotpedia.org/x"},
+        {"url": "https://sos.ga.gov/elections/results"},
+    ]
+    assert (
+        cf.pick_authoritative_url(srcs) == "https://sos.ga.gov/elections/results"
+    )
 
 
 # ---------------------------------------------------------------------------
