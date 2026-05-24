@@ -49,6 +49,10 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
+  // Which mode loaded the current brief. Lets each tab show its own view:
+  // the journalist map isn't replaced by a voter brief, and switching tabs
+  // back preserves the brief (map exploration doesn't change this).
+  const [lastBriefMode, setLastBriefMode] = useState<AppMode | null>(null);
 
   const { agent } = useAgent({ agentId: "districtlens_root" });
   const { copilotkit } = useCopilotKit();
@@ -103,6 +107,7 @@ export default function HomePage() {
     setError(null);
     setSuggestions([]);
     setShowSuggestions(false);
+    setLastBriefMode("voter");
     try {
       agent.addMessage({
         id: crypto.randomUUID(),
@@ -130,6 +135,7 @@ export default function HomePage() {
   const handleRaceTableClick = useCallback(
     (raceKey: string) => {
       if (agent.isRunning) return;
+      setLastBriefMode("journalist");
       agent.addMessage({
         id: crypto.randomUUID(),
         role: "user",
@@ -142,6 +148,8 @@ export default function HomePage() {
 
   const handleModeChange = useCallback(
     (m: AppMode) => {
+      // Switch the lens but preserve state (prev overrides DEFAULT) so each
+      // tab's view is kept; lastBriefMode + the render decide what shows.
       setAgentState((prev) => ({ ...DEFAULT_STATE, ...prev, mode: m }));
     },
     [setAgentState]
@@ -170,6 +178,10 @@ export default function HomePage() {
   const isIdle = agentState.stage === "idle" || !agentState.currentRaceKey;
   const steps = stepsFromStage(agentState.stage);
   const isComplete = agentState.stage === "complete";
+  // A loaded brief shows only in the tab that loaded it; otherwise each tab
+  // shows its own home (voter → address entry, journalist → map).
+  const showVoterBrief = !isJournalist && lastBriefMode === "voter" && !isIdle;
+  const showJournalistRace = isJournalist && lastBriefMode === "journalist" && !isIdle;
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -304,31 +316,35 @@ export default function HomePage() {
               />
             </div>
           )}
-          {isJournalist && isIdle ? (
-            <div className="flex flex-1 flex-col overflow-y-auto min-h-0">
-              <div className="p-4 shrink-0">
-                <USMap
-                  focusedState={agentState.mapFocus}
-                  onStateClick={handleStateClick}
-                  mode={agentState.mode}
-                  heatmapData={agentState.stateRaces}
-                />
-                {agentState.mapFocus && (
-                  <p className="mt-3 text-sm text-slate-600">
-                    <span className="font-semibold">{agentState.mapFocus}</span> selected &mdash; loading races…
-                  </p>
+          {isJournalist ? (
+            showJournalistRace ? (
+              <RaceCanvas state={agentState} />
+            ) : (
+              <div className="flex flex-1 flex-col overflow-y-auto min-h-0">
+                <div className="p-4 shrink-0">
+                  <USMap
+                    focusedState={agentState.mapFocus}
+                    onStateClick={handleStateClick}
+                    mode={agentState.mode}
+                    heatmapData={agentState.stateRaces}
+                  />
+                  {agentState.mapFocus && (
+                    <p className="mt-3 text-sm text-slate-600">
+                      <span className="font-semibold">{agentState.mapFocus}</span> selected &mdash; loading races…
+                    </p>
+                  )}
+                </div>
+                {agentState.stateRaces.length > 0 ? (
+                  <RaceTable races={agentState.stateRaces} onRaceClick={handleRaceTableClick} />
+                ) : (
+                  <p className="px-4 text-sm text-slate-400">Click a state on the map to explore its 2026 races.</p>
                 )}
               </div>
-              {agentState.stateRaces.length > 0 ? (
-                <RaceTable races={agentState.stateRaces} onRaceClick={handleRaceTableClick} />
-              ) : (
-                <p className="px-4 text-sm text-slate-400">Click a state on the map to explore its 2026 races.</p>
-              )}
-            </div>
-          ) : isIdle ? (
-            <CanvasEmptyState onSubmit={handleAddressSubmit} />
-          ) : (
+            )
+          ) : showVoterBrief ? (
             <RaceCanvas state={agentState} />
+          ) : (
+            <CanvasEmptyState onSubmit={handleAddressSubmit} />
           )}
         </div>
 

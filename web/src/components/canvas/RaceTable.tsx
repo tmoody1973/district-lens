@@ -13,6 +13,12 @@ function fmtMoney(val: number | null): string {
   return `$${val}`;
 }
 
+/** FEC stores "Last, First Middle"; show just the last name in the compact matchup. */
+function lastName(fecName: string | null): string {
+  if (!fecName) return "—";
+  return fecName.includes(",") ? fecName.split(",")[0].trim() : fecName.trim();
+}
+
 interface Props {
   races: RaceRow[];
   onRaceClick: (raceKey: string) => void;
@@ -49,13 +55,15 @@ export function RaceTable({ races, onRaceClick }: Props) {
       <table className="w-full text-sm border-collapse">
         <thead>
           <tr className="border-b-2 border-slate-900 text-xs font-semibold uppercase tracking-widest text-slate-500">
-            <th className="text-left py-2 pr-3">Race</th>
             <th
               className="text-left py-2 pr-3 cursor-pointer hover:text-slate-900"
               onClick={() => toggleSort("state")}
             >
-              State{arrow("state")}
+              Race{arrow("state")}
             </th>
+            <th className="text-left py-2 pr-3">Matchup</th>
+            <th className="text-right py-2 pr-3">Incumbent $</th>
+            <th className="text-right py-2 pr-3">Challenger $</th>
             <th
               className="text-right py-2 pr-3 cursor-pointer hover:text-slate-900"
               onClick={() => toggleSort("financeGap")}
@@ -77,11 +85,28 @@ export function RaceTable({ races, onRaceClick }: Props) {
               onClick={() => onRaceClick(race.raceKey)}
               className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
             >
-              <td className="py-2 pr-3 font-medium text-slate-900">
-                {race.incumbentName ?? race.raceKey}
-              </td>
-              <td className="py-2 pr-3 text-slate-500">
+              <td className="py-2 pr-3 font-mono font-medium text-slate-900">
                 {race.state}-{race.district}
+              </td>
+              <td className="py-2 pr-3 text-slate-700">
+                <span className="font-medium text-slate-900">{lastName(race.incumbentName)}</span>
+                {race.incumbentParty && (
+                  <span className="text-slate-400"> ({race.incumbentParty})</span>
+                )}
+                {race.topChallengerName ? (
+                  <>
+                    <span className="text-slate-400"> vs </span>
+                    <span className="font-medium text-slate-900">{lastName(race.topChallengerName)}</span>
+                  </>
+                ) : (
+                  <span className="text-slate-400"> · no challenger filed</span>
+                )}
+              </td>
+              <td className="py-2 pr-3 text-right font-mono text-slate-700">
+                {fmtMoney(race.incumbentReceipts)}
+              </td>
+              <td className="py-2 pr-3 text-right font-mono text-slate-700">
+                {fmtMoney(race.topChallengerReceipts)}
               </td>
               <td className="py-2 pr-3 text-right font-mono text-slate-700">
                 {fmtMoney(race.financeGap)}
