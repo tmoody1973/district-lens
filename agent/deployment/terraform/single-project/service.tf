@@ -20,7 +20,7 @@ resource "google_cloud_run_v2_service" "app" {
   deletion_protection = false
   ingress             = "INGRESS_TRAFFIC_ALL"
   labels = {
-    "created-by"                  = "adk"
+    "created-by" = "adk"
   }
 
   template {
@@ -28,27 +28,93 @@ resource "google_cloud_run_v2_service" "app" {
       image = "us-docker.pkg.dev/cloudrun/container/hello"
       resources {
         limits = {
-          cpu    = "4"
-          memory = "8Gi"
+          cpu    = "2"
+          memory = "2Gi"
         }
       }
 
       env {
+        name  = "GOOGLE_CLOUD_PROJECT"
+        value = var.project_id
+      }
+      env {
+        name  = "GOOGLE_CLOUD_LOCATION"
+        value = "global"
+      }
+      env {
+        name  = "GOOGLE_GENAI_USE_VERTEXAI"
+        value = "True"
+      }
+      env {
         name  = "LOGS_BUCKET_NAME"
         value = google_storage_bucket.logs_data_bucket.name
       }
+      env {
+        name  = "ALLOW_ORIGINS"
+        value = "https://districtlens-web-adewe5kxtq-uc.a.run.app,http://localhost:3000"
+      }
 
       env {
-        name  = "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"
-        value = "NO_CONTENT"
+        name = "PERPLEXITY_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "districtlens-perplexity-key"
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "MONGODB_URI"
+        value_source {
+          secret_key_ref {
+            secret  = "districtlens-mongodb-uri"
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "GEOCODIO_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "districtlens-geocodio-api-key"
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "INTERNAL_API_TOKEN"
+        value_source {
+          secret_key_ref {
+            secret  = "districtlens-internal-api-token"
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "CONGRESS_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "districtlens-congress-api-key"
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "ADDRESS_HASH_SALT"
+        value_source {
+          secret_key_ref {
+            secret  = "districtlens-address-hash-salt"
+            version = "latest"
+          }
+        }
       }
     }
 
-    service_account = google_service_account.app_sa.email
+    service_account                  = google_service_account.app_sa.email
     max_instance_request_concurrency = 40
 
     scaling {
-      min_instance_count = 1
+      min_instance_count = 0
       max_instance_count = 10
     }
 
@@ -60,11 +126,15 @@ resource "google_cloud_run_v2_service" "app" {
     percent = 100
   }
 
-  # This lifecycle block prevents Terraform from overwriting the container image when it's
-  # updated by Cloud Run deployments outside of Terraform (e.g., via CI/CD pipelines)
+  # Ignore attributes that gcloud-based deploys manage out of band, so Terraform
+  # owns the declared config (env/secrets/resources/scaling) without fighting the
+  # deploy pipeline over the image, source-build metadata, or client stamps.
   lifecycle {
     ignore_changes = [
       template[0].containers[0].image,
+      build_config,
+      client,
+      client_version,
     ]
   }
 
