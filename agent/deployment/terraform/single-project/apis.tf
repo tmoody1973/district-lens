@@ -24,6 +24,9 @@ locals {
     "logging.googleapis.com",
     "cloudtrace.googleapis.com",
     "telemetry.googleapis.com",
+    "secretmanager.googleapis.com",
+    "cloudscheduler.googleapis.com",
+    "monitoring.googleapis.com",
   ]
 }
 
@@ -36,6 +39,6 @@ resource "google_project_service" "services" {
 
 resource "google_project_service_identity" "vertex_sa" {
   provider = google-beta
-  project = var.project_id
-  service = "aiplatform.googleapis.com"
+  project  = var.project_id
+  service  = "aiplatform.googleapis.com"
 }
