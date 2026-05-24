@@ -43,7 +43,7 @@ class FakeClient:
 
 
 @pytest.mark.unit
-def test_execute_refresh_writes_start_then_success():
+def test_execute_refresh_success_writes_audit_doc_with_correct_fields():
     col = FakeCollection()
     client = FakeClient(col)
     counts = {"races": 503, "candidates": 3900}

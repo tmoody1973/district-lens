@@ -13,6 +13,7 @@ import os
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Any
 
 import pymongo
 
@@ -34,7 +35,7 @@ def execute_refresh(
     import_fn: Callable[[str], dict[str, int]] = run_import,
     client_factory: Callable[[str], pymongo.MongoClient] = pymongo.MongoClient,
     now_fn: Callable[[], datetime] = _utcnow,
-) -> dict:
+) -> dict[str, Any]:
     """Run the FEC import and record a refresh_runs audit doc.
 
     Writes a `running` doc before the import, then updates it to `completed`
@@ -45,38 +46,38 @@ def execute_refresh(
     started_at = now_fn()
     client = client_factory(mongo_uri)
     runs_col = client["districtlens"]["refresh_runs"]
-
-    runs_col.insert_one(
-        {
-            "run_id": run_id,
-            "job_name": JOB_NAME,
-            "trigger": trigger,
-            "status": "running",
-            "started_at": started_at,
-            "completed_at": None,
-            "counts": None,
-            "error": None,
-        }
-    )
-
     try:
-        counts = import_fn(mongo_uri)
-    except Exception as exc:
+        runs_col.insert_one(
+            {
+                "run_id": run_id,
+                "job_name": JOB_NAME,
+                "trigger": trigger,
+                "status": "running",
+                "started_at": started_at,
+                "completed_at": None,
+                "counts": None,
+                "error": None,
+            }
+        )
+
+        try:
+            counts = import_fn(mongo_uri)
+        except Exception as exc:
+            runs_col.update_one(
+                {"run_id": run_id},
+                {"$set": {"status": "failed", "completed_at": now_fn(), "error": str(exc)}},
+            )
+            logger.exception("refresh_fec run %s failed", run_id)
+            raise
+
         runs_col.update_one(
             {"run_id": run_id},
-            {"$set": {"status": "failed", "completed_at": now_fn(), "error": str(exc)}},
+            {"$set": {"status": "completed", "completed_at": now_fn(), "counts": counts}},
         )
-        logger.exception("refresh_fec run %s failed", run_id)
+        logger.info("refresh_fec run %s completed: %s", run_id, counts)
+        return {"run_id": run_id, "status": "completed", "counts": counts}
+    finally:
         client.close()
-        raise
-
-    runs_col.update_one(
-        {"run_id": run_id},
-        {"$set": {"status": "completed", "completed_at": now_fn(), "counts": counts}},
-    )
-    logger.info("refresh_fec run %s completed: %s", run_id, counts)
-    client.close()
-    return {"run_id": run_id, "status": "completed", "counts": counts}
 
 
 def main() -> int:
