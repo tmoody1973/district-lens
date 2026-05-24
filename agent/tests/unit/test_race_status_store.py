@@ -62,3 +62,16 @@ def test_flag_provisional_allowed_without_citation():
                        presentation_class="newsworthy_signal", prev_status="pre_primary")
     assert s.status_col.find_one({"race_key": "2026-H-GA-07"})["status"] == "provisional"
     assert s.events_col.docs[0]["presentation_class"] == "newsworthy_signal"
+
+
+@pytest.mark.unit
+def test_store_citation_then_confirm_succeeds():
+    s = _stores()
+    cid = s.store_citation(race_key="2026-H-GA-07", url="https://sos.ga.gov/r",
+                           publisher="sos.ga.gov", snippet="Jane Doe wins", content="full results page")
+    s.apply_resolution(race_key="2026-H-GA-07", to_status="confirmed",
+                       winners={"REP": "c1"}, citation_id=cid, reason="clean",
+                       presentation_class="routine", prev_status="pre_primary")
+    st = s.status_col.find_one({"race_key": "2026-H-GA-07"})
+    assert st["status"] == "confirmed" and st["citation_id"] == cid
+    assert len(s.citations_col.docs) == 1 and s.citations_col.docs[0]["content_hash"]

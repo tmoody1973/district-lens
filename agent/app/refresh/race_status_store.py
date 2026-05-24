@@ -31,7 +31,7 @@ class RaceStatusStore:
         citation_id: Any | None, reason: str | None,
         presentation_class: str = "routine", prev_status: str | None = None,
         confidence: float = 0.0, confirmation_basis: list[str] | None = None,
-        losers: list[str] | None = None, extra: dict | None = None,
+        losers: list[str] | None = None, extra: dict[str, Any] | None = None,
     ) -> None:
         if to_status == "confirmed" and citation_id is None:
             raise ValueError("cannot set status=confirmed without a citation_id (no-fabrication rule)")
