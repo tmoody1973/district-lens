@@ -50,6 +50,10 @@ resource "google_cloud_run_v2_service" "app" {
         value = google_storage_bucket.logs_data_bucket.name
       }
       env {
+        name  = "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"
+        value = "NO_CONTENT"
+      }
+      env {
         name  = "ALLOW_ORIGINS"
         value = "https://districtlens-web-adewe5kxtq-uc.a.run.app,http://localhost:3000"
       }
