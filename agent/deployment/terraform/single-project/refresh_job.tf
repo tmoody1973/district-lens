@@ -95,11 +95,13 @@ resource "google_cloud_run_v2_job_iam_member" "scheduler_invokes_job" {
 }
 
 resource "google_cloud_scheduler_job" "refresh_fec_weekly" {
-  name             = "refresh-fec-weekly"
-  project          = var.project_id
-  region           = var.region
-  schedule         = "0 9 * * 1" # Mondays 09:00 UTC
-  time_zone        = "Etc/UTC"
+  name      = "refresh-fec-weekly"
+  project   = var.project_id
+  region    = var.region
+  schedule  = "0 9 * * 1" # Mondays 09:00 UTC
+  time_zone = "Etc/UTC"
+  # Covers only the Admin API round-trip that enqueues the execution, not the
+  # job's own runtime (the :run endpoint returns immediately).
   attempt_deadline = "320s"
 
   http_target {
@@ -108,6 +110,8 @@ resource "google_cloud_scheduler_job" "refresh_fec_weekly" {
 
     oauth_token {
       service_account_email = google_service_account.refresh_scheduler_sa.email
+      # Google-signed access token for the Cloud Run Admin API (*.googleapis.com).
+      scope = "https://www.googleapis.com/auth/cloud-platform"
     }
   }
 
