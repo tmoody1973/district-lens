@@ -78,6 +78,20 @@ _WINNER_PATTERN = re.compile(
     r"(?=[^A-Za-z]|$)",
 )
 
+# Markers that make a "won by Name" phrase NON-affirmative: negation, modal
+# verbs, or speculation. If any appears in the gap between the party word and
+# "won by", the candidate is a false positive (uncertain/negated) and must be
+# discarded. Matched against the gap text wrapped in spaces (" gap ") so the
+# leading/trailing forms (" not ", "not ", " not") all catch regardless of
+# capitalisation.
+_REJECT_MARKERS: tuple[str, ...] = (
+    " not ", " not", "not ", "n't",  # negation
+    " never", " no ",
+    " could", " would", " may", " might", " should",  # modal
+    " expected", " projected", " likely", " possibly", " if ",  # speculation
+    " awaiting", " too close", " undecided", " unclear",
+)
+
 # Reverse map: full name → short code
 _FULL_TO_CODE: dict[str, str] = {v: k for k, v in _PARTY_FULL_NAMES.items()}
 
@@ -153,6 +167,16 @@ def build_prompt(
 # ---------------------------------------------------------------------------
 
 
+def _gap_has_reject_marker(gap: str) -> bool:
+    """Return True if the gap between party and 'won by' negates or hedges the claim.
+
+    Wraps the lowercased gap in spaces so boundary-anchored markers (" not ",
+    "not ", " not") match regardless of position or capitalisation.
+    """
+    padded = f" {gap.lower()} "
+    return any(marker in padded for marker in _REJECT_MARKERS)
+
+
 def _heuristic_structure(answer: str, parties: list[str]) -> dict[str, str]:
     """Extract winners from a free-text Perplexity answer using conservative regex.
 
@@ -161,6 +185,9 @@ def _heuristic_structure(answer: str, parties: list[str]) -> dict[str, str]:
     - Name tokens must be capitalised (catches proper nouns; rejects lowercase
       fragments that are not real names).
     - Requires at least 2 name tokens to avoid matching single common words.
+    - Rejects NEGATED or SPECULATIVE phrasing ("NOT won by", "could be won by",
+      "expected to be won by") via a post-match guard on the gap text, so the
+      parser never fabricates a winner from an uncertain statement.
     - Any ambiguity returns {} immediately — the caller must treat {} as
       "unknown", never as "no candidates ran".
     - Does NOT attempt fuzzy matching, NLP, or inference from context.
@@ -170,6 +197,10 @@ def _heuristic_structure(answer: str, parties: list[str]) -> dict[str, str]:
 
     winners: dict[str, str] = {}
     for match in _WINNER_PATTERN.finditer(answer):
+        # Gap is the text between the matched party word and "won by".
+        gap = answer[match.end(1) : match.start(2)]
+        if _gap_has_reject_marker(gap):
+            continue
         party_text = match.group(1).capitalize()
         name = match.group(2).strip()
         code = _FULL_TO_CODE.get(party_text)

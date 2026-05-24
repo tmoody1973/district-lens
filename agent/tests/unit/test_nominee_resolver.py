@@ -253,6 +253,64 @@ async def test_resolve_race_only_lowercase_names_not_matched():
 
 
 # ---------------------------------------------------------------------------
+# Adversarial: negated / speculative "won by" phrasing must NOT name a winner
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "The Republican primary was NOT won by Jane Doe.",
+        "The Democratic primary could be won by John Roe.",
+        "The Republican seat is expected to be won by Tom Smith.",
+        "Although the Republican race was not officially won by John Doe, counting continues.",
+    ],
+)
+def test_heuristic_rejects_negated_and_speculative_phrasing(answer):
+    """Negation/modal/speculative markers between party and 'won by' → empty.
+
+    These are plausible Perplexity phrasings when the result is uncertain.
+    The conservative contract requires they all yield NO winner, never a
+    confident-but-wrong fabrication.
+    """
+    assert nr._heuristic_structure(answer, ["DEM", "REP"]) == {}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "The Republican primary was NOT won by Jane Doe.",
+        "The Democratic primary could be won by John Roe.",
+        "The Republican seat is expected to be won by Tom Smith.",
+        "Although the Republican race was not officially won by John Doe, counting continues.",
+    ],
+)
+async def test_resolve_race_rejects_negated_and_speculative(answer):
+    """End-to-end: negated/speculative answers → empty winners + confidence 0.0."""
+    res = await nr.resolve_race(
+        state="GA",
+        office="H",
+        district="07",
+        parties=["DEM", "REP"],
+        date="2026-05-19",
+        search_fn=_fake_search(answer),
+        structure_fn=nr._heuristic_structure,
+    )
+    assert res.winners_by_party == {}
+    assert res.confidence == 0.0
+
+
+@pytest.mark.unit
+def test_heuristic_positive_control_still_extracts_winner():
+    """Regression guard: a clean affirmative phrasing must still parse a winner."""
+    answer = "The Republican primary was won by Jane Doe."
+    assert nr._heuristic_structure(answer, ["REP"]) == {"REP": "Jane Doe"}
+
+
+# ---------------------------------------------------------------------------
 # sources pass-through
 # ---------------------------------------------------------------------------
 
