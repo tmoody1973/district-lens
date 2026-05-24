@@ -33,14 +33,44 @@ from app.tools.position_search import gather_candidate_positions
 logger = logging.getLogger(__name__)
 
 _BRIEF_TRIGGER_PREFIX = "Build a complete voter brief for:"
+_BRIEF_RACE_PREFIX = "Build a complete voter brief for race:"
 
 
 def extract_brief_address(message_text: str) -> str | None:
-    """Return the address if the message is a brief trigger, else None."""
+    """Return the address if the message is an address-brief trigger, else None."""
     stripped = message_text.strip()
+    # The race-key trigger is a distinct prefix; don't treat it as an address.
+    if stripped.startswith(_BRIEF_RACE_PREFIX):
+        return None
     if not stripped.startswith(_BRIEF_TRIGGER_PREFIX):
         return None
     return stripped[len(_BRIEF_TRIGGER_PREFIX):].strip() or None
+
+
+def extract_brief_race_key(message_text: str) -> str | None:
+    """Return the race key if the message is a race-key brief trigger, else None.
+
+    Used by the journalist race table: the race key is already known, so the
+    pipeline skips address geocoding and uses it directly.
+    """
+    stripped = message_text.strip()
+    if not stripped.startswith(_BRIEF_RACE_PREFIX):
+        return None
+    return stripped[len(_BRIEF_RACE_PREFIX):].strip() or None
+
+
+def is_brief_trigger(message_text: str) -> bool:
+    """True for either brief trigger (address or known race key)."""
+    return (
+        extract_brief_address(message_text) is not None
+        or extract_brief_race_key(message_text) is not None
+    )
+
+
+def _state_from_race_key(race_key: str) -> str | None:
+    """'2026-H-WI-04' -> 'WI'."""
+    parts = race_key.split("-")
+    return parts[2] if len(parts) >= 3 else None
 
 
 def _latest_user_text(ctx: InvocationContext) -> str:
@@ -61,9 +91,16 @@ class VoterBriefPipeline(BaseAgent):
     async def _run_async_impl(
         self, ctx: InvocationContext
     ) -> AsyncGenerator[Event, None]:
-        address = extract_brief_address(_latest_user_text(ctx))
-
-        race_key, state_code = await self._resolve_district(address)
+        text = _latest_user_text(ctx)
+        # Journalist drill-in supplies a known race key; voter flow supplies an
+        # address to geocode. Both run the identical downstream steps.
+        race_key = extract_brief_race_key(text)
+        if race_key:
+            state_code = _state_from_race_key(race_key)
+        else:
+            race_key, state_code = await self._resolve_district(
+                extract_brief_address(text)
+            )
         yield self._delta(
             ctx,
             {

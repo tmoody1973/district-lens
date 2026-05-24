@@ -29,7 +29,7 @@ from app.middleware import check_input, check_output
 from app.tools.brief_pipeline import (
     VoterBriefPipeline,
     _latest_user_text,
-    extract_brief_address,
+    is_brief_trigger,
 )
 from app.tools.district_lookup import lookup_district
 from app.tools.finish_brief import finish_brief
@@ -51,8 +51,8 @@ _PIPELINE_AGENT_NAME = "voter_brief_pipeline"
 
 
 def _is_brief_trigger(message_text: str) -> bool:
-    """True when the message is the frontend's voter-brief trigger."""
-    return extract_brief_address(message_text) is not None
+    """True when the message is a voter-brief trigger (address or race key)."""
+    return is_brief_trigger(message_text)
 
 _PROMPT_PATH = Path(__file__).parent / "prompts" / "civic_safety.md"
 

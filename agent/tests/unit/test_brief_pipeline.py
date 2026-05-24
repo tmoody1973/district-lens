@@ -107,6 +107,39 @@ async def test_session_state_is_updated_per_step(monkeypatch):
 
 
 @pytest.mark.unit
+def test_trigger_detection_address_vs_race_key():
+    assert brief_pipeline.extract_brief_address("Build a complete voter brief for: 123 Oak St")
+    assert brief_pipeline.extract_brief_address("Build a complete voter brief for race: 2026-H-WI-04") is None
+    assert (
+        brief_pipeline.extract_brief_race_key("Build a complete voter brief for race: 2026-H-WI-04")
+        == "2026-H-WI-04"
+    )
+    assert brief_pipeline.extract_brief_race_key("Build a complete voter brief for: 123 Oak St") is None
+    assert brief_pipeline.is_brief_trigger("Build a complete voter brief for race: 2026-S-GA-00")
+    assert not brief_pipeline.is_brief_trigger("Show me all 2026 congressional races in WI")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_race_key_trigger_skips_geocoding(monkeypatch):
+    _patch_fetchers(monkeypatch)
+
+    async def fail_resolve(address):
+        raise AssertionError("must not geocode when a race key is supplied")
+
+    monkeypatch.setattr(brief_pipeline, "resolve_race_from_address", fail_resolve)
+    pipeline = VoterBriefPipeline(name="voter_brief_pipeline")
+    ctx = _make_ctx("Build a complete voter brief for race: 2026-H-WI-04")
+
+    deltas = await _collect_deltas(pipeline, ctx)
+
+    by_stage = {d["stage"]: d for d in deltas if "stage" in d}
+    assert by_stage["district"]["currentRaceKey"] == "2026-H-WI-04"
+    assert by_stage["district"]["mapFocus"] == "WI"
+    assert by_stage["complete"]["briefReady"] is True
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_failing_positions_step_does_not_abort_brief(monkeypatch):
     _patch_fetchers(monkeypatch, positions_raises=True)

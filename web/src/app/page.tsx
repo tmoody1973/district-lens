@@ -139,7 +139,7 @@ export default function HomePage() {
       agent.addMessage({
         id: crypto.randomUUID(),
         role: "user",
-        content: `Build a voter brief for race ${raceKey}`,
+        content: `Build a complete voter brief for race: ${raceKey}`,
       });
       copilotkit.runAgent({ agent });
     },
