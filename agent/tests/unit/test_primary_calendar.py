@@ -43,3 +43,10 @@ def test_states_with_closed_contest_ignores_future_and_old():
     rows = [{"state": "TX", "primary_date": dt.date(2026, 3, 3), "runoff_date": dt.date(2026, 5, 26)}]
     # today far after both → nothing in a 10-day window
     assert calendar.states_with_closed_contest(rows, today=dt.date(2026, 7, 1), window_days=10) == []
+
+
+@pytest.mark.unit
+def test_states_with_closed_contest_prefers_runoff_when_both_in_window():
+    rows = [{"state": "AL", "primary_date": dt.date(2026, 6, 8), "runoff_date": dt.date(2026, 6, 14)}]
+    closed = calendar.states_with_closed_contest(rows, today=dt.date(2026, 6, 16), window_days=10)
+    assert closed == [("AL", "runoff", dt.date(2026, 6, 14))]
