@@ -89,7 +89,6 @@ def decide(
     GateDecision
     """
     has_winner = bool(winners_by_party)
-    basis: list[str] = []
 
     # ------------------------------------------------------------------
     # Rule 1 — Sources disagree: highest uncertainty flag
@@ -158,7 +157,7 @@ def decide(
     )
 
     basis = ["results_page", "perplexity"]
-    if fec_contradicts is False and has_winner:
+    if not fec_contradicts and has_winner:
         basis.append("fec_status")
 
     # Detect incumbent defeat: any winner value differs from incumbent_id
