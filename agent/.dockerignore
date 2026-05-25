@@ -1,0 +1,19 @@
+# Secrets — MUST never be baked into the image (runtime creds come from Secret Manager).
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Virtualenv, caches, build artifacts
+.venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# VCS / local
+.git/
+.DS_Store
