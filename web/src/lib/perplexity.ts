@@ -12,11 +12,15 @@ const CIVIC_DOMAINS = [
 
 const NONPARTISAN_SYSTEM = [
   "You are a nonpartisan civic research assistant.",
-  "Report only what verifiable sources say.",
-  "Distinguish direct candidate statements from third-party characterizations.",
-  "If no direct statement exists in the sources, say so explicitly.",
-  "Never recommend how to vote. Never infer positions from donors or party alone.",
-  "Cite every factual claim with inline numeric markers [1], [2], etc.",
+  "Report the candidate's documented stance on the issue, drawing on the candidate's own",
+  "materials, candidate questionnaires (Vote411, League of Women Voters, Ballotpedia",
+  "Candidate Connection), credible interviews and news/endorsement coverage, and — for",
+  "incumbents — their voting record.",
+  "Make clear whether each stance is the candidate's own words or a credible source",
+  "describing their position.",
+  "Cite every claim with inline numeric markers [1], [2], etc.",
+  "Never infer a position from party or donors. Never recommend how to vote.",
+  "Only say no information is available when no credible source documents a stance.",
 ].join(" ");
 
 export interface PerplexitySource {
@@ -34,11 +38,13 @@ export interface PerplexityResult {
 
 export function buildPositionPrompt(candidateName: string, issue: string): string {
   return (
-    `What has ${candidateName} publicly said about ${issue}? ` +
-    `Prioritize direct statements (campaign website, press releases, floor speeches, ` +
-    `voting record, debate transcripts, verified questionnaires). ` +
-    `If only third-party characterizations exist, label them as such. ` +
-    `If no direct statement is found in the sources, say so explicitly.`
+    `What is ${candidateName}'s stance on ${issue}? State the candidate's position and ` +
+    `cite the source, drawing on the candidate's campaign materials, candidate ` +
+    `questionnaires (Vote411, League of Women Voters, Ballotpedia Candidate Connection), ` +
+    `credible interviews and news/endorsement coverage, and — for an incumbent — their ` +
+    `voting record. Note whether it is the candidate's own words or a credible source ` +
+    `describing their position. Only say no information is available when no credible ` +
+    `source documents a stance on this issue.`
   );
 }
 

@@ -76,6 +76,55 @@ async def test_structures_broad_answer_into_issue_cards(monkeypatch):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_surfaces_evidence_type_label_per_stance(monkeypatch):
+    # Stances must carry an evidence-strength label so the UI can show how strong
+    # each one is (direct quote vs reported vs questionnaire vs voting record).
+    fake_json = json.dumps(
+        {
+            "positions": [
+                {
+                    "issue": "public lands",
+                    "statement": "Supports protecting public lands",
+                    "evidence_type": "reported",
+                    "source_indices": [0],
+                },
+                {
+                    "issue": "ethics",
+                    "statement": "\"I will ban congressional stock trading\"",
+                    "evidence_type": "direct_quote",
+                    "source_indices": [1],
+                },
+            ]
+        }
+    )
+    monkeypatch.setattr(
+        position_search, "_structure_with_gemini", lambda *a, **k: fake_json
+    )
+
+    cards = await structure_positions("Kaylee Peterson", "broad answer", _SOURCES)
+
+    assert cards[0]["evidenceType"] == "reported"
+    assert cards[1]["evidenceType"] == "direct_quote"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_evidence_type_defaults_when_absent(monkeypatch):
+    # Older/partial model output without evidence_type must not crash; default it.
+    fake_json = json.dumps(
+        {"positions": [{"issue": "housing", "statement": "s", "source_indices": [0]}]}
+    )
+    monkeypatch.setattr(
+        position_search, "_structure_with_gemini", lambda *a, **k: fake_json
+    )
+
+    cards = await structure_positions("Gwen Moore", "broad", _SOURCES)
+
+    assert cards[0]["evidenceType"] == "reported"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_falls_back_to_single_card_on_bad_json(monkeypatch):
     monkeypatch.setattr(
         position_search, "_structure_with_gemini", lambda *a, **k: "not json at all"

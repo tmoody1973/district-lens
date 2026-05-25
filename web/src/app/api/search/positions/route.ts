@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchPerplexity, buildPositionPrompt, CIVIC_DOMAINS } from "@/lib/perplexity";
+import { searchPerplexity, buildPositionPrompt } from "@/lib/perplexity";
 import { getDb } from "@/lib/mongodb";
 
 const POSITIONS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -32,10 +32,12 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // No domain allowlist: a challenger's stances live on local news, candidate
+    // questionnaires, and campaign sites that a narrow allowlist excludes. The
+    // evidence-first system prompt + per-claim labeling are the guard, not the allowlist.
     const result = await searchPerplexity(buildPositionPrompt(candidateName, issue), {
       recency: "year",
-      domainAllowlist: CIVIC_DOMAINS,
-      searchContextSize: "medium",
+      searchContextSize: "high",
     });
 
     const expiresAt = new Date(now.getTime() + POSITIONS_TTL_MS);

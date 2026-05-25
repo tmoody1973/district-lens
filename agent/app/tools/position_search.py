@@ -28,24 +28,32 @@ _DEFAULT_LOCATION = "global"
 _MAX_BROAD_SOURCES = 10
 _SYSTEM = (
     "You are a nonpartisan civic research assistant. "
-    "Report only what verifiable sources say. "
-    "Distinguish direct candidate statements from third-party characterizations. "
-    "If no direct statement exists in the sources, say so explicitly with the phrase "
-    "'NO DIRECT STATEMENT FOUND'. "
-    "Never recommend how to vote. Never infer positions from donors or party alone. "
-    "Cite every factual claim with inline numeric markers [1], [2], etc."
+    "Report the candidate's documented STANCE on policy issues, drawing on the "
+    "candidate's own materials (campaign website, press releases, speeches), candidate "
+    "questionnaires (Vote411, League of Women Voters, Ballotpedia Candidate Connection), "
+    "credible interviews and news/endorsement coverage that quotes or describes their "
+    "position, and — for incumbents — their voting and sponsorship record. "
+    "For each stance make clear whether it is the candidate's own words (a direct quote) "
+    "or a credible source reporting/characterizing their position. "
+    "Cite every claim with inline numeric markers [1], [2], etc. "
+    "Never infer a position from party affiliation or from donors. Never recommend how "
+    "to vote. Only say no information is available for an issue when no credible source "
+    "documents a stance on it."
 )
 
 _BROAD_TRIGGERS = {"", "all", "general", "overview", "issues", "everything"}
 
 _STRUCTURE_SYSTEM = (
     "You are a nonpartisan civic data extractor. You are given a research summary "
-    "about a congressional candidate's public positions, with numbered sources. "
-    "Group the candidate's positions by policy issue. For each issue, write one "
-    "concise factual statement of what the candidate has publicly said, and list the "
-    "indices of the sources (0-based) that support it. Use only what the summary "
-    "states; never infer from party or donors. Return ONLY valid JSON matching the "
-    "requested schema."
+    "about a congressional candidate's policy stances, with numbered sources. "
+    "Group the candidate's stances by policy issue. For each issue, write one concise "
+    "factual statement of the candidate's position, classify the evidence_type as one "
+    "of: 'direct_quote' (the candidate's own words), 'reported' (a credible outlet "
+    "describing their position), 'questionnaire' (a candidate questionnaire such as "
+    "Vote411 / League of Women Voters / Ballotpedia Candidate Connection), or "
+    "'voting_record' (an incumbent's votes or bill sponsorships); and list the indices "
+    "of the sources (0-based) that support it. Use only what the summary states; never "
+    "infer from party or donors. Return ONLY valid JSON matching the requested schema."
 )
 
 _STRUCTURE_SCHEMA = {
@@ -58,12 +66,16 @@ _STRUCTURE_SCHEMA = {
                 "properties": {
                     "issue": {"type": "string"},
                     "statement": {"type": "string"},
+                    "evidence_type": {
+                        "type": "string",
+                        "enum": ["direct_quote", "reported", "questionnaire", "voting_record"],
+                    },
                     "source_indices": {
                         "type": "array",
                         "items": {"type": "integer"},
                     },
                 },
-                "required": ["issue", "statement", "source_indices"],
+                "required": ["issue", "statement", "evidence_type", "source_indices"],
             },
         }
     },
@@ -92,20 +104,29 @@ def _build_prompt(candidate_name: str, state_code: str, issue: str) -> str:
     name = _search_name(candidate_name)
     if _is_broad(issue):
         return (
-            f"What are {name}'s positions and stances on key policy issues? "
+            f"Share comprehensive, issue-by-issue details of {name}'s political stances. "
             f"{name} is a 2026 U.S. congressional candidate from {state_code}. "
-            "Cover as many issues as possible using only direct statements from their "
-            "campaign website, press releases, floor speeches, voting record, and "
-            "verified questionnaires. For each issue where no direct statement exists, "
-            "say 'NO DIRECT STATEMENT FOUND' for that issue specifically."
+            "Cover as many issues as possible — economy and jobs, taxes, health care, "
+            "Social Security and Medicare, reproductive rights, education, immigration, "
+            "public lands and climate, veterans, foreign policy, guns, and others that "
+            "apply. For each issue, state the candidate's position and cite the source. "
+            "Draw on the candidate's own campaign website, press releases and speeches; "
+            "candidate questionnaires (Vote411, League of Women Voters, Ballotpedia "
+            "Candidate Connection); credible interviews and news/endorsement coverage; "
+            "and, for an incumbent, their voting and sponsorship record. Note for each "
+            "issue whether it is the candidate's own words or a credible source describing "
+            "their position. Only say no information is available for an issue when no "
+            "credible source documents a stance on it."
         )
     return (
-        f"What has {name}, a 2026 U.S. congressional candidate from {state_code}, "
-        f"publicly said about {issue}? "
-        "Prioritize direct statements from: campaign website, press releases, "
-        "floor speeches, voting record, debate transcripts, verified questionnaires. "
-        "If only third-party characterizations exist, label them as such. "
-        "If no direct statement is found, say 'NO DIRECT STATEMENT FOUND' explicitly."
+        f"What is {name}'s stance on {issue}? {name} is a 2026 U.S. congressional "
+        f"candidate from {state_code}. State the candidate's position on {issue} and cite "
+        "the source, drawing on the candidate's campaign materials, candidate "
+        "questionnaires (Vote411, League of Women Voters, Ballotpedia Candidate "
+        "Connection), credible interviews and news/endorsement coverage, and — for an "
+        "incumbent — their voting record. Note whether it is the candidate's own words or "
+        "a credible source describing their position. Only say no information is available "
+        "when no credible source documents a stance on this issue."
     )
 
 
@@ -214,6 +235,7 @@ def _fallback_card(candidate_name: str, broad_answer: str, sources: list[dict]) 
         "candidateName": candidate_name,
         "issue": "key positions",
         "answer": broad_answer,
+        "evidenceType": "reported",
         "sources": sources,
     }
 
@@ -252,6 +274,7 @@ async def structure_positions(
             "candidateName": candidate_name,
             "issue": position.get("issue", "key positions"),
             "answer": position.get("statement", ""),
+            "evidenceType": position.get("evidence_type", "reported"),
             "sources": _select_sources(sources, position.get("source_indices", [])),
         }
         for position in positions

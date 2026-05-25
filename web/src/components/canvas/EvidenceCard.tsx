@@ -10,6 +10,15 @@ interface Props {
 
 const SHORT_ANSWER_THRESHOLD = 80;
 
+// Structured evidence-strength labels (preferred). Maps the agent's evidence_type
+// to a reader-friendly label + colour.
+const EVIDENCE_TYPE_LABEL: Record<string, { label: string; color: string }> = {
+  direct_quote: { label: "direct quote", color: "text-green-700" },
+  questionnaire: { label: "questionnaire", color: "text-blue-700" },
+  voting_record: { label: "voting record", color: "text-indigo-700" },
+  reported: { label: "reported stance", color: "text-amber-700" },
+};
+
 function confidenceLabel(answer: string): string {
   if (answer.includes('"') || answer.includes('\u201C') || answer.includes('\u201D')) {
     return "direct quote";
@@ -20,14 +29,21 @@ function confidenceLabel(answer: string): string {
   return "paraphrase";
 }
 
+function evidenceLabel(evidence: EvidenceCardType): { label: string; color: string } {
+  // Prefer the structured label; fall back to the text heuristic for older cards.
+  if (evidence.evidenceType && EVIDENCE_TYPE_LABEL[evidence.evidenceType]) {
+    return EVIDENCE_TYPE_LABEL[evidence.evidenceType];
+  }
+  const c = confidenceLabel(evidence.answer);
+  return {
+    label: c,
+    color:
+      c === "direct quote" ? "text-green-700" : c === "paraphrase" ? "text-amber-700" : "text-slate-500",
+  };
+}
+
 export function EvidenceCard({ evidence, compact = false }: Props) {
-  const confidence = confidenceLabel(evidence.answer);
-  const confidenceColor =
-    confidence === "direct quote"
-      ? "text-green-700"
-      : confidence === "paraphrase"
-      ? "text-amber-700"
-      : "text-slate-500";
+  const { label: confidence, color: confidenceColor } = evidenceLabel(evidence);
 
   return (
     <div className="rounded-[2px] border-l-4 border-l-purple-500 border border-slate-200 bg-white p-4 space-y-2">

@@ -8,9 +8,11 @@ describe("buildPositionPrompt", () => {
     expect(prompt).toContain("housing");
   });
 
-  it("requests direct statements", () => {
-    const prompt = buildPositionPrompt("Jane Doe", "climate");
-    expect(prompt.toLowerCase()).toContain("direct");
+  it("asks for the candidate's stance and broad credible sources (not direct-statements-only)", () => {
+    const prompt = buildPositionPrompt("Jane Doe", "climate").toLowerCase();
+    expect(prompt).toContain("stance");
+    // Must reach beyond primary statements to ballot guides / questionnaires.
+    expect(prompt).toContain("vote411");
   });
 });
 

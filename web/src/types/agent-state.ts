@@ -68,6 +68,9 @@ export interface EvidenceCard {
   candidateName: string;
   issue: string;
   answer: string;
+  // How strong the evidence is: "direct_quote" | "reported" | "questionnaire" |
+  // "voting_record". Optional for backward-compat with cards that predate the field.
+  evidenceType?: string;
   sources: Array<{ title: string; url: string; date: string | null; snippet: string }>;
 }
 
