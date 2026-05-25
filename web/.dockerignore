@@ -1,0 +1,18 @@
+# Secrets — never bake into the image (runtime creds come from Cloud Run secretKeyRef).
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Deps + build output (the image installs + builds fresh)
+node_modules
+.next
+out
+
+# VCS / local / QA artifacts
+.git
+.DS_Store
+*.log
+.playwright-mcp
+nominee-status-badges.png
+coverage

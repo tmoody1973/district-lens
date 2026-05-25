@@ -1,0 +1,16 @@
+# Keep secrets + bulky/local dirs out of the Cloud Build upload entirely.
+.env
+.env.*
+**/.env
+**/.env.*
+
+node_modules
+.next
+out
+
+.git
+.DS_Store
+*.log
+.playwright-mcp
+nominee-status-badges.png
+coverage
