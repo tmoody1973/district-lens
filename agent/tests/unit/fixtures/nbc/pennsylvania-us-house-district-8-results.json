@@ -1,0 +1,50 @@
+{
+  "races": [
+    {
+      "raceId": "2026-05-19R~PA008~H",
+      "primaryParty": null,
+      "stateName": "Pennsylvania",
+      "stateAbbr": null,
+      "houseNumber": null,
+      "electionDate": null,
+      "percentIn": 0,
+      "callStatus": null,
+      "isRunoff": null,
+      "winnerParty": null,
+      "electionType": null,
+      "candidates": [
+        {
+          "firstName": "Rob",
+          "lastName": "Bresnahan",
+          "party": "gop",
+          "percentVote": 0,
+          "isWinner": true,
+          "isIncumbent": true
+        }
+      ]
+    },
+    {
+      "raceId": "2026-05-19D~PA008~H",
+      "primaryParty": null,
+      "stateName": "Pennsylvania",
+      "stateAbbr": null,
+      "houseNumber": null,
+      "electionDate": null,
+      "percentIn": 0,
+      "callStatus": null,
+      "isRunoff": null,
+      "winnerParty": null,
+      "electionType": null,
+      "candidates": [
+        {
+          "firstName": "Paige",
+          "lastName": "Cognetti",
+          "party": "dem",
+          "percentVote": 0,
+          "isWinner": true,
+          "isIncumbent": false
+        }
+      ]
+    }
+  ]
+}

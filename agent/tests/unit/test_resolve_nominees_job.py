@@ -213,8 +213,13 @@ _TODAY = datetime.date(2026, 5, 24)
 
 
 @pytest.mark.asyncio
-async def test_ga_clean_primary_confirms_race():
-    """Full happy path: GA primary resolved with an authoritative source."""
+async def test_perplexity_path_never_auto_confirms():
+    """Civic safety: with NO NBC data, even a clean Perplexity answer + authoritative
+    source must NOT auto-confirm. Perplexity prose can fabricate a winner (OH-2024
+    cited YouTube), so the result is demoted to a projected, unofficial signal.
+
+    (This used to assert a Perplexity confirm; that behavior is now disallowed.)
+    """
     cols = _ga_cols()
     client = FakeClient(cols)
 
@@ -230,33 +235,25 @@ async def test_ga_clean_primary_confirms_race():
     assert result["status"] == "completed"
     counts = result["counts"]
     assert counts["races_checked"] == 1
-    assert counts["confirmed"] == 1
-    assert counts["flagged"] == 0
-    assert counts["errors"] == 0
+    assert counts["confirmed"] == 0
+    assert counts["flagged"] == 1
 
-    # race_status set to confirmed
     status_docs = cols["race_status"].docs
     assert len(status_docs) == 1
-    assert status_docs[0]["status"] == "confirmed"
+    assert status_docs[0]["status"] == "provisional"
+    assert status_docs[0]["flagged_reason"] == "projected_unofficial_perplexity"
 
-    # One event written (pre_primary → confirmed)
+    # The projected winner is surfaced as a newsworthy signal, not a confirm.
     event_docs = cols["race_status_events"].docs
     assert len(event_docs) == 1
-    assert event_docs[0]["to_status"] == "confirmed"
+    assert event_docs[0]["to_status"] == "provisional"
+    assert event_docs[0]["presentation_class"] == "newsworthy_signal"
 
-    # Citation stored
-    citation_docs = cols["results_citations"].docs
-    assert len(citation_docs) == 1
-    assert citation_docs[0]["url"] == _AUTH_URL
+    # Citation still stored (it's the projected-signal evidence).
+    assert cols["results_citations"].docs[0]["url"] == _AUTH_URL
 
-    # refresh_runs completed
     run_docs = cols["refresh_runs"].docs
-    assert len(run_docs) == 1
-    run = run_docs[0]
-    assert run["job_name"] == "resolve_nominees"
-    assert run["trigger"] == "scheduled"
-    assert run["status"] == "completed"
-    assert run["counts"]["confirmed"] == 1
+    assert run_docs[0]["status"] == "completed"
     assert client.closed is True
 
 
@@ -436,6 +433,141 @@ async def test_already_confirmed_race_is_skipped():
 # ---------------------------------------------------------------------------
 # Test 6: main() returns 1 when MONGODB_URI missing
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# NBC-first path (Phase C): NBC structured results are the primary confirm source
+# ---------------------------------------------------------------------------
+
+from app.refresh import nbc_results as nbc  # noqa: E402
+
+
+def _nbc_seat_called():
+    """Two party-races for GA-07, both clearly called (REP Jane Doe, DEM John Smith)."""
+    return [
+        nbc.NbcRaceResult(
+            race_id="2026-05-19R~GA007~H", party_code="REP", state="GA", office="H",
+            district="07", percent_in=99.0, call_status=None, is_runoff=False,
+            candidates=(
+                nbc.NbcCandidate("Jane", "Doe", "gop", 80.0, True, True),
+                nbc.NbcCandidate("Other", "Guy", "gop", 20.0, False, False),
+            ),
+        ),
+        nbc.NbcRaceResult(
+            race_id="2026-05-19D~GA007~H", party_code="DEM", state="GA", office="H",
+            district="07", percent_in=99.0, call_status=None, is_runoff=False,
+            candidates=(
+                nbc.NbcCandidate("John", "Smith", "dem", 75.0, True, False),
+                nbc.NbcCandidate("Also", "Ran", "dem", 25.0, False, False),
+            ),
+        ),
+    ]
+
+
+def _make_nbc_fetch_fn(races):
+    async def fake(slug: str):
+        return races
+    return fake
+
+
+@pytest.mark.asyncio
+async def test_nbc_called_confirms_without_perplexity():
+    """NBC called result confirms the race; Perplexity must NOT be consulted."""
+    cols = _ga_cols()
+    client = FakeClient(cols)
+    search_fn, calls = _make_counting_search_fn(_CLEAN_ANSWER, _AUTH_SOURCES)
+
+    result = await job_mod.execute_resolution(
+        mongo_uri="mongodb://fake",
+        today=_TODAY,
+        search_fn=search_fn,
+        fetch_fn=_make_fetch_fn(None),
+        nbc_fetch_fn=_make_nbc_fetch_fn(_nbc_seat_called()),
+        client_factory=lambda uri: client,
+    )
+
+    assert result["counts"]["confirmed"] == 1
+    assert calls["n"] == 0  # NBC resolved it; Perplexity never called
+
+    status_doc = cols["race_status"].docs[0]
+    assert status_doc["status"] == "confirmed"
+    assert status_doc["winners"] == {"REP": "Jane Doe", "DEM": "John Smith"}
+    assert "nbc_decision_desk" in status_doc["confirmation_basis"]
+
+    citation = cols["results_citations"].docs[0]
+    assert "nbcnews.com" in citation["url"]
+
+
+@pytest.mark.asyncio
+async def test_nbc_runoff_flags_runoff_pending():
+    cols = _ga_cols()
+    client = FakeClient(cols)
+    runoff_races = [
+        nbc.NbcRaceResult(
+            race_id="2026-05-19R~GA007~H", party_code="REP", state="GA", office="H",
+            district="07", percent_in=99.0, call_status=None, is_runoff=True,
+            candidates=(nbc.NbcCandidate("A", "B", "gop", 40.0, False, False),),
+        ),
+    ]
+    result = await job_mod.execute_resolution(
+        mongo_uri="mongodb://fake",
+        today=_TODAY,
+        search_fn=_make_search_fn(_CLEAN_ANSWER, _AUTH_SOURCES),
+        fetch_fn=_make_fetch_fn(None),
+        nbc_fetch_fn=_make_nbc_fetch_fn(runoff_races),
+        client_factory=lambda uri: client,
+    )
+    assert result["counts"]["confirmed"] == 0
+    assert cols["race_status"].docs[0]["status"] == "runoff_pending"
+
+
+@pytest.mark.asyncio
+async def test_nbc_insufficient_falls_back_and_perplexity_never_confirms():
+    """When NBC can't confirm, fall back to Perplexity — but Perplexity prose must
+    NEVER auto-confirm (civic-safety; OH-2024 hallucination). It is at most a
+    projected/provisional signal."""
+    cols = _ga_cols()
+    client = FakeClient(cols)
+    # NBC has no usable call (low reporting, contested) -> insufficient.
+    insufficient = [
+        nbc.NbcRaceResult(
+            race_id="2026-05-19R~GA007~H", party_code="REP", state="GA", office="H",
+            district="07", percent_in=5.0, call_status=None, is_runoff=False,
+            candidates=(
+                nbc.NbcCandidate("Lead", "Er", "gop", 51.0, True, False),
+                nbc.NbcCandidate("Trail", "Er", "gop", 49.0, False, False),
+            ),
+        ),
+    ]
+    # Perplexity returns a clean answer + authoritative source (the old confirm path).
+    result = await job_mod.execute_resolution(
+        mongo_uri="mongodb://fake",
+        today=_TODAY,
+        search_fn=_make_search_fn(_CLEAN_ANSWER, _AUTH_SOURCES),
+        fetch_fn=_make_fetch_fn(("Election results: Jane Doe wins", "sos.ga.gov")),
+        nbc_fetch_fn=_make_nbc_fetch_fn(insufficient),
+        client_factory=lambda uri: client,
+    )
+    # Must NOT confirm from the Perplexity path.
+    assert result["counts"]["confirmed"] == 0
+    assert cols["race_status"].docs[0]["status"] != "confirmed"
+
+
+@pytest.mark.asyncio
+async def test_nbc_fetch_none_falls_back_without_crash():
+    cols = _ga_cols()
+    client = FakeClient(cols)
+    result = await job_mod.execute_resolution(
+        mongo_uri="mongodb://fake",
+        today=_TODAY,
+        search_fn=_make_search_fn(_CLEAN_ANSWER, _WEAK_SOURCES),
+        fetch_fn=_make_fetch_fn(None),
+        nbc_fetch_fn=_make_nbc_fetch_fn(None),
+        client_factory=lambda uri: client,
+    )
+    assert result["status"] == "completed"
+    assert result["counts"]["confirmed"] == 0
+    assert cols["race_status"].docs[0]["status"] == "provisional"
 
 
 def test_main_returns_1_when_uri_missing(monkeypatch):

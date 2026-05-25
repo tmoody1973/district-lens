@@ -1,0 +1,74 @@
+{
+  "races": [
+    {
+      "raceId": "2026-05-19R~ID001~H",
+      "primaryParty": null,
+      "stateName": "Idaho",
+      "stateAbbr": null,
+      "houseNumber": null,
+      "electionDate": null,
+      "percentIn": 99,
+      "callStatus": null,
+      "isRunoff": null,
+      "winnerParty": null,
+      "electionType": null,
+      "candidates": [
+        {
+          "firstName": "Russ",
+          "lastName": "Fulcher",
+          "party": "gop",
+          "percentVote": 78.1,
+          "isWinner": true,
+          "isIncumbent": true
+        },
+        {
+          "firstName": "Andy",
+          "lastName": "Briner",
+          "party": "gop",
+          "percentVote": 11.3,
+          "isWinner": false,
+          "isIncumbent": false
+        },
+        {
+          "firstName": "Joseph",
+          "lastName": "Morrison",
+          "party": "gop",
+          "percentVote": 10.6,
+          "isWinner": false,
+          "isIncumbent": false
+        }
+      ]
+    },
+    {
+      "raceId": "2026-05-19D~ID001~H",
+      "primaryParty": null,
+      "stateName": "Idaho",
+      "stateAbbr": null,
+      "houseNumber": null,
+      "electionDate": null,
+      "percentIn": 99,
+      "callStatus": null,
+      "isRunoff": null,
+      "winnerParty": null,
+      "electionType": null,
+      "candidates": [
+        {
+          "firstName": "Kaylee",
+          "lastName": "Peterson",
+          "party": "dem",
+          "percentVote": 87.1,
+          "isWinner": true,
+          "isIncumbent": false
+        },
+        {
+          "firstName": "Kenneth",
+          "lastName": "Brungardt",
+          "party": "dem",
+          "percentVote": 12.9,
+          "isWinner": false,
+          "isIncumbent": false
+        }
+      ]
+    }
+  ]
+}

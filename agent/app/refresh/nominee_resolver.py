@@ -15,9 +15,14 @@ Design principle — the failure mode is "I'm not sure", not "confident-wrong":
 
 from __future__ import annotations
 
+import json
+import logging
+import os
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -222,6 +227,103 @@ def _detect_runoff(answer: str) -> bool:
     """Return True if any runoff keyword appears in the answer (case-insensitive)."""
     lower = answer.lower()
     return any(kw in lower for kw in _RUNOFF_KEYWORDS)
+
+
+# ---------------------------------------------------------------------------
+# Gemini-backed winner extractor (FALLBACK ONLY — feeds a projected signal)
+# ---------------------------------------------------------------------------
+#
+# NBC structured results are the primary confirm source (see nbc_results.py).
+# This extractor is the Perplexity fallback. Because an LLM can confidently
+# report a wrong winner (verified: a Perplexity answer fabricated a winner and
+# cited YouTube), its output NEVER auto-confirms — the job demotes any
+# Perplexity-derived winner to a "projected, unofficial" signal.
+
+_WINNER_GEMINI_MODEL = "gemini-3.1-pro-preview"
+_WINNER_GEMINI_LOCATION = "global"
+
+_WINNER_STRUCTURE_SYSTEM = (
+    "You are a nonpartisan civic data extractor. Given a research answer about a "
+    "primary election, report the winning candidate for each requested party ONLY "
+    "if the text explicitly states a winner for that party. Never infer a winner "
+    "from party, donors, or polling. If the text does not clearly name a winner for "
+    "a party, omit that party. Return ONLY valid JSON matching the schema."
+)
+
+_WINNER_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "winners": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "party": {"type": "string"},
+                    "winner": {"type": "string"},
+                },
+                "required": ["party", "winner"],
+            },
+        }
+    },
+    "required": ["winners"],
+}
+
+
+def _parse_winner_json(raw: str, parties: list[str]) -> dict[str, str]:
+    """Parse the extractor's JSON into a {party_code: winner_name} map.
+
+    Pure + offline-testable. Returns {} on empty/malformed input or when no
+    requested party has a named winner — never raises, never fabricates.
+    """
+    if not raw or not raw.strip():
+        return {}
+    try:
+        data = json.loads(raw)
+    except (ValueError, TypeError):
+        return {}
+    requested = {p.upper() for p in parties}
+    out: dict[str, str] = {}
+    for item in data.get("winners", []) if isinstance(data, dict) else []:
+        if not isinstance(item, dict):
+            continue
+        party = str(item.get("party", "")).upper()
+        winner = str(item.get("winner", "")).strip()
+        if party in requested and winner:
+            out[party] = winner
+    return out
+
+
+def _structure_winners_with_gemini(answer: str, parties: list[str]) -> dict[str, str]:
+    """Extract winners-by-party from a free-text answer via gemini-3.1-pro-preview.
+
+    Drop-in StructureFn for resolve_race. Pinned to gemini-3.1-pro-preview with
+    location="global" (project mandate). Returns {} on missing config or any
+    error so a failure can never fabricate or block — it just yields no winner.
+    """
+    if not answer or not answer.strip():
+        return {}
+    project = os.environ.get("GOOGLE_CLOUD_PROJECT")
+    if not project:
+        return {}
+    try:
+        import google.genai as genai
+        from google.genai import types
+
+        location = os.environ.get("GOOGLE_CLOUD_LOCATION", _WINNER_GEMINI_LOCATION)
+        client = genai.Client(vertexai=True, project=project, location=location)
+        response = client.models.generate_content(
+            model=_WINNER_GEMINI_MODEL,
+            contents=f"Requested parties: {', '.join(parties)}\n\nResearch answer:\n{answer}",
+            config=types.GenerateContentConfig(
+                system_instruction=_WINNER_STRUCTURE_SYSTEM,
+                response_mime_type="application/json",
+                response_schema=_WINNER_SCHEMA,
+            ),
+        )
+        return _parse_winner_json(response.text or "", parties)
+    except Exception as exc:  # any failure → no winner, never fabricate
+        logger.warning("_structure_winners_with_gemini failed: %s", exc)
+        return {}
 
 
 # ---------------------------------------------------------------------------

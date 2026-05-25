@@ -1,0 +1,82 @@
+{
+  "races": [
+    {
+      "raceId": "2026-05-19R~KY005~H",
+      "primaryParty": null,
+      "stateName": "Kentucky",
+      "stateAbbr": null,
+      "houseNumber": null,
+      "electionDate": null,
+      "percentIn": 99,
+      "callStatus": null,
+      "isRunoff": null,
+      "winnerParty": null,
+      "electionType": null,
+      "candidates": [
+        {
+          "firstName": "Hal",
+          "lastName": "Rogers",
+          "party": "gop",
+          "percentVote": 77.4,
+          "isWinner": true,
+          "isIncumbent": true
+        },
+        {
+          "firstName": "Kevin",
+          "lastName": "Smith",
+          "party": "gop",
+          "percentVote": 11.7,
+          "isWinner": false,
+          "isIncumbent": false
+        },
+        {
+          "firstName": "Benjamin",
+          "lastName": "Hurley",
+          "party": "gop",
+          "percentVote": 5.3,
+          "isWinner": false,
+          "isIncumbent": false
+        },
+        {
+          "firstName": "Brandon",
+          "lastName": "Monhollen",
+          "party": "gop",
+          "percentVote": 3.3,
+          "isWinner": false,
+          "isIncumbent": false
+        },
+        {
+          "firstName": "Jerry",
+          "lastName": "Shelton",
+          "party": "gop",
+          "percentVote": 2.3,
+          "isWinner": false,
+          "isIncumbent": false
+        }
+      ]
+    },
+    {
+      "raceId": "2026-05-19D~KY005~H",
+      "primaryParty": null,
+      "stateName": "Kentucky",
+      "stateAbbr": null,
+      "houseNumber": null,
+      "electionDate": null,
+      "percentIn": 0,
+      "callStatus": null,
+      "isRunoff": null,
+      "winnerParty": null,
+      "electionType": null,
+      "candidates": [
+        {
+          "firstName": "Ned",
+          "lastName": "Pillersdorf",
+          "party": "dem",
+          "percentVote": 0,
+          "isWinner": true,
+          "isIncumbent": false
+        }
+      ]
+    }
+  ]
+}

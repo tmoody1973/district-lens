@@ -71,3 +71,51 @@ def test_states_with_closed_contest_accepts_datetime_values_from_mongo():
         rows, today=dt.date(2026, 5, 22), window_days=10
     )
     assert closed == [("GA", "primary", dt.date(2026, 5, 19))]
+
+
+# ---------------------------------------------------------------------------
+# states_with_passed_contest — the re-check selector (no lower window bound)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_passed_contest_includes_long_past_primary():
+    """A primary 90 days ago must still be selected (so it can confirm once
+    results post) — unlike the 10-day window which dropped it."""
+    rows = [{"state": "ID", "cycle": "2026", "primary_date": dt.date(2026, 5, 19),
+             "runoff_date": None, "runoff_rule": "none"}]
+    out = calendar.states_with_passed_contest(rows, today=dt.date(2026, 8, 17))
+    assert out == [("ID", "primary", dt.date(2026, 5, 19))]
+
+
+@pytest.mark.unit
+def test_passed_contest_excludes_future_primary():
+    rows = [{"state": "WA", "cycle": "2026", "primary_date": dt.date(2026, 8, 4),
+             "runoff_date": None, "runoff_rule": "none"}]
+    out = calendar.states_with_passed_contest(rows, today=dt.date(2026, 5, 25))
+    assert out == []
+
+
+@pytest.mark.unit
+def test_passed_contest_runoff_precedence_when_both_passed():
+    rows = [{"state": "GA", "cycle": "2026", "primary_date": dt.date(2026, 5, 19),
+             "runoff_date": dt.date(2026, 6, 16), "runoff_rule": "majority_50"}]
+    out = calendar.states_with_passed_contest(rows, today=dt.date(2026, 7, 1))
+    assert out == [("GA", "runoff", dt.date(2026, 6, 16))]
+
+
+@pytest.mark.unit
+def test_passed_contest_caps_to_cycle():
+    rows = [{"state": "XX", "cycle": "2024", "primary_date": dt.date(2024, 3, 5),
+             "runoff_date": None, "runoff_rule": "none"}]
+    out = calendar.states_with_passed_contest(rows, today=dt.date(2026, 5, 25))
+    assert out == []
+
+
+@pytest.mark.unit
+def test_passed_contest_handles_int_cycle():
+    """Mongo may store cycle as an int; it must still match the target cycle."""
+    rows = [{"state": "ID", "cycle": 2026, "primary_date": dt.date(2026, 5, 19),
+             "runoff_date": None, "runoff_rule": "none"}]
+    out = calendar.states_with_passed_contest(rows, today=dt.date(2026, 8, 1))
+    assert out == [("ID", "primary", dt.date(2026, 5, 19))]

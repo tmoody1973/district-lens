@@ -1,0 +1,74 @@
+{
+  "races": [
+    {
+      "raceId": "2026-05-19R~ID002~H",
+      "primaryParty": null,
+      "stateName": "Idaho",
+      "stateAbbr": null,
+      "houseNumber": null,
+      "electionDate": null,
+      "percentIn": 99,
+      "callStatus": null,
+      "isRunoff": null,
+      "winnerParty": null,
+      "electionType": null,
+      "candidates": [
+        {
+          "firstName": "Mike",
+          "lastName": "Simpson",
+          "party": "gop",
+          "percentVote": 63.3,
+          "isWinner": true,
+          "isIncumbent": true
+        },
+        {
+          "firstName": "Brian",
+          "lastName": "Keene",
+          "party": "gop",
+          "percentVote": 20.9,
+          "isWinner": false,
+          "isIncumbent": false
+        },
+        {
+          "firstName": "Perry",
+          "lastName": "Shumway",
+          "party": "gop",
+          "percentVote": 15.8,
+          "isWinner": false,
+          "isIncumbent": false
+        }
+      ]
+    },
+    {
+      "raceId": "2026-05-19D~ID002~H",
+      "primaryParty": null,
+      "stateName": "Idaho",
+      "stateAbbr": null,
+      "houseNumber": null,
+      "electionDate": null,
+      "percentIn": 99,
+      "callStatus": null,
+      "isRunoff": null,
+      "winnerParty": null,
+      "electionType": null,
+      "candidates": [
+        {
+          "firstName": "Ellie",
+          "lastName": "Gilbreath",
+          "party": "dem",
+          "percentVote": 72.5,
+          "isWinner": true,
+          "isIncumbent": false
+        },
+        {
+          "firstName": "Julie",
+          "lastName": "Wiley",
+          "party": "dem",
+          "percentVote": 27.5,
+          "isWinner": false,
+          "isIncumbent": false
+        }
+      ]
+    }
+  ]
+}

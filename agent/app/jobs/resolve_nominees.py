@@ -10,6 +10,7 @@ Cloud Scheduler executions are uniformly observable.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import uuid
@@ -22,6 +23,7 @@ import pymongo
 import app.refresh.calendar as calendar_mod
 import app.refresh.citation_fetch as citation_fetch_mod
 import app.refresh.gate as gate_mod
+import app.refresh.nbc_results as nbc_mod
 import app.refresh.nominee_resolver as resolver_mod
 from app.refresh.race_status_store import RaceStatusStore
 
@@ -38,8 +40,15 @@ _OUTCOME_ERROR = "error"
 _DEFAULT_PARTIES = ("REP", "DEM")
 _PRE_PRIMARY_STATUS = "pre_primary"
 
+# NBC Decision Desk is the primary, structured (no-LLM) confirm source.
+_NBC_CONFIDENCE = 0.95
+_NBC_PUBLISHER = "nbcnews.com"
+_NBC_CONFIRMATION_BASIS = ["nbc_decision_desk", "results_page"]
+
 SearchFn = Callable[[str], Awaitable[tuple[str, list[dict]]]]
 FetchFn = Callable[[str], Awaitable[tuple[str, str] | None]]
+NbcFetchFn = Callable[[str], Awaitable[list[nbc_mod.NbcRaceResult] | None]]
+StructureFn = resolver_mod.StructureFn
 
 
 def _utcnow() -> datetime:
@@ -72,6 +81,218 @@ def _runoff_rule_for(
     return "none"
 
 
+def _nbc_snippet(decision: nbc_mod.NbcSeatDecision) -> str:
+    """Short human-readable summary of the NBC winners (stored on the citation)."""
+    pairs = ", ".join(f"{party} {name}" for party, name in decision.winners_by_party.items())
+    return f"NBC Decision Desk: {pairs}"
+
+
+def _nbc_content(races: list[nbc_mod.NbcRaceResult]) -> str:
+    """Serialize the NBC race payload for caching (hashed + timestamped by the store)."""
+    return json.dumps(
+        [
+            {
+                "race_id": r.race_id,
+                "percent_in": r.percent_in,
+                "call_status": r.call_status,
+                "is_runoff": r.is_runoff,
+                "candidates": [
+                    {
+                        "name": c.full_name,
+                        "party": c.party,
+                        "percent_vote": c.percent_vote,
+                        "is_winner": c.is_winner,
+                    }
+                    for c in r.candidates
+                ],
+            }
+            for r in races
+        ],
+        default=str,
+    )
+
+
+async def _try_nbc_confirm(
+    *,
+    race_key: str,
+    state: str,
+    office: str,
+    district: str,
+    incumbent_id: str | None,
+    runoff_rule: str,
+    prev_status: str,
+    store: RaceStatusStore,
+    nbc_fetch_fn: NbcFetchFn,
+) -> str | None:
+    """Try to resolve a seat from NBC's structured results (the primary path).
+
+    Returns an outcome tag when NBC settles the seat (confirmed or runoff), or
+    None when NBC has no usable result so the caller falls back to Perplexity.
+    The winner name is a structured ``isWinner`` field — never LLM prose — so
+    this path cannot fabricate a winner.
+    """
+    slug = nbc_mod.build_page_slug(state=state, office=office, district=district)
+    races = await nbc_fetch_fn(slug)
+    if not races:
+        return None
+
+    decision = nbc_mod.decide_seat(races)
+    if decision.status == nbc_mod.NBC_INSUFFICIENT:
+        return None  # not enough to confirm — fall back to Perplexity signal
+
+    if decision.is_runoff:
+        # Store the NBC payload as evidence for the runoff signal too (data-integrity
+        # rule: cache external responses with a timestamp), even though runoff_pending
+        # does not require a citation.
+        runoff_citation_id = store.store_citation(
+            race_key=race_key,
+            url=nbc_mod.results_url(slug),
+            publisher=_NBC_PUBLISHER,
+            snippet=_nbc_snippet(decision),
+            content=_nbc_content(races),
+        )
+        gate_decision = gate_mod.decide(
+            winners_by_party=decision.winners_by_party,
+            confidence=_NBC_CONFIDENCE,
+            runoff_indicated=True,
+            citation_id=runoff_citation_id,
+            runoff_rule=runoff_rule,
+            incumbent_id=incumbent_id,
+            sources_disagree=False,
+            fec_contradicts=False,
+        )
+        store.apply_resolution(
+            race_key=race_key,
+            to_status=gate_decision.to_status,
+            winners=gate_decision.winners,
+            citation_id=runoff_citation_id,
+            reason="nbc_runoff",
+            presentation_class=gate_decision.presentation_class,
+            prev_status=prev_status,
+            confidence=gate_decision.confidence,
+            confirmation_basis=[],
+        )
+        return _OUTCOME_FLAGGED
+
+    # Confirmable: store the NBC results citation, then run the confirm gate
+    # (keeps the gate's citation_id-required invariant as the single chokepoint).
+    citation_id = store.store_citation(
+        race_key=race_key,
+        url=nbc_mod.results_url(slug),
+        publisher=_NBC_PUBLISHER,
+        snippet=_nbc_snippet(decision),
+        content=_nbc_content(races),
+    )
+    gate_decision = gate_mod.decide(
+        winners_by_party=decision.winners_by_party,
+        confidence=_NBC_CONFIDENCE,
+        runoff_indicated=False,
+        citation_id=citation_id,
+        runoff_rule=runoff_rule,
+        incumbent_id=incumbent_id,
+        sources_disagree=False,
+        fec_contradicts=False,
+    )
+    store.apply_resolution(
+        race_key=race_key,
+        to_status=gate_decision.to_status,
+        winners=gate_decision.winners,
+        citation_id=citation_id,
+        reason="nbc_called",
+        presentation_class=gate_decision.presentation_class,
+        prev_status=prev_status,
+        confidence=gate_decision.confidence,
+        confirmation_basis=_NBC_CONFIRMATION_BASIS,
+    )
+    return (
+        _OUTCOME_CONFIRMED
+        if gate_decision.to_status == "confirmed"
+        else _OUTCOME_FLAGGED
+    )
+
+
+async def _resolve_via_perplexity(
+    *,
+    race_key: str,
+    state: str,
+    office: str,
+    district: str,
+    parties: list[str],
+    contest_date: date,
+    incumbent_id: str | None,
+    runoff_rule: str,
+    prev_status: str,
+    store: RaceStatusStore,
+    search_fn: SearchFn,
+    fetch_fn: FetchFn,
+    structure_fn: StructureFn,
+) -> str:
+    """Fallback path when NBC has no usable result.
+
+    CIVIC SAFETY: Perplexity/news prose can confidently report a WRONG winner
+    (verified: an answer fabricated a winner and cited YouTube). So this path is
+    a *projected, unofficial* signal only — any gate "confirmed" is demoted to
+    provisional. It never auto-confirms.
+    """
+    resolved: resolver_mod.ResolvedPrimary = await resolver_mod.resolve_race(
+        state=state,
+        office=office,
+        district=district,
+        parties=parties,
+        date=contest_date.isoformat(),
+        search_fn=search_fn,
+        structure_fn=structure_fn,
+    )
+
+    auth_url = citation_fetch_mod.pick_authoritative_url(resolved.sources)
+    citation_id: Any | None = None
+    if auth_url:
+        fetched = await fetch_fn(auth_url)
+        if fetched is not None:
+            content, publisher = fetched
+            citation_id = store.store_citation(
+                race_key=race_key,
+                url=auth_url,
+                publisher=publisher,
+                snippet=content[:300],
+                content=content,
+            )
+
+    decision = gate_mod.decide(
+        winners_by_party=resolved.winners_by_party,
+        confidence=resolved.confidence,
+        runoff_indicated=resolved.runoff_indicated,
+        citation_id=citation_id,
+        runoff_rule=runoff_rule,
+        incumbent_id=incumbent_id,
+        sources_disagree=False,
+        fec_contradicts=False,  # TODO(P2): compare FEC active-candidate status
+    )
+
+    to_status = decision.to_status
+    reason = decision.reason
+    presentation = decision.presentation_class
+    basis = decision.confirmation_basis
+    if to_status == "confirmed":
+        to_status = "provisional"
+        reason = "projected_unofficial_perplexity"
+        presentation = "newsworthy_signal"
+        basis = []
+
+    store.apply_resolution(
+        race_key=race_key,
+        to_status=to_status,
+        winners=decision.winners,
+        citation_id=citation_id,
+        reason=reason,
+        presentation_class=presentation,
+        prev_status=prev_status,
+        confidence=decision.confidence,
+        confirmation_basis=basis,
+    )
+    return _OUTCOME_CONFIRMED if to_status == "confirmed" else _OUTCOME_FLAGGED
+
+
 async def _resolve_one_race(
     race_doc: dict,
     *,
@@ -83,16 +304,15 @@ async def _resolve_one_race(
     store: RaceStatusStore,
     search_fn: SearchFn,
     fetch_fn: FetchFn,
+    nbc_fetch_fn: NbcFetchFn | None = None,
+    structure_fn: StructureFn = resolver_mod._heuristic_structure,
 ) -> str:
-    """Run the confirm-or-flag pipeline for a single race.
+    """Confirm-or-flag a single seat.
 
-    Steps: (1) resolve via Perplexity, (2) pick an authoritative URL,
-    (3) fetch + store a citation, (4) decide via the gate, (5) persist the
-    resolution and append a transition event.
-
-    Returns one of ``_OUTCOME_CONFIRMED``, ``_OUTCOME_FLAGGED``, or
-    ``_OUTCOME_ERROR``.  A single race's failure never aborts the batch:
-    all exceptions are caught here and reported as an error outcome.
+    NBC structured results are the PRIMARY confirm source; Perplexity is a
+    projected-signal-only fallback. Returns ``_OUTCOME_CONFIRMED``,
+    ``_OUTCOME_FLAGGED``, or ``_OUTCOME_ERROR``. A single race's failure never
+    aborts the batch — all exceptions are caught and reported as an error.
     """
     race_key = race_doc.get("race_key", "")
     office = race_doc.get("office", "H")
@@ -107,70 +327,39 @@ async def _resolve_one_race(
         ),
         None,
     )
+    runoff_rule = _runoff_rule_for(race_doc, state=state, calendar_rows=calendar_rows)
 
     try:
-        # Step 1: resolve via Perplexity.
-        resolved: resolver_mod.ResolvedPrimary = await resolver_mod.resolve_race(
+        if nbc_fetch_fn is not None:
+            nbc_outcome = await _try_nbc_confirm(
+                race_key=race_key,
+                state=state,
+                office=office,
+                district=district,
+                incumbent_id=incumbent_id,
+                runoff_rule=runoff_rule,
+                prev_status=prev_status,
+                store=store,
+                nbc_fetch_fn=nbc_fetch_fn,
+            )
+            if nbc_outcome is not None:
+                return nbc_outcome
+
+        return await _resolve_via_perplexity(
+            race_key=race_key,
             state=state,
             office=office,
             district=district,
             parties=parties or list(_DEFAULT_PARTIES),
-            date=contest_date.isoformat(),
-            search_fn=search_fn,
-        )
-
-        # Step 2: pick an authoritative citation URL.
-        auth_url: str | None = citation_fetch_mod.pick_authoritative_url(
-            resolved.sources
-        )
-
-        # Step 3: fetch the results page if we have an authoritative URL.
-        citation_id: Any | None = None
-        if auth_url:
-            fetched = await fetch_fn(auth_url)
-            if fetched is not None:
-                content, publisher = fetched
-                citation_id = store.store_citation(
-                    race_key=race_key,
-                    url=auth_url,
-                    publisher=publisher,
-                    snippet=content[:300],
-                    content=content,
-                )
-
-        # Step 4: decide via the gate.
-        fec_contradicts = False  # TODO(P2): compare FEC active-candidate status vs resolved winners
-        runoff_rule = _runoff_rule_for(
-            race_doc, state=state, calendar_rows=calendar_rows
-        )
-        decision: gate_mod.GateDecision = gate_mod.decide(
-            winners_by_party=resolved.winners_by_party,
-            confidence=resolved.confidence,
-            runoff_indicated=resolved.runoff_indicated,
-            citation_id=citation_id,
-            runoff_rule=runoff_rule,
+            contest_date=contest_date,
             incumbent_id=incumbent_id,
-            sources_disagree=False,
-            fec_contradicts=fec_contradicts,
-        )
-
-        # Step 5: persist the resolution + transition event.
-        store.apply_resolution(
-            race_key=race_key,
-            to_status=decision.to_status,
-            winners=decision.winners,
-            citation_id=citation_id,
-            reason=decision.reason,
-            presentation_class=decision.presentation_class,
+            runoff_rule=runoff_rule,
             prev_status=prev_status,
-            confidence=decision.confidence,
-            confirmation_basis=decision.confirmation_basis,
+            store=store,
+            search_fn=search_fn,
+            fetch_fn=fetch_fn,
+            structure_fn=structure_fn,
         )
-
-        if decision.to_status == "confirmed":
-            return _OUTCOME_CONFIRMED
-        return _OUTCOME_FLAGGED
-
     except Exception:
         logger.exception("resolve_nominees: error processing race %s", race_key)
         return _OUTCOME_ERROR
@@ -180,10 +369,12 @@ async def execute_resolution(
     *,
     mongo_uri: str,
     today: date | None = None,
-    window_days: int = 10,
+    window_days: int = 10,  # accepted for compatibility; re-check now spans the full cycle
     trigger: str = "scheduled",
     search_fn: SearchFn,
     fetch_fn: FetchFn,
+    nbc_fetch_fn: NbcFetchFn | None = None,
+    structure_fn: StructureFn = resolver_mod._heuristic_structure,
     client_factory: Callable[[str], pymongo.MongoClient] = pymongo.MongoClient,
     now_fn: Callable[[], datetime] = _utcnow,
 ) -> dict[str, Any]:
@@ -234,9 +425,10 @@ async def execute_resolution(
         counts = await _run_resolution_batch(
             db=db,
             resolved_today=resolved_today,
-            window_days=window_days,
             search_fn=search_fn,
             fetch_fn=fetch_fn,
+            nbc_fetch_fn=nbc_fetch_fn,
+            structure_fn=structure_fn,
         )
 
         runs_col.update_one(
@@ -274,9 +466,10 @@ async def _run_resolution_batch(
     *,
     db: Any,
     resolved_today: date,
-    window_days: int,
     search_fn: SearchFn,
     fetch_fn: FetchFn,
+    nbc_fetch_fn: NbcFetchFn | None = None,
+    structure_fn: StructureFn = resolver_mod._heuristic_structure,
 ) -> dict[str, int]:
     """Resolve every in-window race and return the tally of outcomes.
 
@@ -303,11 +496,13 @@ async def _run_resolution_batch(
         # Fall back to the hardcoded FVAP 2026 table when the collection is empty.
         calendar_rows = calendar_mod.FVAP_2026_ROWS
 
+    # Re-check EVERY race whose contest has passed this cycle (not just the last
+    # 10 days). The per-race loop below skips already-confirmed races, so this
+    # keeps flagging non-terminal races until results post and they confirm.
     closed_contests: list[tuple[str, str, date]] = (
-        calendar_mod.states_with_closed_contest(
+        calendar_mod.states_with_passed_contest(
             calendar_rows,
             today=resolved_today,
-            window_days=window_days,
         )
     )
 
@@ -346,6 +541,8 @@ async def _run_resolution_batch(
                 store=store,
                 search_fn=search_fn,
                 fetch_fn=fetch_fn,
+                nbc_fetch_fn=nbc_fetch_fn,
+                structure_fn=structure_fn,
             )
             if outcome == _OUTCOME_CONFIRMED:
                 confirmed_count += 1
@@ -387,6 +584,8 @@ def main() -> int:
                 trigger=trigger,
                 search_fn=_perplexity_search,
                 fetch_fn=fetch_results_page,
+                nbc_fetch_fn=nbc_mod.fetch_nbc_results,
+                structure_fn=resolver_mod._structure_winners_with_gemini,
             )
         )
     except Exception:

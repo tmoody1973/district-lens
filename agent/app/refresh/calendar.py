@@ -132,3 +132,36 @@ def states_with_closed_contest(
         if chosen:
             out.append((r["state"], chosen[0], chosen[1]))
     return out
+
+
+def states_with_passed_contest(
+    rows: list[dict],
+    *,
+    today: dt.date | dt.datetime,
+    cycle: str = CYCLE,
+) -> list[tuple[str, str, dt.date]]:
+    """Return (state, contest_kind, contest_date) for EVERY contest whose date has
+    passed (<= today) this cycle — with no lower bound on how long ago.
+
+    This is the re-check selector: a race must keep being re-checked until it is
+    confirmed, because official/called results can post weeks after the primary.
+    The old 10-day window (``states_with_closed_contest``) caused races to age out
+    and never confirm. Runoff takes precedence when both have passed. Capped to
+    ``cycle`` so prior-cycle rows are never re-resolved.
+    """
+    today_date = _as_date(today)
+    out: list[tuple[str, str, dt.date]] = []
+    for r in rows:
+        # Coerce both sides: Mongo may deserialize cycle as int (2026) vs str "2026".
+        if str(r.get("cycle", cycle)) != str(cycle):
+            continue
+        chosen: tuple[str, dt.date] | None = None
+        runoff_date = _as_date(r.get("runoff_date"))
+        primary_date = _as_date(r.get("primary_date"))
+        if runoff_date and runoff_date <= today_date:
+            chosen = ("runoff", runoff_date)
+        elif primary_date and primary_date <= today_date:
+            chosen = ("primary", primary_date)
+        if chosen:
+            out.append((r["state"], chosen[0], chosen[1]))
+    return out

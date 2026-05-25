@@ -1,0 +1,50 @@
+{
+  "races": [
+    {
+      "raceId": "2026-05-19R~OR006~H",
+      "primaryParty": null,
+      "stateName": "Oregon",
+      "stateAbbr": null,
+      "houseNumber": null,
+      "electionDate": null,
+      "percentIn": 0,
+      "callStatus": null,
+      "isRunoff": null,
+      "winnerParty": null,
+      "electionType": null,
+      "candidates": [
+        {
+          "firstName": "David",
+          "lastName": "Russ",
+          "party": "gop",
+          "percentVote": 0,
+          "isWinner": true,
+          "isIncumbent": false
+        }
+      ]
+    },
+    {
+      "raceId": "2026-05-19D~OR006~H",
+      "primaryParty": null,
+      "stateName": "Oregon",
+      "stateAbbr": null,
+      "houseNumber": null,
+      "electionDate": null,
+      "percentIn": 0,
+      "callStatus": null,
+      "isRunoff": null,
+      "winnerParty": null,
+      "electionType": null,
+      "candidates": [
+        {
+          "firstName": "Andrea",
+          "lastName": "Salinas",
+          "party": "dem",
+          "percentVote": 0,
+          "isWinner": true,
+          "isIncumbent": true
+        }
+      ]
+    }
+  ]
+}

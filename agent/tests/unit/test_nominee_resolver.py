@@ -335,3 +335,43 @@ async def test_resolve_race_sources_contain_expected_keys():
     assert len(res.sources) == 1
     assert res.sources[0]["url"] == "https://apnews.com/elections/ga"
     assert res.sources[0]["title"] == "AP Results"
+
+
+# ---------------------------------------------------------------------------
+# Gemini winner extractor (fallback) — pure JSON parsing + safety guards
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_winner_model_is_pinned():
+    assert nr._WINNER_GEMINI_MODEL == "gemini-3.1-pro-preview"
+    assert nr._WINNER_GEMINI_LOCATION == "global"
+
+
+@pytest.mark.unit
+def test_parse_winner_json_extracts_requested_parties():
+    raw = '{"winners":[{"party":"REP","winner":"Jane Doe"},{"party":"DEM","winner":"John Smith"}]}'
+    assert nr._parse_winner_json(raw, ["REP", "DEM"]) == {"REP": "Jane Doe", "DEM": "John Smith"}
+
+
+@pytest.mark.unit
+def test_parse_winner_json_filters_unrequested_party():
+    raw = '{"winners":[{"party":"LIB","winner":"Third Party"}]}'
+    assert nr._parse_winner_json(raw, ["REP", "DEM"]) == {}
+
+
+@pytest.mark.unit
+def test_parse_winner_json_malformed_returns_empty():
+    assert nr._parse_winner_json("not json at all", ["REP"]) == {}
+
+
+@pytest.mark.unit
+def test_parse_winner_json_empty_returns_empty():
+    assert nr._parse_winner_json("", ["REP"]) == {}
+
+
+@pytest.mark.unit
+def test_structure_winners_returns_empty_without_project(monkeypatch):
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
+    # Must short-circuit to {} without attempting any Gemini call.
+    assert nr._structure_winners_with_gemini("Republican: Jane Doe won.", ["REP"]) == {}
