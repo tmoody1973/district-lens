@@ -189,6 +189,20 @@ def _make_fetch_fn(result: tuple[str, str] | None = None):
     return fake_fetch
 
 
+def _make_counting_search_fn(answer: str, sources: list[dict]):
+    """Return an async search_fn plus a mutable call counter (calls["n"]).
+
+    Lets a test assert the resolver was never invoked for a skipped race.
+    """
+    calls = {"n": 0}
+
+    async def fake_search(prompt: str) -> tuple[str, list[dict]]:
+        calls["n"] += 1
+        return answer, sources
+
+    return fake_search, calls
+
+
 # Fixed reference date: 2026-05-24 (5 days after GA's 2026-05-19 primary).
 _TODAY = datetime.date(2026, 5, 24)
 
@@ -362,7 +376,65 @@ async def test_outer_failure_marks_refresh_run_failed_and_reraises():
 
 
 # ---------------------------------------------------------------------------
-# Test 5: main() returns 1 when MONGODB_URI missing
+# Test 5: an already-confirmed race is skipped, never re-resolved or overwritten
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_already_confirmed_race_is_skipped():
+    """A race whose race_status is already 'confirmed' must not be re-resolved.
+
+    This protects a human-reviewed/confirmed result from being overwritten on a
+    later scheduled run: the race is skipped before checking, no new event is
+    appended, and the resolver (search_fn) is never invoked.
+    """
+    cols = _ga_cols()
+    # Seed race_status with this race already confirmed (as the store would write it).
+    cols["race_status"] = FakeCol(
+        [
+            {
+                "race_key": GA_RACE_DOC["race_key"],
+                "status": "confirmed",
+                "winners": {"REP": "Jane Doe"},
+                "citation_id": 999,
+            }
+        ]
+    )
+    client = FakeClient(cols)
+
+    search_fn, calls = _make_counting_search_fn(_CLEAN_ANSWER, _AUTH_SOURCES)
+
+    result = await job_mod.execute_resolution(
+        mongo_uri="mongodb://fake",
+        today=_TODAY,
+        window_days=10,
+        search_fn=search_fn,
+        fetch_fn=_make_fetch_fn(("Election results: Jane Doe wins", "sos.ga.gov")),
+        client_factory=lambda uri: client,
+    )
+
+    assert result["status"] == "completed"
+    counts = result["counts"]
+    assert counts["races_checked"] == 0
+    assert counts["confirmed"] == 0
+    assert counts["flagged"] == 0
+    assert counts["errors"] == 0
+
+    # The resolver must never have been called for the confirmed race.
+    assert calls["n"] == 0
+
+    # No new transition event was appended.
+    assert len(cols["race_status_events"].docs) == 0
+
+    # The pre-existing confirmed status doc is untouched (no overwrite).
+    status_docs = cols["race_status"].docs
+    assert len(status_docs) == 1
+    assert status_docs[0]["status"] == "confirmed"
+    assert status_docs[0]["citation_id"] == 999
+
+
+# ---------------------------------------------------------------------------
+# Test 6: main() returns 1 when MONGODB_URI missing
 # ---------------------------------------------------------------------------
 
 
@@ -372,7 +444,7 @@ def test_main_returns_1_when_uri_missing(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Test 5: main() returns 0 on success (monkeypatches execute_resolution)
+# Test 7: main() returns 0 on success (monkeypatches execute_resolution)
 # ---------------------------------------------------------------------------
 
 
@@ -387,7 +459,7 @@ def test_main_returns_0_on_success(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Test 6: main() returns 1 on execute_resolution failure
+# Test 8: main() returns 1 on execute_resolution failure
 # ---------------------------------------------------------------------------
 
 
