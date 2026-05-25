@@ -8,7 +8,6 @@ citation_fetch.pick_authoritative_url are used so logic bugs are caught.
 from __future__ import annotations
 
 import datetime
-from typing import Any
 
 import pytest
 
@@ -20,7 +19,7 @@ from app.jobs import resolve_nominees as job_mod
 
 
 class FakeCol:
-    """In-memory stand-in for a pymongo collection."""
+    """In-memory stand-in for a pymongo collection (equality-only matching)."""
 
     def __init__(self, seed: list[dict] | None = None) -> None:
         self.docs: list[dict] = [dict(d) for d in (seed or [])]
@@ -47,41 +46,9 @@ class FakeCol:
         if doc is not None:
             doc.update(update.get("$set", {}))
 
-    # ------------------------------------------------------------------
-    # Internal matcher — handles $ne, $exists
-    # ------------------------------------------------------------------
-
-    def _matches(self, doc: dict, flt: dict) -> bool:
-        for key, value in flt.items():
-            # Dotted-path traversal (e.g. "race_status.status")
-            parts = key.split(".")
-            current: Any = doc
-            found = True
-            for part in parts:
-                if not isinstance(current, dict) or part not in current:
-                    found = False
-                    break
-                current = current[part]
-
-            if isinstance(value, dict):
-                # Handle $ne
-                if "$ne" in value:
-                    if not found:
-                        continue  # field absent → cannot equal $ne target → matches
-                    if current == value["$ne"]:
-                        return False
-                # Handle $exists
-                if "$exists" in value:
-                    want = value["$exists"]
-                    has = found
-                    if want and not has:
-                        return False
-                    if not want and has:
-                        return False
-            else:
-                if not found or current != value:
-                    return False
-        return True
+    @staticmethod
+    def _matches(doc: dict, flt: dict) -> bool:
+        return all(doc.get(key) == value for key, value in flt.items())
 
 
 # ---------------------------------------------------------------------------
@@ -273,6 +240,7 @@ async def test_ga_clean_primary_confirms_race():
     assert len(run_docs) == 1
     run = run_docs[0]
     assert run["job_name"] == "resolve_nominees"
+    assert run["trigger"] == "scheduled"
     assert run["status"] == "completed"
     assert run["counts"]["confirmed"] == 1
     assert client.closed is True
@@ -355,7 +323,46 @@ async def test_no_op_day_when_no_contests_in_window():
 
 
 # ---------------------------------------------------------------------------
-# Test 4: main() returns 1 when MONGODB_URI missing
+# Test 4: outer exception → refresh_runs "failed" + exception propagates
+# ---------------------------------------------------------------------------
+
+
+class RaisingCol(FakeCol):
+    """FakeCol whose find() raises — simulates a Mongo access failure."""
+
+    def find(self, flt: dict | None = None):
+        raise RuntimeError("calendar read exploded")
+
+
+@pytest.mark.asyncio
+async def test_outer_failure_marks_refresh_run_failed_and_reraises():
+    """If a failure escapes the per-race loop (e.g. calendar load), the
+    refresh_runs doc must end status='failed' and the exception must propagate."""
+    cols = _ga_cols()
+    cols["primary_calendar"] = RaisingCol()
+    client = FakeClient(cols)
+
+    with pytest.raises(RuntimeError, match="calendar read exploded"):
+        await job_mod.execute_resolution(
+            mongo_uri="mongodb://fake",
+            today=_TODAY,
+            window_days=10,
+            search_fn=_make_search_fn(_CLEAN_ANSWER, _AUTH_SOURCES),
+            fetch_fn=_make_fetch_fn(("content", "sos.ga.gov")),
+            client_factory=lambda uri: client,
+        )
+
+    run_docs = cols["refresh_runs"].docs
+    assert len(run_docs) == 1
+    run = run_docs[0]
+    assert run["status"] == "failed"
+    assert run["error"] == "calendar read exploded"
+    assert run["completed_at"] is not None
+    assert client.closed is True
+
+
+# ---------------------------------------------------------------------------
+# Test 5: main() returns 1 when MONGODB_URI missing
 # ---------------------------------------------------------------------------
 
 
