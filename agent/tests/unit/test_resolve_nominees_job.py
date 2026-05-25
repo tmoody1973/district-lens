@@ -444,6 +444,22 @@ def test_main_returns_1_when_uri_missing(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Test 6b: main() returns 1 when PERPLEXITY_API_KEY missing
+# ---------------------------------------------------------------------------
+
+
+def test_main_returns_1_when_perplexity_key_missing(monkeypatch):
+    """Regression: a missing PERPLEXITY_API_KEY must fail fast at startup.
+
+    Previously the job started successfully and only surfaced the missing key
+    as per-race errors (exit 0 with all races errored — hard to diagnose).
+    """
+    monkeypatch.setenv("MONGODB_URI", "mongodb://fake")
+    monkeypatch.delenv("PERPLEXITY_API_KEY", raising=False)
+    assert job_mod.main() == 1
+
+
+# ---------------------------------------------------------------------------
 # Test 7: main() returns 0 on success (monkeypatches execute_resolution)
 # ---------------------------------------------------------------------------
 

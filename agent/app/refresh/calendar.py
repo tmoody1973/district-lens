@@ -76,6 +76,17 @@ def _d(md: tuple[int, int] | None) -> dt.date | None:
     return dt.date(2026, md[0], md[1]) if md else None
 
 
+def _as_date(v: dt.date | dt.datetime | None) -> dt.date | None:
+    """Normalize a date or datetime to date, returning None for None.
+
+    MongoDB deserializes stored datetime fields as datetime.datetime objects.
+    This helper makes comparison logic robust to both types.
+    """
+    if isinstance(v, dt.datetime):
+        return v.date()
+    return v
+
+
 FVAP_2026_ROWS: list[dict] = [
     {
         "state": s,
@@ -95,20 +106,29 @@ FVAP_2026_ROWS: list[dict] = [
 def states_with_closed_contest(
     rows: list[dict],
     *,
-    today: dt.date,
+    today: dt.date | dt.datetime,
     window_days: int = 10,
 ) -> list[tuple[str, str, dt.date]]:
     """Return (state, contest_kind, contest_date) for primaries/runoffs that fell
     within the last `window_days` (inclusive, not in the future). Runoff takes
-    precedence when both a state's primary and runoff are in-window."""
+    precedence when both a state's primary and runoff are in-window.
+
+    Accepts both ``datetime.date`` and ``datetime.datetime`` for ``today`` and
+    for ``primary_date``/``runoff_date`` in each row. MongoDB deserializes stored
+    datetime fields as ``datetime.datetime``; this function normalizes to
+    ``datetime.date`` before comparison so callers never hit a TypeError.
+    """
+    today_date = _as_date(today)
     out: list[tuple[str, str, dt.date]] = []
-    lo = today - dt.timedelta(days=window_days)
+    lo = today_date - dt.timedelta(days=window_days)
     for r in rows:
         chosen: tuple[str, dt.date] | None = None
-        if r.get("runoff_date") and lo <= r["runoff_date"] <= today:
-            chosen = ("runoff", r["runoff_date"])
-        elif r.get("primary_date") and lo <= r["primary_date"] <= today:
-            chosen = ("primary", r["primary_date"])
+        runoff_date = _as_date(r.get("runoff_date"))
+        primary_date = _as_date(r.get("primary_date"))
+        if runoff_date and lo <= runoff_date <= today_date:
+            chosen = ("runoff", runoff_date)
+        elif primary_date and lo <= primary_date <= today_date:
+            chosen = ("primary", primary_date)
         if chosen:
             out.append((r["state"], chosen[0], chosen[1]))
     return out

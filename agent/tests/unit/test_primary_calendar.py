@@ -50,3 +50,24 @@ def test_states_with_closed_contest_prefers_runoff_when_both_in_window():
     rows = [{"state": "AL", "primary_date": dt.date(2026, 6, 8), "runoff_date": dt.date(2026, 6, 14)}]
     closed = calendar.states_with_closed_contest(rows, today=dt.date(2026, 6, 16), window_days=10)
     assert closed == [("AL", "runoff", dt.date(2026, 6, 14))]
+
+
+@pytest.mark.unit
+def test_states_with_closed_contest_accepts_datetime_values_from_mongo():
+    """Regression: MongoDB deserializes stored dates as datetime.datetime.
+
+    Before the fix, comparing a datetime.date ``today`` against a
+    datetime.datetime row value raised TypeError. This test pins the corrected
+    behaviour: datetime values are normalized to date and selection still works.
+    """
+    rows = [
+        {
+            "state": "GA",
+            "primary_date": dt.datetime(2026, 5, 19, 0, 0, tzinfo=dt.UTC),
+            "runoff_date": dt.datetime(2026, 6, 16, 0, 0, tzinfo=dt.UTC),
+        }
+    ]
+    closed = calendar.states_with_closed_contest(
+        rows, today=dt.date(2026, 5, 22), window_days=10
+    )
+    assert closed == [("GA", "primary", dt.date(2026, 5, 19))]

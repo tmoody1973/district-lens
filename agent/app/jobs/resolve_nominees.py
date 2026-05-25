@@ -370,6 +370,9 @@ def main() -> int:
     if not mongo_uri:
         logger.error("MONGODB_URI not set; cannot run resolve_nominees job")
         return 1
+    if not os.environ.get("PERPLEXITY_API_KEY"):
+        logger.error("PERPLEXITY_API_KEY not set; cannot run resolve_nominees job")
+        return 1
     trigger = os.environ.get("REFRESH_TRIGGER", "scheduled")
 
     # Import the real Perplexity search function at runtime only (avoids import
