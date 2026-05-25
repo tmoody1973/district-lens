@@ -1,6 +1,7 @@
 "use client";
 import type { DistrictLensState, EvidenceCard } from "@/types/agent-state";
 import { RaceHeader } from "./RaceHeader";
+import { NomineeStatusBanner } from "./NomineeStatusBanner";
 import { CandidateCard } from "./CandidateCard";
 import { FinanceChart } from "./FinanceChart";
 import { BillFeed } from "./BillFeed";
@@ -98,6 +99,8 @@ export function RaceCanvas({ state }: Props) {
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-5">
       <RaceHeader raceKey={state.currentRaceKey} />
+
+      <NomineeStatusBanner raceKey={state.currentRaceKey} />
 
       {!isJournalist && stateCode && <CanVoteStrip stateCode={stateCode} />}
 
