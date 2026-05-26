@@ -31,3 +31,16 @@ test("shows the honest empty state when there are no positions", () => {
   })} />);
   expect(screen.getByText(/No position evidence found in indexed sources/i)).toBeInTheDocument();
 });
+
+test("journalist mode renders campaign finance before issue positions", () => {
+  vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+  render(<RaceCanvas state={state({
+    mode: "journalist",
+    candidates: [{ candidateId: "1", name: "Gwen Moore", party: "DEM", status: "incumbent", photoUrl: "", photoSource: "placeholder", raceKey: "2026-H-WI-03" }],
+    finance: [{ candidateId: "1", name: "Gwen Moore", party: "DEM", receipts: 500000, disbursements: null, cashOnHand: null, individualContributions: null, pacContributions: null, coverageEndDate: null }],
+  })} />);
+  const money = screen.getByText("Campaign finance · FEC");
+  const positions = screen.getByText("Issue positions · Perplexity");
+  // positions must appear AFTER money in document order
+  expect(money.compareDocumentPosition(positions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
