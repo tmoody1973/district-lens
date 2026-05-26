@@ -2,6 +2,8 @@
 import { useState } from "react";
 import type { CandidateCard as CandidateCardType, FinanceSummary } from "@/types/agent-state";
 import { placeholderAvatarUrl } from "@/lib/bioguide";
+import { fmtMoney } from "@/lib/format";
+export { fmtMoney };
 
 const PARTY_BORDER: Record<string, string> = {
   DEM: "border-l-blue-600",
@@ -20,14 +22,6 @@ const STATUS_LABELS: Record<string, string> = {
   challenger: "Challenger",
   open_seat: "Open Seat",
 };
-
-export function fmtMoney(val: number | null): string {
-  if (val == null) return "—";
-  const abs = Math.abs(val);
-  if (abs >= 1_000_000) return `$${(val / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `$${Math.round(val / 1_000)}K`;
-  return `$${val}`;
-}
 
 interface Props {
   candidate: CandidateCardType;
