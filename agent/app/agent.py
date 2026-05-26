@@ -40,6 +40,7 @@ from app.tools.mongodb_tools import (
     get_incumbent_legislation,
     get_race_candidates,
     get_race_finance_brief,
+    get_voting_record,
 )
 from app.tools.position_search import search_candidate_positions
 from app.tools.state_races import get_state_races
@@ -76,6 +77,7 @@ def _build_tools() -> list:
         get_race_finance_brief,
         get_candidate_finance,
         get_incumbent_legislation,
+        get_voting_record,
         find_candidate,
         search_candidate_positions,
         finish_brief,

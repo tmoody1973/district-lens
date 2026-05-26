@@ -43,10 +43,14 @@ def _patch_fetchers(monkeypatch, *, positions_raises: bool = False) -> None:
             raise RuntimeError("perplexity timeout")
         return [{"candidateName": "A", "issue": "housing", "answer": "x", "sources": []}]
 
+    async def fake_voting_record(race_key):
+        return {"raceKey": race_key, "incumbentName": "A", "votes": []}
+
     monkeypatch.setattr(brief_pipeline, "resolve_race_from_address", fake_resolve)
     monkeypatch.setattr(brief_pipeline, "fetch_candidate_cards", fake_candidates)
     monkeypatch.setattr(brief_pipeline, "fetch_finance_summaries", fake_finance)
     monkeypatch.setattr(brief_pipeline, "fetch_legislation_records", fake_legislation)
+    monkeypatch.setattr(brief_pipeline, "fetch_voting_record", fake_voting_record)
     monkeypatch.setattr(brief_pipeline, "gather_candidate_positions", fake_positions)
 
 
@@ -153,3 +157,10 @@ async def test_failing_positions_step_does_not_abort_brief(monkeypatch):
     complete = next(d for d in deltas if d.get("stage") == "complete")
     assert complete["briefReady"] is True
     assert complete["positions"] == []
+
+
+@pytest.mark.unit
+def test_pipeline_imports_voting_record_fetcher():
+    # The deterministic pipeline must call the voting-record core as a step.
+    import app.tools.brief_pipeline as bp
+    assert hasattr(bp, "fetch_voting_record")
