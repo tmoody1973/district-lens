@@ -1,14 +1,18 @@
 "use client";
 import type { DistrictLensState, EvidenceCard } from "@/types/agent-state";
-import { RaceHeader } from "./RaceHeader";
+import { DecisionHeader } from "./DecisionHeader";
 import { NomineeStatusBanner } from "./NomineeStatusBanner";
-import { CandidateCard } from "./CandidateCard";
+import { CandidateField } from "./CandidateField";
+import { CollapsibleSection } from "./CollapsibleSection";
 import { FinanceChart } from "./FinanceChart";
 import { BillFeed } from "./BillFeed";
 import { NewsCard } from "./NewsCard";
 import { NewsAccordion } from "./NewsAccordion";
 import { IssueAccordion } from "./IssueAccordion";
 import { CanVoteStrip } from "./CanVoteStrip";
+import { buildBriefLayout, type SectionPlan } from "@/lib/brief-layout";
+import { sortByEvidenceStrength } from "@/lib/evidence-strength";
+import { useRaceStatus } from "@/lib/useRaceStatus";
 import { stateCodeFromRaceKey } from "@/lib/states";
 
 interface Props {
@@ -18,13 +22,14 @@ interface Props {
 function groupByIssue(positions: EvidenceCard[]): Array<[string, EvidenceCard[]]> {
   const groups = new Map<string, EvidenceCard[]>();
   for (const position of positions) {
-    const existing = groups.get(position.issue);
-    groups.set(position.issue, existing ? [...existing, position] : [position]);
+    groups.set(position.issue, [...(groups.get(position.issue) ?? []), position]);
   }
   return Array.from(groups.entries());
 }
 
 export function RaceCanvas({ state }: Props) {
+  const raceStatus = useRaceStatus(state.currentRaceKey);
+
   if (state.stage === "idle" || !state.currentRaceKey) {
     return (
       <div className="flex flex-1 items-center justify-center p-8 text-sm text-slate-400">
@@ -33,80 +38,66 @@ export function RaceCanvas({ state }: Props) {
     );
   }
 
-  const financeByCandidate = Object.fromEntries(
-    state.finance.map((summary) => [summary.candidateId, summary])
-  );
-
-  const issueGroups = groupByIssue(state.positions);
+  const layout = buildBriefLayout(state, raceStatus);
+  const financeByCandidate = Object.fromEntries(state.finance.map((s) => [s.candidateId, s]));
   const stateCode = stateCodeFromRaceKey(state.currentRaceKey);
-  const isJournalist = state.mode === "journalist";
+  const isVoter = state.mode === "voter";
 
-  const positionsSection = issueGroups.length > 0 && (
-    <div key="positions" className="space-y-2">
-      <p className="text-xs font-medium uppercase tracking-widest text-slate-500">
-        Issue Positions · Perplexity
-      </p>
-      {issueGroups.map(([issue, cards], index) => (
-        <IssueAccordion key={issue} issue={issue} cards={cards} defaultOpen={index === 0} />
-      ))}
-    </div>
-  );
-
-  const candidatesSection = state.candidates.length > 0 && (
-    <div key="candidates" className="space-y-2">
-      <p className="text-xs font-medium uppercase tracking-widest text-slate-500">
-        Candidates · FEC 2026
-      </p>
-      {state.candidates.map((candidate) => (
-        <CandidateCard
-          key={candidate.candidateId}
-          candidate={candidate}
-          finance={financeByCandidate[candidate.candidateId] ?? null}
-        />
-      ))}
-    </div>
-  );
-
-  const financeSection = state.finance.length > 0 && (
-    <FinanceChart key="finance" finance={state.finance} />
-  );
-
-  const legislationSection = state.legislation.length > 0 && (
-    <BillFeed
-      key="legislation"
-      legislation={state.legislation}
-      memberName={state.legislation[0]?.memberName}
-    />
-  );
-
-  const newsSection = state.candidates.length > 0 && (
-    <div key="news" className="space-y-2">
-      <p className="text-xs font-medium uppercase tracking-widest text-slate-500">
-        Recent News · Perplexity
-      </p>
-      {state.candidates.map((candidate) => (
-        <NewsAccordion key={candidate.candidateId} candidateName={candidate.name} />
-      ))}
-    </div>
-  );
-
-  // Journalist leads with the money (candidates + finance) and drops the
-  // voter-only logistics strip; voter leads with evidence (stances) first.
-  const sections = isJournalist
-    ? [candidatesSection, financeSection, positionsSection, legislationSection, newsSection]
-    : [positionsSection, candidatesSection, financeSection, legislationSection, newsSection];
+  const renderSection = (plan: SectionPlan) => {
+    switch (plan.id) {
+      case "candidates":
+        return (
+          <div key="candidates" className="space-y-2">
+            <p className="text-xs font-medium uppercase tracking-widest text-slate-500">Candidates · FEC 2026</p>
+            <CandidateField candidates={state.candidates} financeByCandidate={financeByCandidate} phase={layout.header.phase} />
+          </div>
+        );
+      case "record":
+        return (
+          <CollapsibleSection key="record" title={`Legislative record · ${state.legislation[0]?.memberName ?? ""}`.trim()} defaultOpen={plan.defaultOpen}>
+            <BillFeed legislation={state.legislation} memberName={state.legislation[0]?.memberName} />
+          </CollapsibleSection>
+        );
+      case "positions":
+        return (
+          <CollapsibleSection key="positions" title="Issue positions · Perplexity" defaultOpen={plan.defaultOpen}>
+            {state.positions.length === 0 ? (
+              <p className="text-sm text-slate-500">No position evidence found in indexed sources.</p>
+            ) : (
+              <div className="space-y-2">
+                {groupByIssue(state.positions).map(([issue, cards], index) => (
+                  <IssueAccordion key={issue} issue={issue} cards={sortByEvidenceStrength(cards)} defaultOpen={index === 0} />
+                ))}
+              </div>
+            )}
+          </CollapsibleSection>
+        );
+      case "money":
+        return (
+          <CollapsibleSection key="money" title="Campaign finance · FEC" defaultOpen={plan.defaultOpen}>
+            <FinanceChart finance={state.finance} />
+          </CollapsibleSection>
+        );
+      case "news":
+        return (
+          <CollapsibleSection key="news" title="Recent news · Perplexity" defaultOpen={plan.defaultOpen}>
+            {state.news.length > 0 && <NewsCard news={state.news} />}
+            <div className="mt-2 space-y-2">
+              {state.candidates.map((c) => (
+                <NewsAccordion key={c.candidateId} candidateName={c.name} />
+              ))}
+            </div>
+          </CollapsibleSection>
+        );
+    }
+  };
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-5">
-      <RaceHeader raceKey={state.currentRaceKey} />
-
-      <NomineeStatusBanner raceKey={state.currentRaceKey} />
-
-      {!isJournalist && stateCode && <CanVoteStrip stateCode={stateCode} />}
-
-      {state.news.length > 0 && <NewsCard news={state.news} />}
-
-      {sections}
+      <DecisionHeader facts={layout.header} />
+      <NomineeStatusBanner status={raceStatus} />
+      {isVoter && stateCode && <CanVoteStrip stateCode={stateCode} />}
+      {layout.sections.map(renderSection)}
     </div>
   );
 }
