@@ -12,7 +12,8 @@ def test_parse_members_returns_bioguide_position_party():
     assert len(members) > 100
     sample = members[0]
     assert set(sample) >= {"bioguide_id", "position", "party"}
-    assert sample["position"] in {"Yea", "Nay", "Present", "Not Voting"}
+    valid_positions = {"Yea", "Nay", "Present", "Not Voting"}
+    assert all(member["position"] in valid_positions for member in members)
 
 
 def test_aggregate_vote_computes_party_majorities_and_split():

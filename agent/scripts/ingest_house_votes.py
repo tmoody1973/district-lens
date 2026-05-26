@@ -40,6 +40,15 @@ CONGRESS = 119
 SESSION = 2
 CYCLE = "2026"
 
+# Retry the same roll-call /members fetch this many times on HTTP 429 before
+# logging and skipping — a transient rate limit must never silently drop a vote.
+MAX_RATE_LIMIT_RETRIES = 3
+RATE_LIMIT_BACKOFF_SECONDS = 60
+
+# Flush accumulated raw member-vote upserts to MongoDB every N ops to bound
+# memory across a full session (~435 incumbents x hundreds of roll calls).
+RAW_FLUSH_EVERY = 1000
+
 # Congress.gov returns single-letter party codes in the vote-members endpoint.
 # Map them to the three-letter abbreviations used throughout DistrictLens.
 _PARTY_CODE: dict[str, str] = {
@@ -150,6 +159,42 @@ def _list_vote_numbers(client: httpx.Client, api_key: str) -> list[dict]:
     return votes
 
 
+def _fetch_members(
+    client: httpx.Client, api_key: str, roll_call: int
+) -> list[dict] | None:
+    """Fetch + parse one roll call's member list, retrying on HTTP 429.
+
+    Returns the parsed member list, or None if the fetch ultimately failed
+    (so the caller can log+skip rather than silently dropping the vote).
+    """
+    url = f"{CONGRESS_API_BASE}/house-vote/{CONGRESS}/{SESSION}/{roll_call}/members"
+    params = {"api_key": api_key, "format": "json"}
+    for attempt in range(1, MAX_RATE_LIMIT_RETRIES + 1):
+        try:
+            resp = client.get(url, params=params)
+            if resp.status_code == 429:
+                logger.warning(
+                    "vote %s rate limited (attempt %d/%d) — sleeping %ds then retrying",
+                    roll_call,
+                    attempt,
+                    MAX_RATE_LIMIT_RETRIES,
+                    RATE_LIMIT_BACKOFF_SECONDS,
+                )
+                time.sleep(RATE_LIMIT_BACKOFF_SECONDS)
+                continue
+            resp.raise_for_status()
+            return _parse_members(resp.json())
+        except httpx.HTTPError as exc:
+            logger.warning("vote %s fetch failed: %s", roll_call, exc)
+            return None
+    logger.warning(
+        "vote %s still rate limited after %d retries — skipping",
+        roll_call,
+        MAX_RATE_LIMIT_RETRIES,
+    )
+    return None
+
+
 def run_import(mongo_uri: str, api_key: str) -> dict[str, int]:
     now = datetime.now(UTC)
     batch_id = now.strftime("house-votes-%Y%m%d-%H%M%S")
@@ -167,6 +212,7 @@ def run_import(mongo_uri: str, api_key: str) -> dict[str, int]:
     contexts: dict[str, list[MemberVoteContext]] = {b: [] for b in incumbents}
     latest_date: dict[str, str] = {}
     raw_ops: list[UpdateOne] = []
+    raw_written = 0
 
     with httpx.Client(timeout=30, follow_redirects=True) as client:
         votes = _list_vote_numbers(client, api_key)
@@ -178,18 +224,8 @@ def run_import(mongo_uri: str, api_key: str) -> dict[str, int]:
             roll_call = v.get("rollCallNumber") or v.get("voteNumber")
             if roll_call is None:
                 continue
-            try:
-                resp = client.get(
-                    f"{CONGRESS_API_BASE}/house-vote/{CONGRESS}/{SESSION}/{roll_call}/members",
-                    params={"api_key": api_key, "format": "json"},
-                )
-                if resp.status_code == 429:
-                    time.sleep(60)
-                    continue
-                resp.raise_for_status()
-                members = _parse_members(resp.json())
-            except httpx.HTTPError as exc:
-                logger.warning("vote %s fetch failed: %s", roll_call, exc)
+            members = _fetch_members(client, api_key, roll_call)
+            if members is None:
                 continue
 
             agg = aggregate_vote(members)
@@ -243,10 +279,18 @@ def run_import(mongo_uri: str, api_key: str) -> dict[str, int]:
                     }},
                     upsert=True,
                 ))
+
+            if len(raw_ops) >= RAW_FLUSH_EVERY:
+                member_votes.bulk_write(raw_ops, ordered=False)
+                raw_written += len(raw_ops)
+                logger.info("  flushed %d raw vote rows (total: %d)", len(raw_ops), raw_written)
+                raw_ops = []
+
             time.sleep(0.4)
 
     if raw_ops:
         member_votes.bulk_write(raw_ops, ordered=False)
+        raw_written += len(raw_ops)
 
     summaries = db["voting_record_summaries"]
     summaries.create_index([("bioguide_id", 1), ("congress", 1)], unique=True)
@@ -284,13 +328,13 @@ def run_import(mongo_uri: str, api_key: str) -> dict[str, int]:
     db["official_import_batches"].insert_one({
         "batch_id": batch_id,
         "source_system": "congress_gov_api_house_votes",
-        "counts": {"raw_votes": len(raw_ops), "summaries": len(summary_ops)},
+        "counts": {"raw_votes": raw_written, "summaries": len(summary_ops)},
         "started_at": now,
         "completed_at": datetime.now(UTC),
         "status": "completed",
     })
-    logger.info("Done: %d raw rows, %d summaries", len(raw_ops), len(summary_ops))
-    return {"raw_votes": len(raw_ops), "summaries": len(summary_ops)}
+    logger.info("Done: %d raw rows, %d summaries", raw_written, len(summary_ops))
+    return {"raw_votes": raw_written, "summaries": len(summary_ops)}
 
 
 if __name__ == "__main__":
