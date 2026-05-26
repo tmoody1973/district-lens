@@ -1,5 +1,5 @@
 import { test, expect } from "vitest";
-import { derivePhase, deriveSeatType } from "../brief-layout";
+import { derivePhase, deriveSeatType, type RaceStatus } from "../brief-layout";
 import type { CandidateCard } from "@/types/agent-state";
 
 const cand = (status: string): CandidateCard => ({
@@ -7,11 +7,16 @@ const cand = (status: string): CandidateCard => ({
   photoUrl: "", photoSource: "placeholder", raceKey: "2026-H-WI-04",
 });
 
+const rs = (status: string): RaceStatus => ({
+  status, winners: {}, confidence: null, confirmationBasis: [],
+  flaggedReason: null, resolvedAt: null, citation: null,
+});
+
 test("derivePhase maps status values", () => {
-  expect(derivePhase({ status: "confirmed" } as any)).toBe("called");
-  expect(derivePhase({ status: "provisional" } as any)).toBe("primary");
-  expect(derivePhase({ status: "runoff_pending" } as any)).toBe("runoff");
-  expect(derivePhase({ status: "contested" } as any)).toBe("contested");
+  expect(derivePhase(rs("confirmed"))).toBe("called");
+  expect(derivePhase(rs("provisional"))).toBe("primary");
+  expect(derivePhase(rs("runoff_pending"))).toBe("runoff");
+  expect(derivePhase(rs("contested"))).toBe("contested");
   expect(derivePhase(null)).toBe("primary");
 });
 
