@@ -45,7 +45,7 @@ export function getVoterLinks(stateCode: string): VoterLinks {
   const code = stateCode.toUpperCase();
   return {
     stateCode: code,
-    stateName: STATE_NAMES[code] ?? code,
+    stateName: stateName(code),
     registration: VOTE_GOV_URL,
     pollingAndDeadlines: CAN_I_VOTE_URL,
     fullBallot: FULL_BALLOT_URL,

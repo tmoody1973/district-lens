@@ -12,6 +12,7 @@ export function parseRaceKey(raceKey: string | null): ParsedRaceKey | null {
   if (!raceKey) return null;
   const parts = raceKey.split("-");
   if (parts.length < 3) return null;
+  if (parts.length > 4) return null;
   const [year, officeCode, state, district] = parts;
   if (state?.length !== 2) return null;
   const office: Office | null =

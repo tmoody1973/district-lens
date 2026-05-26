@@ -23,3 +23,7 @@ test("returns null for a malformed key", () => {
   expect(parseRaceKey("garbage")).toBeNull();
   expect(parseRaceKey(null)).toBeNull();
 });
+
+test("returns null when there are extra trailing segments", () => {
+  expect(parseRaceKey("2026-H-WI-04-EXTRA")).toBeNull();
+});
