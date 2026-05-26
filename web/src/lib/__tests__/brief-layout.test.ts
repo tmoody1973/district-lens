@@ -32,7 +32,7 @@ import type { DistrictLensState } from "@/types/agent-state";
 const baseState = (over: Partial<DistrictLensState>): DistrictLensState => ({
   mode: "voter", mapFocus: null, currentRaceKey: "2026-H-WI-03", stage: "complete",
   briefStartedAt: null, status_message: null, candidates: [], finance: [],
-  legislation: [], news: [], positions: [], stateRaces: [], comparisons: [],
+  legislation: [], votingRecord: null, news: [], positions: [], stateRaces: [], comparisons: [],
   briefMarkdown: null, briefReady: true, ...over,
 });
 
