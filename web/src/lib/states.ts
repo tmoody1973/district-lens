@@ -1,3 +1,5 @@
+import { parseRaceKey } from "./race-key";
+
 // Official, nonpartisan voter-logistics links.
 //
 // We deliberately use state-aware NATIONAL portals rather than hardcoding 50
@@ -25,6 +27,12 @@ const STATE_NAMES: Record<string, string> = {
   WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
 };
 
+export function stateName(code: string | null): string {
+  if (!code) return "";
+  const upper = code.toUpperCase();
+  return STATE_NAMES[upper] ?? upper;
+}
+
 export interface VoterLinks {
   stateCode: string;
   stateName: string;
@@ -37,16 +45,13 @@ export function getVoterLinks(stateCode: string): VoterLinks {
   const code = stateCode.toUpperCase();
   return {
     stateCode: code,
-    stateName: STATE_NAMES[code] ?? code,
+    stateName: stateName(code),
     registration: VOTE_GOV_URL,
     pollingAndDeadlines: CAN_I_VOTE_URL,
     fullBallot: FULL_BALLOT_URL,
   };
 }
 
-// Race keys look like "2026-H-WI-04" or "2026-S-WI"; the state code is the third segment.
 export function stateCodeFromRaceKey(raceKey: string | null): string | null {
-  if (!raceKey) return null;
-  const code = raceKey.split("-")[2];
-  return code && code.length === 2 ? code.toUpperCase() : null;
+  return parseRaceKey(raceKey)?.state ?? null;
 }
