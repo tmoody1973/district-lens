@@ -25,3 +25,63 @@ test("deriveSeatType detects an incumbent", () => {
   expect(deriveSeatType([cand("open_seat"), cand("challenger")])).toBe("open");
   expect(deriveSeatType([])).toBe("open");
 });
+
+import { buildHeaderFacts } from "../brief-layout";
+import type { DistrictLensState } from "@/types/agent-state";
+
+const baseState = (over: Partial<DistrictLensState>): DistrictLensState => ({
+  mode: "voter", mapFocus: null, currentRaceKey: "2026-H-WI-03", stage: "complete",
+  briefStartedAt: null, status_message: null, candidates: [], finance: [],
+  legislation: [], news: [], positions: [], stateRaces: [], comparisons: [],
+  briefMarkdown: null, briefReady: true, ...over,
+});
+
+test("header title, office, and stakes for a House race", () => {
+  const h = buildHeaderFacts(baseState({}), null);
+  expect(h.officeLabel).toBe("U.S. House");
+  expect(h.title).toBe("U.S. House — Wisconsin District 3");
+  expect(h.stakesLabel).toBe("1 of 435 U.S. House seats");
+  expect(h.competitivenessAvailable).toBe(false);
+});
+
+test("header for a Senate race omits the district", () => {
+  const h = buildHeaderFacts(baseState({ currentRaceKey: "2026-S-WI" }), null);
+  expect(h.title).toBe("U.S. Senate — Wisconsin");
+  expect(h.stakesLabel).toBe("1 of 100 — chamber control + judicial confirmations");
+});
+
+test("seat label names the incumbent", () => {
+  const h = buildHeaderFacts(baseState({
+    candidates: [{ candidateId: "1", name: "Gwen Moore", party: "DEM", status: "incumbent", photoUrl: "", photoSource: "placeholder", raceKey: "2026-H-WI-03" }],
+  }), null);
+  expect(h.seatType).toBe("incumbent");
+  expect(h.seatLabel).toBe("Incumbent — Gwen Moore (DEM)");
+});
+
+test("open seat + primary field summary counts by party", () => {
+  const mk = (id: string, party: string) => ({ candidateId: id, name: id, party, status: "open_seat", photoUrl: "", photoSource: "placeholder" as const, raceKey: "2026-H-WI-03" });
+  const h = buildHeaderFacts(baseState({ candidates: [mk("a","DEM"), mk("b","DEM"), mk("c","REP")] }), null);
+  expect(h.seatLabel).toBe("Open seat");
+  expect(h.fieldSummary).toBe("2 Democrats · 1 Republican");
+  expect(h.phaseLabel).toBe("Primary · winner advances to November");
+});
+
+test("money summary sums receipts and names top fundraiser", () => {
+  const h = buildHeaderFacts(baseState({
+    finance: [
+      { candidateId: "1", name: "Jane Smith", party: "DEM", receipts: 2_100_000, disbursements: null, cashOnHand: null, individualContributions: null, pacContributions: null, coverageEndDate: null },
+      { candidateId: "2", name: "Bob Jones", party: "REP", receipts: 2_200_000, disbursements: null, cashOnHand: null, individualContributions: null, pacContributions: null, coverageEndDate: null },
+    ],
+  }), null);
+  expect(h.moneySummary).toBe("$4.3M raised · top Jones $2.2M");
+});
+
+test("money summary falls back when no finance", () => {
+  expect(buildHeaderFacts(baseState({}), null).moneySummary).toBe("Finance data not yet available");
+});
+
+test("unparseable race key degrades gracefully", () => {
+  const h = buildHeaderFacts(baseState({ currentRaceKey: "garbage" }), null);
+  expect(h.title).toBe("Race");
+  expect(h.officeLabel).toBe("Race");
+});
