@@ -52,12 +52,14 @@ export function RaceCanvas({ state }: Props) {
             <CandidateField candidates={state.candidates} financeByCandidate={financeByCandidate} phase={layout.header.phase} />
           </div>
         );
-      case "record":
+      case "record": {
+        const memberName = state.legislation[0]?.memberName;
         return (
-          <CollapsibleSection key="record" title={`Legislative record · ${state.legislation[0]?.memberName ?? ""}`.trim()} defaultOpen={plan.defaultOpen}>
-            <BillFeed legislation={state.legislation} memberName={state.legislation[0]?.memberName} />
+          <CollapsibleSection key="record" title={memberName ? `Legislative record · ${memberName}` : "Legislative record"} defaultOpen={plan.defaultOpen}>
+            <BillFeed legislation={state.legislation} memberName={memberName} />
           </CollapsibleSection>
         );
+      }
       case "positions":
         return (
           <CollapsibleSection key="positions" title="Issue positions · Perplexity" defaultOpen={plan.defaultOpen}>
@@ -89,6 +91,8 @@ export function RaceCanvas({ state }: Props) {
             </div>
           </CollapsibleSection>
         );
+      default:
+        return null;
     }
   };
 
