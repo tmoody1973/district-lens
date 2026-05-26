@@ -1,4 +1,4 @@
-import type { CandidateCard, DistrictLensState, FinanceSummary } from "@/types/agent-state";
+import type { AppMode, CandidateCard, DistrictLensState, FinanceSummary } from "@/types/agent-state";
 import { parseRaceKey } from "./race-key";
 import { stateName } from "./states";
 import { fmtMoney } from "./format";
@@ -88,6 +88,54 @@ function moneySummary(finance: FinanceSummary[]): string {
   const total = withReceipts.reduce((sum, f) => sum + (f.receipts ?? 0), 0);
   const top = withReceipts.reduce((a, b) => ((b.receipts ?? 0) > (a.receipts ?? 0) ? b : a));
   return `${fmtMoney(total)} raised · top ${lastName(top.name)} ${fmtMoney(top.receipts)}`;
+}
+
+// Ordered section plans keyed by mode × seat type. Sections absent from state
+// are filtered out in buildSections.
+const SECTION_PLANS: Record<AppMode, Record<SeatType, SectionPlan[]>> = {
+  voter: {
+    incumbent: [
+      { id: "candidates", defaultOpen: true },
+      { id: "record", defaultOpen: true },
+      { id: "positions", defaultOpen: true },
+      { id: "money", defaultOpen: false },
+      { id: "news", defaultOpen: false },
+    ],
+    open: [
+      { id: "candidates", defaultOpen: true },
+      { id: "positions", defaultOpen: true },
+      { id: "money", defaultOpen: false },
+    ],
+  },
+  journalist: {
+    incumbent: [
+      { id: "candidates", defaultOpen: true },
+      { id: "money", defaultOpen: true },
+      { id: "record", defaultOpen: true },
+      { id: "positions", defaultOpen: false },
+      { id: "news", defaultOpen: false },
+    ],
+    open: [
+      { id: "candidates", defaultOpen: true },
+      { id: "money", defaultOpen: true },
+      { id: "positions", defaultOpen: true },
+      { id: "news", defaultOpen: false },
+    ],
+  },
+};
+
+function isIncluded(id: SectionId, seatType: SeatType, state: DistrictLensState): boolean {
+  switch (id) {
+    case "candidates": return true;
+    case "positions": return true;
+    case "record": return seatType === "incumbent" && state.legislation.length > 0;
+    case "money": return state.finance.length > 0;
+    case "news": return state.candidates.length > 0 || state.news.length > 0;
+  }
+}
+
+export function buildSections(mode: AppMode, seatType: SeatType, state: DistrictLensState): SectionPlan[] {
+  return SECTION_PLANS[mode][seatType].filter((p) => isIncluded(p.id, seatType, state));
 }
 
 export function buildHeaderFacts(state: DistrictLensState, raceStatus: RaceStatus | null): HeaderFacts {

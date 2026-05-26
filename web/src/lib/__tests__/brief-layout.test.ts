@@ -85,3 +85,34 @@ test("unparseable race key degrades gracefully", () => {
   expect(h.title).toBe("Race");
   expect(h.officeLabel).toBe("Race");
 });
+
+import { buildSections } from "../brief-layout";
+
+const ids = (s: { id: string }[]) => s.map((x) => x.id);
+
+test("voter incumbent with bills: record present, money/news collapsed", () => {
+  const s = buildSections("voter", "incumbent",
+    baseState({ legislation: [{ billId: "1", title: "t", introducedDate: null, latestAction: null, memberName: "x" }], finance: [{ candidateId: "1", name: "n", party: "DEM", receipts: 1, disbursements: null, cashOnHand: null, individualContributions: null, pacContributions: null, coverageEndDate: null }], candidates: [{ candidateId: "1", name: "n", party: "DEM", status: "incumbent", photoUrl: "", photoSource: "placeholder", raceKey: "2026-H-WI-03" }] }));
+  expect(ids(s)).toEqual(["candidates", "record", "positions", "money", "news"]);
+  expect(s.find((x) => x.id === "money")!.defaultOpen).toBe(false);
+  expect(s.find((x) => x.id === "positions")!.defaultOpen).toBe(true);
+});
+
+test("voter open seat: no record section", () => {
+  const s = buildSections("voter", "open",
+    baseState({ candidates: [{ candidateId: "1", name: "n", party: "DEM", status: "open_seat", photoUrl: "", photoSource: "placeholder", raceKey: "2026-H-WI-03" }] }));
+  expect(ids(s)).toEqual(["candidates", "positions"]);
+});
+
+test("incumbent without bills omits the record section", () => {
+  const s = buildSections("voter", "incumbent",
+    baseState({ legislation: [], candidates: [{ candidateId: "1", name: "n", party: "DEM", status: "incumbent", photoUrl: "", photoSource: "placeholder", raceKey: "2026-H-WI-03" }] }));
+  expect(ids(s)).not.toContain("record");
+});
+
+test("journalist leads with money, open by default", () => {
+  const s = buildSections("journalist", "incumbent",
+    baseState({ legislation: [{ billId: "1", title: "t", introducedDate: null, latestAction: null, memberName: "x" }], finance: [{ candidateId: "1", name: "n", party: "DEM", receipts: 1, disbursements: null, cashOnHand: null, individualContributions: null, pacContributions: null, coverageEndDate: null }], candidates: [{ candidateId: "1", name: "n", party: "DEM", status: "incumbent", photoUrl: "", photoSource: "placeholder", raceKey: "2026-H-WI-03" }] }));
+  expect(ids(s)).toEqual(["candidates", "money", "record", "positions", "news"]);
+  expect(s.find((x) => x.id === "money")!.defaultOpen).toBe(true);
+});
