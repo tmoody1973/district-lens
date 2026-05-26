@@ -105,6 +105,7 @@ const SECTION_PLANS: Record<AppMode, Record<SeatType, SectionPlan[]>> = {
       { id: "candidates", defaultOpen: true },
       { id: "positions", defaultOpen: true },
       { id: "money", defaultOpen: false },
+      { id: "news", defaultOpen: false },
     ],
   },
   journalist: {

@@ -98,10 +98,11 @@ test("voter incumbent with bills: record present, money/news collapsed", () => {
   expect(s.find((x) => x.id === "positions")!.defaultOpen).toBe(true);
 });
 
-test("voter open seat: no record section", () => {
+test("voter open seat: no record section, news still included", () => {
   const s = buildSections("voter", "open",
     baseState({ candidates: [{ candidateId: "1", name: "n", party: "DEM", status: "open_seat", photoUrl: "", photoSource: "placeholder", raceKey: "2026-H-WI-03" }] }));
-  expect(ids(s)).toEqual(["candidates", "positions"]);
+  expect(ids(s)).toEqual(["candidates", "positions", "news"]);
+  expect(s.find((x) => x.id === "news")!.defaultOpen).toBe(false);
 });
 
 test("incumbent without bills omits the record section", () => {
