@@ -41,3 +41,19 @@ def test_get_voting_record_not_found_when_no_summary():
         res = mongodb_tools.get_voting_record("2026-H-WI-04", ctx)
     assert res["status"] == "not_found"
     assert "votingRecord" not in ctx.state
+
+
+def test_get_voting_record_null_party_line_is_honest_gap():
+    summary = _summary_doc()
+    summary["party_line_pct"] = None  # no party-split votes yet
+    fake_db = MagicMock()
+    fake_db.voting_record_summaries.find_one.return_value = summary
+    ctx = MagicMock()
+    ctx.state = {}
+    with patch.object(mongodb_tools, "_get_db", return_value=fake_db):
+        res = mongodb_tools.get_voting_record("2026-H-WI-04", ctx)
+    assert res["status"] == "success"
+    assert ctx.state["votingRecord"]["partyLinePct"] is None
+    assert any(
+        "Not enough party-split votes" in warning for warning in res["warnings"]
+    )
