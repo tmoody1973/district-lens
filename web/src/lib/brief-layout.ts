@@ -61,13 +61,19 @@ function plural(n: number, word: string): string {
 }
 
 function lastName(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  return parts[parts.length - 1] || name;
+  const trimmed = name.trim();
+  // FEC stores names as "Last, First" — the surname is before the comma.
+  if (trimmed.includes(",")) return trimmed.split(",")[0].trim() || trimmed;
+  const parts = trimmed.split(/\s+/);
+  return parts[parts.length - 1] || trimmed;
 }
 
-function fieldSummary(phase: RacePhase, candidates: CandidateCard[]): string {
+function fieldSummary(phase: RacePhase, candidates: CandidateCard[], winners: Record<string, string>): string {
   if (phase === "called") {
-    const letters = [...new Set(candidates.map((c) => PARTY_LETTER[c.party.toUpperCase()] ?? "?"))];
+    const known = (parties: string[]) =>
+      [...new Set(parties.map((p) => PARTY_LETTER[p.toUpperCase()]).filter((l): l is string => Boolean(l)))];
+    const fromWinners = known(Object.keys(winners));
+    const letters = fromWinners.length >= 2 ? fromWinners : known(candidates.map((c) => c.party));
     return letters.length > 1 ? `${letters.join(" vs ")} matchup` : "General matchup";
   }
   const counts = new Map<string, number>();
@@ -155,7 +161,7 @@ export function buildHeaderFacts(state: DistrictLensState, raceStatus: RaceStatu
     return {
       officeLabel: "Race", title: "Race", phase, phaseLabel: PHASE_LABEL[phase],
       seatType, seatLabel: incumbent ? `Incumbent — ${incumbent.name} (${incumbent.party})` : "Open seat",
-      fieldSummary: fieldSummary(phase, state.candidates), moneySummary: moneySummary(state.finance),
+      fieldSummary: fieldSummary(phase, state.candidates, raceStatus?.winners ?? {}), moneySummary: moneySummary(state.finance),
       stakesLabel: "", competitivenessAvailable: false,
     };
   }
@@ -173,7 +179,7 @@ export function buildHeaderFacts(state: DistrictLensState, raceStatus: RaceStatu
   return {
     officeLabel, title, phase, phaseLabel: PHASE_LABEL[phase], seatType,
     seatLabel: incumbent ? `Incumbent — ${incumbent.name} (${incumbent.party})` : "Open seat",
-    fieldSummary: fieldSummary(phase, state.candidates), moneySummary: moneySummary(state.finance),
+    fieldSummary: fieldSummary(phase, state.candidates, raceStatus?.winners ?? {}), moneySummary: moneySummary(state.finance),
     stakesLabel, competitivenessAvailable: false,
   };
 }

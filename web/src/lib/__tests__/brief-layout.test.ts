@@ -127,3 +127,27 @@ test("buildBriefLayout returns header + sections together", () => {
   expect(layout.header.title).toBe("U.S. House — Wisconsin District 3");
   expect(layout.sections.map((s) => s.id)).toEqual(["candidates", "positions", "news"]);
 });
+
+test("called race: field matchup comes from nominees, money uses surname (FEC Last,First)", () => {
+  const h = buildHeaderFacts(baseState({
+    candidates: [
+      { candidateId: "1", name: "Fulcher, Russell", party: "REP", status: "incumbent", photoUrl: "", photoSource: "placeholder", raceKey: "2026-H-ID-01" },
+      { candidateId: "2", name: "Peterson, Kaylee Jade", party: "DEM", status: "challenger", photoUrl: "", photoSource: "placeholder", raceKey: "2026-H-ID-01" },
+      { candidateId: "3", name: "Gomez, Brendan", party: "CON", status: "challenger", photoUrl: "", photoSource: "placeholder", raceKey: "2026-H-ID-01" },
+    ],
+    finance: [
+      { candidateId: "1", name: "Fulcher, Russell", party: "REP", receipts: 578000, disbursements: null, cashOnHand: null, individualContributions: null, pacContributions: null, coverageEndDate: null },
+    ],
+  }), { status: "confirmed", winners: { REP: "Russ Fulcher", DEM: "Kaylee Peterson" }, confidence: null, confirmationBasis: [], flaggedReason: null, resolvedAt: null, citation: null });
+  expect(h.phase).toBe("called");
+  expect(h.fieldSummary).toBe("R vs D matchup");        // from winners, no "?" for CON
+  expect(h.moneySummary).toBe("$578K raised · top Fulcher $578K");  // surname from "Fulcher, Russell"
+});
+
+test("lastName handles plain First Last too (regression)", () => {
+  // "Bob Jones" (no comma) must still resolve to "Jones"
+  const h = buildHeaderFacts(baseState({
+    finance: [{ candidateId: "1", name: "Bob Jones", party: "REP", receipts: 1000, disbursements: null, cashOnHand: null, individualContributions: null, pacContributions: null, coverageEndDate: null }],
+  }), null);
+  expect(h.moneySummary).toBe("$1K raised · top Jones $1K");
+});
