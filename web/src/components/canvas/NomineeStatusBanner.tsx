@@ -1,15 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
-
-interface NomineeStatus {
-  status: string;
-  winners: Record<string, string>;
-  confidence: number | null;
-  confirmationBasis: string[];
-  flaggedReason: string | null;
-  resolvedAt: string | null;
-  citation: { url: string; publisher: string } | null;
-}
+import type { RaceStatus } from "@/lib/brief-layout";
 
 const PARTY_DOT: Record<string, string> = {
   DEM: "bg-blue-600",
@@ -95,29 +85,9 @@ function Banner({
   );
 }
 
-export function NomineeStatusBanner({ raceKey }: { raceKey: string }) {
-  // Tag fetched data with the race it belongs to so a previous race's badge is
-  // never shown for the current one (and we avoid resetting state in the effect).
-  const [data, setData] = useState<(NomineeStatus & { forKey: string }) | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/race/status?race_key=${encodeURIComponent(raceKey)}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json) => {
-        if (!cancelled && json && !json.error) {
-          setData({ ...(json as NomineeStatus), forKey: raceKey });
-        }
-      })
-      .catch(() => {
-        /* no status yet — render nothing */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [raceKey]);
-
-  if (!data || data.forKey !== raceKey) return null;
+export function NomineeStatusBanner({ status }: { status: RaceStatus | null }) {
+  if (!status) return null;
+  const data = status;
 
   const date = fmtDate(data.resolvedAt);
   const hasWinners = Object.keys(data.winners ?? {}).length > 0;
