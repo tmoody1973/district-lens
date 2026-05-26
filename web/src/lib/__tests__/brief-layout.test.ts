@@ -117,3 +117,13 @@ test("journalist leads with money, open by default", () => {
   expect(ids(s)).toEqual(["candidates", "money", "record", "positions", "news"]);
   expect(s.find((x) => x.id === "money")!.defaultOpen).toBe(true);
 });
+
+import { buildBriefLayout } from "../brief-layout";
+
+test("buildBriefLayout returns header + sections together", () => {
+  const layout = buildBriefLayout(baseState({
+    candidates: [{ candidateId: "1", name: "Jane Doe", party: "DEM", status: "open_seat", photoUrl: "", photoSource: "placeholder", raceKey: "2026-H-WI-03" }],
+  }), null);
+  expect(layout.header.title).toBe("U.S. House — Wisconsin District 3");
+  expect(layout.sections.map((s) => s.id)).toEqual(["candidates", "positions", "news"]);
+});

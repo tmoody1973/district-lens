@@ -139,6 +139,12 @@ export function buildSections(mode: AppMode, seatType: SeatType, state: District
   return SECTION_PLANS[mode][seatType].filter((p) => isIncluded(p.id, seatType, state));
 }
 
+export function buildBriefLayout(state: DistrictLensState, raceStatus: RaceStatus | null): BriefLayout {
+  const header = buildHeaderFacts(state, raceStatus);
+  const sections = buildSections(state.mode, header.seatType, state);
+  return { header, sections };
+}
+
 export function buildHeaderFacts(state: DistrictLensState, raceStatus: RaceStatus | null): HeaderFacts {
   const parsed = parseRaceKey(state.currentRaceKey);
   const phase = derivePhase(raceStatus);
