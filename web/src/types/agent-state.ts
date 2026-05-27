@@ -56,6 +56,18 @@ export interface BillRecord {
   memberName: string;
 }
 
+export interface VotingRecordSummary {
+  memberName: string;
+  congress: string;
+  attendancePct: number;
+  partyLinePct: number | null; // null = honest gap (no party-split votes yet)
+  votesCast: number;
+  votesMissed: number;
+  totalRollCalls: number;
+  asOfDate: string | null;
+  sourceUrl: string;
+}
+
 export interface NewsItem {
   title: string;
   url: string;
@@ -98,6 +110,7 @@ export interface DistrictLensState {
   candidates: CandidateCard[];
   finance: FinanceSummary[];
   legislation: BillRecord[];
+  votingRecord: VotingRecordSummary | null;
   news: NewsItem[];
   positions: EvidenceCard[];
   stateRaces: RaceRow[];
@@ -116,6 +129,7 @@ export const DEFAULT_STATE: DistrictLensState = {
   candidates: [],
   finance: [],
   legislation: [],
+  votingRecord: null,
   news: [],
   positions: [],
   stateRaces: [],

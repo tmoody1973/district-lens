@@ -27,6 +27,7 @@ from app.tools.mongodb_tools import (
     fetch_candidate_cards,
     fetch_finance_summaries,
     fetch_legislation_records,
+    fetch_voting_record,
 )
 from app.tools.position_search import gather_candidate_positions
 
@@ -132,6 +133,11 @@ class VoterBriefPipeline(BaseAgent):
             {"stage": "legislation", "legislation": legislation, "status_message": ""},
         )
 
+        voting_record = await self._fetch_voting_record(race_key)
+        yield self._delta(
+            ctx, {"votingRecord": voting_record, "status_message": ""}
+        )
+
         # Announce the slow positions phase as its own running step before the
         # ~25s gather, so the live receipt shows it active rather than stalling
         # on "legislation" and then jumping straight to "complete".
@@ -175,6 +181,15 @@ class VoterBriefPipeline(BaseAgent):
         except Exception as exc:  # any failure must not abort the brief
             logger.warning("voter_brief %s step failed: %s", step, exc)
             return []
+
+    async def _fetch_voting_record(self, race_key: str | None):
+        if not race_key:
+            return None
+        try:
+            return await fetch_voting_record(race_key)
+        except Exception as exc:  # any failure must not abort the brief
+            logger.warning("voter_brief voting_record step failed: %s", exc)
+            return None
 
     async def _fetch_positions(
         self, candidates: list[dict], state_code: str | None

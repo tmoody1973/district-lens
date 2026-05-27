@@ -135,7 +135,8 @@ function isIncluded(id: SectionId, seatType: SeatType, state: DistrictLensState)
   switch (id) {
     case "candidates": return true;
     case "positions": return true;
-    case "record": return seatType === "incumbent" && state.legislation.length > 0;
+    case "record":
+      return seatType === "incumbent" && (state.legislation.length > 0 || state.votingRecord != null);
     case "money": return state.finance.length > 0;
     case "news": return state.candidates.length > 0 || state.news.length > 0;
   }

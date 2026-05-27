@@ -32,7 +32,7 @@ import type { DistrictLensState } from "@/types/agent-state";
 const baseState = (over: Partial<DistrictLensState>): DistrictLensState => ({
   mode: "voter", mapFocus: null, currentRaceKey: "2026-H-WI-03", stage: "complete",
   briefStartedAt: null, status_message: null, candidates: [], finance: [],
-  legislation: [], news: [], positions: [], stateRaces: [], comparisons: [],
+  legislation: [], votingRecord: null, news: [], positions: [], stateRaces: [], comparisons: [],
   briefMarkdown: null, briefReady: true, ...over,
 });
 
@@ -150,4 +150,14 @@ test("lastName handles plain First Last too (regression)", () => {
     finance: [{ candidateId: "1", name: "Bob Jones", party: "REP", receipts: 1000, disbursements: null, cashOnHand: null, individualContributions: null, pacContributions: null, coverageEndDate: null }],
   }), null);
   expect(h.moneySummary).toBe("$1K raised · top Jones $1K");
+});
+
+test("includes the record section for an incumbent with a voting record but no bills", () => {
+  const state = baseState({
+    candidates: [{ candidateId: "1", name: "Jane Rep", party: "DEM", status: "incumbent", photoUrl: "", photoSource: "placeholder", raceKey: "2026-H-WI-03" }],
+    legislation: [],
+    votingRecord: { memberName: "Jane Rep", congress: "119th", attendancePct: 97, partyLinePct: 90, votesCast: 388, votesMissed: 12, totalRollCalls: 400, asOfDate: "2026-05-20", sourceUrl: "https://www.congress.gov" },
+  });
+  const layout = buildBriefLayout(state, null);
+  expect(layout.sections.some((s) => s.id === "record")).toBe(true);
 });

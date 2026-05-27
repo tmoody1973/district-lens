@@ -6,6 +6,7 @@ import { CandidateField } from "./CandidateField";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { FinanceChart } from "./FinanceChart";
 import { BillFeed } from "./BillFeed";
+import { VotingRecordCard } from "./VotingRecordCard";
 import { NewsCard } from "./NewsCard";
 import { NewsAccordion } from "./NewsAccordion";
 import { IssueAccordion } from "./IssueAccordion";
@@ -53,10 +54,13 @@ export function RaceCanvas({ state }: Props) {
           </div>
         );
       case "record": {
-        const memberName = state.legislation[0]?.memberName;
+        const memberName = state.votingRecord?.memberName ?? state.legislation[0]?.memberName;
         return (
           <CollapsibleSection key="record" title={memberName ? `Legislative record · ${memberName}` : "Legislative record"} defaultOpen={plan.defaultOpen}>
-            <BillFeed legislation={state.legislation} memberName={memberName} />
+            <div className="space-y-3">
+              <VotingRecordCard record={state.votingRecord} />
+              <BillFeed legislation={state.legislation} memberName={memberName} />
+            </div>
           </CollapsibleSection>
         );
       }

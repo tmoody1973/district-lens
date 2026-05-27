@@ -39,6 +39,7 @@ def _bioguide_photo_url(bioguide_id: str) -> str:
     return f"{_BIOGUIDE_PHOTO_BASE}/{bid[0]}/{bid}.jpg"
 FEC_SOURCE = "FEC bulk import (fec.gov), 2026 cycle, imported 2026-05-14"
 CONGRESS_SOURCE = "Congress.gov official records, 119th Congress"
+HOUSE_VOTES_SOURCE = "Congress.gov House roll-call votes, 119th Congress"
 
 _mongo_client: pymongo.MongoClient | None = None  # type: ignore[type-arg]
 
@@ -127,6 +128,21 @@ def _to_bill_record(bill: dict, fallback_member: str) -> dict[str, Any]:
     }
 
 
+def _to_voting_record(summary: dict) -> dict[str, Any]:
+    """Build the camelCase VotingRecordSummary the frontend canvas reads."""
+    return {
+        "memberName": summary.get("member_name", "The incumbent"),
+        "congress": f"{summary.get('congress', 119)}th",
+        "attendancePct": summary.get("attendance_pct"),
+        "partyLinePct": summary.get("party_line_pct"),  # None = honest gap
+        "votesCast": summary.get("votes_cast"),
+        "votesMissed": summary.get("votes_missed"),
+        "totalRollCalls": summary.get("total_roll_calls"),
+        "asOfDate": summary.get("as_of_date"),
+        "sourceUrl": summary.get("source_url", CONGRESS_GOV_URL),
+    }
+
+
 def _query_candidate_cards(race_key: str) -> list[dict[str, Any]]:
     db = _get_db()
     candidates = list(
@@ -187,6 +203,19 @@ async def fetch_finance_summaries(race_key: str) -> list[dict[str, Any]]:
 async def fetch_legislation_records(race_key: str) -> list[dict[str, Any]]:
     """Async data core: incumbent legislation for a race (used by the brief pipeline)."""
     return await asyncio.to_thread(_query_legislation_records, race_key)
+
+
+def _query_voting_record(race_key: str) -> dict[str, Any] | None:
+    db = _get_db()
+    summary = db.voting_record_summaries.find_one(
+        {"race_key_2026": race_key}, {"_id": 0}
+    )
+    return _to_voting_record(summary) if summary else None
+
+
+async def fetch_voting_record(race_key: str) -> dict[str, Any] | None:
+    """Async data core: incumbent voting-record summary (brief pipeline)."""
+    return await asyncio.to_thread(_query_voting_record, race_key)
 
 
 def get_race_candidates(race_key: str, tool_context: ToolContext) -> dict[str, Any]:
@@ -539,4 +568,48 @@ def get_incumbent_legislation(race_key: str, tool_context: ToolContext, limit: i
             "Bill sponsorship reflects legislative priorities, not a definitive policy position.",
         ],
         "source": CONGRESS_SOURCE,
+    }
+
+
+def get_voting_record(race_key: str, tool_context: ToolContext) -> dict[str, Any]:
+    """Get the incumbent's House vote attendance % and party-line voting %.
+
+    Computed from 119th-Congress roll-call votes (Congress.gov). Attendance %
+    is the share of roll calls the member voted on (Yea/Nay/Present); party-line
+    % is the share of party-split votes where they sided with their own party's
+    majority. Use this for the incumbent record section.
+
+    Civic safety: these are voting-behavior metrics, not policy positions, and
+    party-line % is omitted (not zero) when there are no party-split votes yet.
+
+    Args:
+        race_key: Race identifier, e.g. '2026-H-WI-04'. Must contain a House incumbent.
+    """
+    tool_context.state["status_message"] = f"Computing voting record for {race_key}…"
+    try:
+        record = _query_voting_record(race_key)
+    except pymongo.errors.PyMongoError as exc:
+        logger.error("mongodb.get_voting_record: %s", exc)
+        return _error(f"Database error retrieving voting record for {race_key}.", HOUSE_VOTES_SOURCE)
+
+    if record is None:
+        return _not_found(
+            f"No computed voting record for race {race_key}. "
+            "This race may have no House incumbent, or votes have not been ingested yet.",
+            HOUSE_VOTES_SOURCE,
+        )
+
+    tool_context.state["votingRecord"] = record
+    tool_context.state["stage"] = "legislation"
+    warnings = [
+        "Attendance and party-line percentages describe voting behavior, not policy positions.",
+    ]
+    if record["partyLinePct"] is None:
+        warnings.append("Not enough party-split votes yet to compute a party-line percentage.")
+
+    return {
+        "status": "success",
+        "data": {"race_key": race_key, **record},
+        "warnings": warnings,
+        "source": HOUSE_VOTES_SOURCE,
     }
