@@ -2,6 +2,7 @@ export type ResearchStage =
   | "idle"
   | "district"
   | "candidates"
+  | "mcp"
   | "finance"
   | "legislation"
   | "positions"
