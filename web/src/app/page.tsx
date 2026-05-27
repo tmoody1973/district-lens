@@ -12,6 +12,7 @@ import { RaceTable } from "@/components/canvas/RaceTable";
 import { ReceiptProgress } from "@/components/canvas/ReceiptProgress";
 import { AgentToolTrace } from "@/components/canvas/AgentToolTrace";
 import { annotateSteps, stepsFromStage } from "@/lib/steps";
+import { pickDisplayedBrief, type DisplayedBrief } from "@/lib/brief-display";
 import { DEFAULT_STATE, type DistrictLensState, type AppMode } from "@/types/agent-state";
 
 const SYSTEM_PROMPT = `You are DistrictLens, a nonpartisan election-accountability assistant for the 2026 U.S. midterm cycle.
@@ -54,6 +55,10 @@ export default function HomePage() {
   // the journalist map isn't replaced by a voter brief, and switching tabs
   // back preserves the brief (map exploration doesn't change this).
   const [lastBriefMode, setLastBriefMode] = useState<AppMode | null>(null);
+  // Last live brief, captured continuously. Survives any later clearing of the
+  // CopilotKit coagent state so a completed brief is never lost to a hiccup,
+  // and is the serializable shape a future "Save brief" button persists.
+  const [briefSnapshot, setBriefSnapshot] = useState<DisplayedBrief | null>(null);
 
   const { agent } = useAgent({ agentId: "districtlens_root" });
   const { copilotkit } = useCopilotKit();
@@ -78,6 +83,15 @@ export default function HomePage() {
     }
     prevStageRef.current = agentState.stage;
   }, [agentState.stage, setAgentState]);
+
+  // Capture the live brief while it's present. When agentState later loses its
+  // currentRaceKey the guard is false, so the last good snapshot is retained
+  // rather than overwritten with an empty state.
+  useEffect(() => {
+    if (agentState.currentRaceKey && lastBriefMode) {
+      setBriefSnapshot({ mode: lastBriefMode, state: agentState });
+    }
+  }, [agentState, lastBriefMode]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -176,13 +190,14 @@ export default function HomePage() {
   }
 
   const isJournalist = agentState.mode === "journalist";
-  const isIdle = agentState.stage === "idle" || !agentState.currentRaceKey;
   const steps = annotateSteps(stepsFromStage(agentState.stage), agentState);
   const isComplete = agentState.stage === "complete";
+  // Prefer the live brief; fall back to the snapshot if agentState was cleared.
+  const displayed = pickDisplayedBrief(agentState, briefSnapshot, lastBriefMode);
   // A loaded brief shows only in the tab that loaded it; otherwise each tab
   // shows its own home (voter → address entry, journalist → map).
-  const showVoterBrief = !isJournalist && lastBriefMode === "voter" && !isIdle;
-  const showJournalistRace = isJournalist && lastBriefMode === "journalist" && !isIdle;
+  const showVoterBrief = !isJournalist && displayed?.mode === "voter";
+  const showJournalistRace = isJournalist && displayed?.mode === "journalist";
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -321,7 +336,7 @@ export default function HomePage() {
           )}
           {isJournalist ? (
             showJournalistRace ? (
-              <RaceCanvas state={agentState} />
+              <RaceCanvas state={displayed!.state} />
             ) : (
               <div className="flex flex-1 flex-col overflow-y-auto min-h-0">
                 <div className="p-4 shrink-0">
@@ -345,7 +360,7 @@ export default function HomePage() {
               </div>
             )
           ) : showVoterBrief ? (
-            <RaceCanvas state={agentState} />
+            <RaceCanvas state={displayed!.state} />
           ) : (
             <CanvasEmptyState onSubmit={handleAddressSubmit} />
           )}
