@@ -13,6 +13,7 @@
   "dependencies": {
     "@ag-ui/client": "^0.0.53",
     "@ai-sdk/google-vertex": "^4.0.128",
+    "@clerk/nextjs": "^7.4.1",
     "@copilotkit/react-core": "^1.57.1",
     "@copilotkit/react-ui": "^1.57.1",
     "@copilotkit/runtime": "^1.57.1",
