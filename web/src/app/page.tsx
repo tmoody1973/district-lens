@@ -5,6 +5,7 @@ import { useCopilotReadable, useCoAgent } from "@copilotkit/react-core";
 import { useAgent, useCopilotKit } from "@copilotkit/react-core/v2";
 import { CopilotChat } from "@copilotkit/react-ui";
 import "@copilotkit/react-ui/styles.css";
+import { Show, SignInButton, UserButton } from "@clerk/nextjs";
 import { USMap } from "@/components/map/USMap";
 import { RaceCanvas } from "@/components/canvas/RaceCanvas";
 import { CanvasEmptyState } from "@/components/canvas/CanvasEmptyState";
@@ -246,9 +247,23 @@ export default function HomePage() {
 
           {error && <p className="text-sm text-red-700">{error}</p>}
 
-          <span className="ml-auto text-xs font-medium uppercase tracking-widest text-slate-400 hidden lg:block">
-            Nonpartisan &middot; Evidence-first
-          </span>
+          <div className="ml-auto flex items-center gap-3">
+            <span className="text-xs font-medium uppercase tracking-widest text-slate-400 hidden lg:block">
+              Nonpartisan &middot; Evidence-first
+            </span>
+            <Show
+              when="signed-in"
+              fallback={
+                <SignInButton mode="modal">
+                  <button className="rounded-[2px] border-2 border-slate-900 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 transition-colors hover:bg-slate-100">
+                    Sign in
+                  </button>
+                </SignInButton>
+              }
+            >
+              <UserButton />
+            </Show>
+          </div>
         </div>
       </header>
 
