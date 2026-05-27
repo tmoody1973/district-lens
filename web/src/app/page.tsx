@@ -11,7 +11,7 @@ import { CanvasEmptyState } from "@/components/canvas/CanvasEmptyState";
 import { RaceTable } from "@/components/canvas/RaceTable";
 import { ReceiptProgress } from "@/components/canvas/ReceiptProgress";
 import { AgentToolTrace } from "@/components/canvas/AgentToolTrace";
-import { stepsFromStage } from "@/lib/steps";
+import { annotateSteps, stepsFromStage } from "@/lib/steps";
 import { DEFAULT_STATE, type DistrictLensState, type AppMode } from "@/types/agent-state";
 
 const SYSTEM_PROMPT = `You are DistrictLens, a nonpartisan election-accountability assistant for the 2026 U.S. midterm cycle.
@@ -177,7 +177,7 @@ export default function HomePage() {
 
   const isJournalist = agentState.mode === "journalist";
   const isIdle = agentState.stage === "idle" || !agentState.currentRaceKey;
-  const steps = stepsFromStage(agentState.stage);
+  const steps = annotateSteps(stepsFromStage(agentState.stage), agentState);
   const isComplete = agentState.stage === "complete";
   // A loaded brief shows only in the tab that loaded it; otherwise each tab
   // shows its own home (voter → address entry, journalist → map).
