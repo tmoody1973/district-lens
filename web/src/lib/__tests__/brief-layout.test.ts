@@ -151,3 +151,13 @@ test("lastName handles plain First Last too (regression)", () => {
   }), null);
   expect(h.moneySummary).toBe("$1K raised · top Jones $1K");
 });
+
+test("includes the record section for an incumbent with a voting record but no bills", () => {
+  const state = baseState({
+    candidates: [{ candidateId: "1", name: "Jane Rep", party: "DEM", status: "incumbent", photoUrl: "", photoSource: "placeholder", raceKey: "2026-H-WI-03" }],
+    legislation: [],
+    votingRecord: { memberName: "Jane Rep", congress: "119th", attendancePct: 97, partyLinePct: 90, votesCast: 388, votesMissed: 12, totalRollCalls: 400, asOfDate: "2026-05-20", sourceUrl: "https://www.congress.gov" },
+  });
+  const layout = buildBriefLayout(state, null);
+  expect(layout.sections.some((s) => s.id === "record")).toBe(true);
+});
