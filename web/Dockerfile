@@ -20,6 +20,12 @@ COPY . .
 # Build with standalone output (next.config.ts: output: "standalone")
 # Pass placeholder env vars so build doesn't fail on missing secrets —
 # real values are injected by Cloud Run at runtime.
+#
+# NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is inlined into the client bundle at build
+# time (that's what NEXT_PUBLIC_ means) so it MUST be present here, not just at
+# runtime. It is a publishable key — public by design, shipped to every browser —
+# so it is safe to commit. The matching secret (CLERK_SECRET_KEY) is runtime-only
+# and injected by Cloud Run from Secret Manager.
 RUN NEXT_TELEMETRY_DISABLED=1 \
     GOOGLE_CLOUD_PROJECT=civicsync-440613 \
     GOOGLE_CLOUD_LOCATION=global \
@@ -27,6 +33,7 @@ RUN NEXT_TELEMETRY_DISABLED=1 \
     GEOCODIO_API_KEY=placeholder \
     AGENT_URL=https://districtlens-agent-adewe5kxtq-uc.a.run.app \
     INTERNAL_API_TOKEN=placeholder \
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_cXVhbGl0eS13aGlwcGV0LTc3LmNsZXJrLmFjY291bnRzLmRldiQ \
     pnpm build
 
 # ---------------------------------------------------------------------------
