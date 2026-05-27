@@ -13,6 +13,8 @@ export type StepStatus = "pending" | "running" | "done";
 export interface BriefStep {
   label: string;
   status: StepStatus;
+  source?: string; // tool/data source for this step, e.g. "MongoDB MCP", "FEC"
+  detail?: string; // result summary once done, e.g. "4 filings"
 }
 
 export type AppMode = "voter" | "journalist";
