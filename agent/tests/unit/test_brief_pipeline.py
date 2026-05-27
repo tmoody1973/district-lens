@@ -46,11 +46,15 @@ def _patch_fetchers(monkeypatch, *, positions_raises: bool = False) -> None:
     async def fake_voting_record(race_key):
         return {"raceKey": race_key, "incumbentName": "A", "votes": []}
 
+    async def fake_mcp_count(collection, query):
+        return 4
+
     monkeypatch.setattr(brief_pipeline, "resolve_race_from_address", fake_resolve)
     monkeypatch.setattr(brief_pipeline, "fetch_candidate_cards", fake_candidates)
     monkeypatch.setattr(brief_pipeline, "fetch_finance_summaries", fake_finance)
     monkeypatch.setattr(brief_pipeline, "fetch_legislation_records", fake_legislation)
     monkeypatch.setattr(brief_pipeline, "fetch_voting_record", fake_voting_record)
+    monkeypatch.setattr(brief_pipeline, "mongodb_mcp_count", fake_mcp_count)
     monkeypatch.setattr(brief_pipeline, "gather_candidate_positions", fake_positions)
 
 
@@ -72,8 +76,21 @@ async def test_pipeline_runs_every_step_in_fixed_order(monkeypatch):
 
     stages = [d["stage"] for d in deltas if "stage" in d]
     assert stages == [
-        "district", "candidates", "finance", "legislation", "positions", "complete"
+        "district", "candidates", "mcp", "finance", "legislation", "positions", "complete"
     ]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_mcp_step_reports_partner_count(monkeypatch):
+    _patch_fetchers(monkeypatch)
+    pipeline = VoterBriefPipeline(name="voter_brief_pipeline")
+    ctx = _make_ctx("Build a complete voter brief for: 123 Oak St, Racine WI")
+
+    deltas = await _collect_deltas(pipeline, ctx)
+
+    mcp = next(d for d in deltas if d.get("stage") == "mcp")
+    assert "MongoDB MCP confirmed 4 candidate filings" in mcp["status_message"]
 
 
 @pytest.mark.unit

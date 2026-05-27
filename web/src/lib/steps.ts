@@ -3,6 +3,7 @@ import type { BriefStep, ResearchStage } from "@/types/agent-state";
 const STEP_LABELS = [
   "District resolved",
   "Candidates loaded",
+  "Verified via MongoDB MCP",
   "Finance pulled",
   "Legislation loaded",
   "Positions searched",
@@ -13,19 +14,21 @@ const STAGE_DONE_COUNT: Record<ResearchStage, number> = {
   idle: 0,
   district: 0,
   candidates: 1,
-  finance: 2,
-  legislation: 3,
-  positions: 4,
-  complete: 6,
+  mcp: 2,
+  finance: 3,
+  legislation: 4,
+  positions: 5,
+  complete: 7,
 };
 
 const STAGE_RUNNING_INDEX: Record<ResearchStage, number | null> = {
   idle: null,
   district: 0,
   candidates: 1,
-  finance: 2,
-  legislation: 3,
-  positions: 4,
+  mcp: 2,
+  finance: 3,
+  legislation: 4,
+  positions: 5,
   complete: null,
 };
 
