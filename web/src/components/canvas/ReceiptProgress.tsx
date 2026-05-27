@@ -138,6 +138,11 @@ export function ReceiptProgress({ steps, briefStartedAt, statusMessage, compact,
             >
               {step.label}
             </span>
+            {step.source && (
+              <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wide text-slate-400">
+                {step.detail ? `${step.source} · ${step.detail}` : step.source}
+              </span>
+            )}
           </div>
         ))}
       </div>
