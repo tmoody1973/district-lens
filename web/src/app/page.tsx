@@ -10,6 +10,7 @@ import { RaceCanvas } from "@/components/canvas/RaceCanvas";
 import { CanvasEmptyState } from "@/components/canvas/CanvasEmptyState";
 import { RaceTable } from "@/components/canvas/RaceTable";
 import { ReceiptProgress } from "@/components/canvas/ReceiptProgress";
+import { AgentToolTrace } from "@/components/canvas/AgentToolTrace";
 import { stepsFromStage } from "@/lib/steps";
 import { DEFAULT_STATE, type DistrictLensState, type AppMode } from "@/types/agent-state";
 
@@ -185,6 +186,8 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
+      {/* Renders agent tool calls (incl. MongoDB MCP) inline in the chat */}
+      <AgentToolTrace />
       {/* Header */}
       <header className="border-b-2 border-slate-900 bg-white px-4 py-3 shrink-0 lg:px-6">
         <div className="mx-auto flex max-w-7xl items-center gap-3 lg:gap-6">
