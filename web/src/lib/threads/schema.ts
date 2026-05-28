@@ -2,14 +2,22 @@ import { z } from "zod";
 
 import { deriveDistrictKey } from "@/lib/saved-briefs/schema";
 
+// One captured chat turn, stored as a read-only transcript on the thread.
+export interface ThreadMessage {
+  role: string; // "user" | "assistant"
+  content: string;
+}
+
 // A journalist research thread: a named, renameable container that groups saved
-// briefs (by thread_id on saved_briefs) across one or more races, plus notes.
+// briefs (by thread_id on saved_briefs) across one or more races, plus notes and
+// a read-only transcript of the chat captured while the thread was active.
 export interface AgentThreadDoc {
   thread_id: string;
   clerk_user_id: string;
   title: string;
   race_keys: string[];
   notes: string;
+  messages: ThreadMessage[];
   created_at: string;
   updated_at: string;
 }
@@ -30,9 +38,12 @@ export const createThreadRequestSchema = z.object({
 
 // At least one of title/notes may be present; an empty title is rejected, but an
 // empty body (no-op) is allowed so the client can PATCH freely.
+const threadMessageSchema = z.object({ role: z.string(), content: z.string() });
+
 export const updateThreadRequestSchema = z.object({
   title: z.string().min(1, "title cannot be empty").optional(),
   notes: z.string().optional(),
+  messages: z.array(threadMessageSchema).optional(),
 });
 export type UpdateThreadRequest = z.infer<typeof updateThreadRequestSchema>;
 
@@ -69,6 +80,7 @@ export function buildThreadDoc(
     title: deriveThreadTitle(uniqueSorted, now),
     race_keys: uniqueSorted,
     notes: "",
+    messages: [],
     created_at: iso,
     updated_at: iso,
   };

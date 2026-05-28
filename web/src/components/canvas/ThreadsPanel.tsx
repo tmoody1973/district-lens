@@ -86,6 +86,27 @@ function ThreadDetail({
           ))}
         </ul>
       )}
+      {thread.messages.length > 0 && (
+        <div className="mt-2">
+          <p className="mb-1 text-[9px] font-bold uppercase tracking-widest text-slate-400">
+            Conversation
+          </p>
+          <div className="max-h-48 space-y-1 overflow-y-auto rounded-[2px] border border-slate-200 bg-white p-1.5">
+            {thread.messages.map((m, i) => (
+              <div key={i} className={m.role === "user" ? "text-right" : "text-left"}>
+                <span
+                  className={[
+                    "inline-block max-w-[90%] rounded-[2px] px-1.5 py-1 text-[10px]",
+                    m.role === "user" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-800",
+                  ].join(" ")}
+                >
+                  {m.content}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <button
         onClick={() => onDelete(thread.thread_id)}
         className="mt-2 text-[9px] font-medium text-red-600 hover:text-red-800"

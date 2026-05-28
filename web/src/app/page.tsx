@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useCopilotReadable, useCoAgent } from "@copilotkit/react-core";
+import { useCopilotReadable, useCoAgent, useCopilotChat } from "@copilotkit/react-core";
 import { useAgent, useCopilotKit } from "@copilotkit/react-core/v2";
 import { CopilotChat } from "@copilotkit/react-ui";
 import "@copilotkit/react-ui/styles.css";
@@ -81,6 +81,8 @@ export default function HomePage() {
     name: "districtlens_root",
     initialState: DEFAULT_STATE,
   });
+  const { visibleMessages } = useCopilotChat();
+  const lastSavedTranscriptRef = useRef<string>("");
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -296,6 +298,40 @@ export default function HomePage() {
     setActiveThread((prev) => (prev && prev.thread.thread_id === threadId ? null : prev));
     await loadThreads();
   }, [loadThreads]);
+
+  // While a thread is open, capture the chat conversation onto it as a read-only
+  // transcript (debounced). Stored so reopening the thread shows what was asked.
+  const activeThreadId = activeThread?.thread.thread_id ?? null;
+  useEffect(() => {
+    if (!activeThreadId) return;
+    const transcript = visibleMessages.flatMap((m) => {
+      const role = (m as { role?: unknown }).role;
+      const content = (m as { content?: unknown }).content;
+      return typeof content === "string" && (role === "user" || role === "assistant")
+        ? [{ role, content }]
+        : [];
+    });
+    if (transcript.length === 0) return;
+    const sig = activeThreadId + JSON.stringify(transcript);
+    if (sig === lastSavedTranscriptRef.current) return;
+    const timer = setTimeout(() => {
+      lastSavedTranscriptRef.current = sig;
+      fetch(`/api/threads/${activeThreadId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: transcript }),
+      })
+        .then(() =>
+          setActiveThread((prev) =>
+            prev && prev.thread.thread_id === activeThreadId
+              ? { ...prev, thread: { ...prev.thread, messages: transcript } }
+              : prev,
+          ),
+        )
+        .catch(() => {});
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [visibleMessages, activeThreadId]);
 
   const saveBrief = useCallback(async (state: DistrictLensState, threadId?: string) => {
     setSaveStatus("saving");
