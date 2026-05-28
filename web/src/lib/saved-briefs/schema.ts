@@ -28,7 +28,11 @@ const stateSchema = z
   })
   .passthrough();
 
-export const saveBriefRequestSchema = z.object({ state: stateSchema });
+export const saveBriefRequestSchema = z.object({
+  state: stateSchema,
+  // When present, the brief is filed into a journalist research thread.
+  threadId: z.string().min(1).optional(),
+});
 export type SaveBriefRequest = z.infer<typeof saveBriefRequestSchema>;
 
 export interface SourceRef {

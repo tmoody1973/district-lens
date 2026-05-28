@@ -4,6 +4,8 @@ import { getDb, getFinanceSummaries } from "@/lib/mongodb";
 import type { BriefFingerprint } from "@/lib/brief-fingerprint";
 import type { DistrictLensState } from "@/types/agent-state";
 
+import { attachRaceToThread } from "@/lib/threads/store";
+
 import { diffFingerprints, type CurrentRaceFingerprint } from "./diff";
 import {
   buildSavedDocs,
@@ -29,20 +31,27 @@ async function ensureIndexes(): Promise<void> {
 }
 
 // Persist a brief: a new immutable snapshot in saved_briefs (history powers the
-// change-diff), plus an upserted one-per-race bookmark in saved_districts.
+// change-diff), plus an upserted one-per-race bookmark in saved_districts. When
+// threadId is given, the brief is filed into that journalist thread.
 export async function createSavedBrief(
   clerkUserId: string,
   state: DistrictLensState,
+  threadId?: string,
 ): Promise<{ briefId: string }> {
   await ensureIndexes();
   const db = await getDb();
 
-  const { savedBrief, savedDistrict } = buildSavedDocs(clerkUserId, state, {
+  const built = buildSavedDocs(clerkUserId, state, {
     briefId: randomUUID(),
     savedDistrictId: randomUUID(),
   });
+  const savedBrief = threadId ? { ...built.savedBrief, thread_id: threadId } : built.savedBrief;
+  const { savedDistrict } = built;
 
   await db.collection<SavedBriefDoc>("saved_briefs").insertOne(savedBrief);
+  if (threadId) {
+    await attachRaceToThread(clerkUserId, threadId, savedBrief.race_key);
+  }
 
   // clerk_user_id + race_key come from the filter on insert, so they live in
   // neither $set nor $setOnInsert (avoids a Mongo path-conflict).

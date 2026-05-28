@@ -93,6 +93,20 @@ export async function updateThread(
   return res.matchedCount > 0;
 }
 
+// Add a race to a thread (idempotent) and bump its updated_at — called when a
+// brief is filed into the thread. Owner-scoped.
+export async function attachRaceToThread(
+  clerkUserId: string,
+  threadId: string,
+  raceKey: string,
+): Promise<void> {
+  const db = await getDb();
+  await db.collection<AgentThreadDoc>("agent_threads").updateOne(
+    { clerk_user_id: clerkUserId, thread_id: threadId },
+    { $addToSet: { race_keys: raceKey }, $set: { updated_at: new Date().toISOString() } },
+  );
+}
+
 export async function deleteThread(clerkUserId: string, threadId: string): Promise<boolean> {
   const db = await getDb();
   // Untag the thread's briefs so they survive in saved_briefs / My Ballot.

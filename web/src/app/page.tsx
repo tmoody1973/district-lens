@@ -12,9 +12,11 @@ import { CanvasEmptyState } from "@/components/canvas/CanvasEmptyState";
 import { RaceTable } from "@/components/canvas/RaceTable";
 import { ReceiptProgress } from "@/components/canvas/ReceiptProgress";
 import { AgentToolTrace } from "@/components/canvas/AgentToolTrace";
+import { ThreadsPanel } from "@/components/canvas/ThreadsPanel";
 import { annotateSteps, stepsFromStage } from "@/lib/steps";
 import { pickDisplayedBrief, type DisplayedBrief } from "@/lib/brief-display";
-import type { SavedBallotItem } from "@/lib/saved-briefs/schema";
+import type { SavedBallotItem, SavedBriefDoc } from "@/lib/saved-briefs/schema";
+import type { AgentThreadDoc, ThreadSummary } from "@/lib/threads/schema";
 import { DEFAULT_STATE, type DistrictLensState, type AppMode } from "@/types/agent-state";
 
 const SYSTEM_PROMPT = `You are DistrictLens, a nonpartisan election-accountability assistant for the 2026 U.S. midterm cycle.
@@ -65,6 +67,12 @@ export default function HomePage() {
   // An opened saved brief takes display priority over the live/snapshot brief.
   const [savedItems, setSavedItems] = useState<SavedBallotItem[]>([]);
   const [openedBrief, setOpenedBrief] = useState<DisplayedBrief | null>(null);
+  // Journalist research threads (named containers of saved briefs + notes).
+  const [threads, setThreads] = useState<ThreadSummary[]>([]);
+  const [activeThread, setActiveThread] = useState<{
+    thread: AgentThreadDoc;
+    briefs: SavedBriefDoc[];
+  } | null>(null);
 
   const { agent } = useAgent({ agentId: "districtlens_root" });
   const { copilotkit } = useCopilotKit();
@@ -214,20 +222,98 @@ export default function HomePage() {
 
   useEffect(() => { loadBallot(); }, [loadBallot]);
 
-  const saveBrief = useCallback(async (state: DistrictLensState) => {
+  // --- Journalist research threads ---
+  const loadThreads = useCallback(async () => {
+    try {
+      const res = await fetch("/api/threads");
+      if (!res.ok) { setThreads([]); return; }
+      const data = await res.json();
+      setThreads(data.threads ?? []);
+    } catch {
+      setThreads([]);
+    }
+  }, []);
+
+  useEffect(() => { loadThreads(); }, [loadThreads]);
+
+  const openThread = useCallback(async (threadId: string) => {
+    try {
+      const res = await fetch(`/api/threads/${threadId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setActiveThread({ thread: data.thread, briefs: data.briefs ?? [] });
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const createThread = useCallback(async () => {
+    try {
+      const seed = agentState.currentRaceKey ? { raceKey: agentState.currentRaceKey } : {};
+      const res = await fetch("/api/threads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(seed),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      await loadThreads();
+      setActiveThread({ thread: data.thread, briefs: [] });
+    } catch {
+      /* ignore */
+    }
+  }, [agentState.currentRaceKey, loadThreads]);
+
+  const renameThread = useCallback(async (threadId: string, title: string) => {
+    await fetch(`/api/threads/${threadId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+    await loadThreads();
+    setActiveThread((prev) =>
+      prev && prev.thread.thread_id === threadId
+        ? { ...prev, thread: { ...prev.thread, title } }
+        : prev,
+    );
+  }, [loadThreads]);
+
+  const saveThreadNotes = useCallback(async (threadId: string, notes: string) => {
+    await fetch(`/api/threads/${threadId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes }),
+    });
+    setActiveThread((prev) =>
+      prev && prev.thread.thread_id === threadId
+        ? { ...prev, thread: { ...prev.thread, notes } }
+        : prev,
+    );
+  }, []);
+
+  const deleteThread = useCallback(async (threadId: string) => {
+    await fetch(`/api/threads/${threadId}`, { method: "DELETE" });
+    setActiveThread((prev) => (prev && prev.thread.thread_id === threadId ? null : prev));
+    await loadThreads();
+  }, [loadThreads]);
+
+  const saveBrief = useCallback(async (state: DistrictLensState, threadId?: string) => {
     setSaveStatus("saving");
     try {
       const res = await fetch("/api/saved/brief", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ state }),
+        body: JSON.stringify({ state, threadId }),
       });
       setSaveStatus(res.ok ? "saved" : "error");
-      if (res.ok) loadBallot();
+      if (res.ok) {
+        loadBallot();
+        if (threadId) { loadThreads(); openThread(threadId); }
+      }
     } catch {
       setSaveStatus("error");
     }
-  }, [loadBallot]);
+  }, [loadBallot, loadThreads, openThread]);
 
   // Reopen a saved snapshot: fetch it, show it (openedBrief wins over live), and
   // switch to the tab that loaded it so the canvas renders it.
@@ -355,9 +441,26 @@ export default function HomePage() {
             ))}
           </div>
 
-          {/* My Ballot — saved briefs, signed-in only */}
+          {/* Journalist research threads — signed-in, journalist mode */}
+          {isJournalist && (
+            <Show when="signed-in">
+              <ThreadsPanel
+                threads={threads}
+                active={activeThread}
+                onNew={createThread}
+                onOpen={openThread}
+                onClose={() => setActiveThread(null)}
+                onRename={renameThread}
+                onSaveNotes={saveThreadNotes}
+                onDelete={deleteThread}
+                onReopenBrief={openSavedBrief}
+              />
+            </Show>
+          )}
+
+          {/* My Ballot — saved briefs, signed-in + voter mode */}
           <Show when="signed-in">
-            {savedItems.length > 0 && (
+            {!isJournalist && savedItems.length > 0 && (
               <div className="p-3 border-b border-slate-200">
                 <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2">
                   My Ballot
@@ -451,17 +554,26 @@ export default function HomePage() {
                   }
                 >
                   <button
-                    onClick={() => saveBrief(displayed?.state ?? agentState)}
+                    onClick={() =>
+                      saveBrief(
+                        displayed?.state ?? agentState,
+                        isJournalist && activeThread ? activeThread.thread.thread_id : undefined,
+                      )
+                    }
                     disabled={saveStatus === "saving" || saveStatus === "saved"}
                     className="w-full rounded-[2px] border-2 border-slate-900 bg-white px-2 py-1.5 text-[10px] font-semibold text-slate-900 transition-colors hover:bg-slate-100 disabled:opacity-60"
                   >
                     {saveStatus === "saving"
                       ? "Saving…"
                       : saveStatus === "saved"
-                        ? "Saved to ballot ✓"
+                        ? isJournalist && activeThread
+                          ? "Saved to thread ✓"
+                          : "Saved to ballot ✓"
                         : saveStatus === "error"
                           ? "Save failed — retry"
-                          : "Save to my ballot"}
+                          : isJournalist && activeThread
+                            ? `Save to “${activeThread.thread.title}”`
+                            : "Save to my ballot"}
                   </button>
                 </Show>
               )}
