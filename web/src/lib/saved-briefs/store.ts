@@ -1,8 +1,10 @@
 import { randomUUID } from "crypto";
 
-import { getDb } from "@/lib/mongodb";
+import { getDb, getFinanceSummaries } from "@/lib/mongodb";
+import type { BriefFingerprint } from "@/lib/brief-fingerprint";
 import type { DistrictLensState } from "@/types/agent-state";
 
+import { diffFingerprints, type CurrentRaceFingerprint } from "./diff";
 import {
   buildSavedDocs,
   type SavedBallotItem,
@@ -63,8 +65,30 @@ export async function createSavedBrief(
   return { briefId: savedBrief.brief_id };
 }
 
+// Recompute the cheap-to-derive signals for a race as it stands now (current
+// candidate set + latest fundraising coverage), straight from stored data, to
+// compare against a saved fingerprint.
+export async function computeCurrentRaceFingerprint(
+  raceKey: string,
+): Promise<CurrentRaceFingerprint> {
+  const db = await getDb();
+  const cands = await db
+    .collection("candidates")
+    .find({ race_key: raceKey }, { projection: { _id: 0, candidate_id: 1 } })
+    .toArray();
+  const candidateIds = cands.map((c) => c.candidate_id as string).sort();
+
+  const fins = candidateIds.length ? await getFinanceSummaries(candidateIds) : [];
+  const dates = fins
+    .map((f) => (f.coverage_end_date as string | null) ?? null)
+    .filter((d): d is string => !!d);
+  const financeCoverageEndMax = dates.length ? dates.reduce((m, d) => (d > m ? d : m)) : null;
+
+  return { candidateIds, financeCoverageEndMax };
+}
+
 // The user's "My Ballot": one row per bookmarked race (most recent first), each
-// pointing at its latest saved snapshot so the UI can reopen it.
+// pointing at its latest snapshot and annotated with what's changed since.
 export async function listSavedBallot(clerkUserId: string): Promise<SavedBallotItem[]> {
   const db = await getDb();
   const districts = await db
@@ -81,12 +105,26 @@ export async function listSavedBallot(clerkUserId: string): Promise<SavedBallotI
         .sort({ created_at: -1 })
         .limit(1)
         .next();
+
+      let changes: string[] = [];
+      const savedFingerprint = latest?.freshness as BriefFingerprint | undefined;
+      if (savedFingerprint) {
+        try {
+          const current = await computeCurrentRaceFingerprint(d.race_key);
+          changes = diffFingerprints(savedFingerprint, current);
+        } catch {
+          // A diff failure must never break the list — just show no changes.
+          changes = [];
+        }
+      }
+
       return {
         raceKey: d.race_key,
         districtKey: d.district_key,
         label: d.label,
         briefId: latest?.brief_id ?? null,
         savedAt: latest?.created_at ?? d.updated_at,
+        changes,
       };
     }),
   );
