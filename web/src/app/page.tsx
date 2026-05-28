@@ -361,8 +361,9 @@ export default function HomePage() {
         const res = await fetch(`/api/saved/brief/${briefId}`);
         if (!res.ok) return;
         const { brief } = await res.json();
-        const mode: AppMode = "voter";
-        setOpenedBrief({ mode, state: brief.answer_snapshot as DistrictLensState });
+        const snapshot = brief.answer_snapshot as DistrictLensState;
+        const mode: AppMode = snapshot.mode ?? "voter";
+        setOpenedBrief({ mode, state: snapshot });
         setAgentState((prev) => ({ ...DEFAULT_STATE, ...prev, mode }));
       } catch {
         /* ignore — reopening is best-effort */
@@ -370,6 +371,17 @@ export default function HomePage() {
     },
     [setAgentState]
   );
+
+  // Restore the latest saved brief for the active thread whenever the thread changes.
+  // Keyed to thread_id only so saves within the same thread don't trigger a re-open.
+  // When no thread is active this effect is a no-op (voter mode brief is unaffected).
+  useEffect(() => {
+    if (!activeThread || activeThread.briefs.length === 0) return;
+    openSavedBrief(activeThread.briefs[0].brief_id);
+    // openSavedBrief identity changes when setAgentState changes — intentionally omitted
+    // from deps to avoid re-firing on every render; thread_id is the real trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeThread?.thread.thread_id]);
 
   function handleSuggestionClick(s: string) {
     setAddress(s);
