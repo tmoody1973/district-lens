@@ -15,12 +15,20 @@ export interface BriefFingerprint {
   newsLatestDate: string | null;
 }
 
-// Latest non-null ISO date string in a list, or null. ISO YYYY-MM-DD sorts
-// lexicographically, so a string max is also the chronological max.
+// Parse a date string to a comparable timestamp. Real FEC dates are MM/DD/YYYY,
+// not ISO, so a lexicographic string compare is wrong — parse to time instead.
+// Unparseable/missing dates sort to the bottom.
+export function toTime(d: string | null): number {
+  if (!d) return -Infinity;
+  const t = Date.parse(d);
+  return Number.isNaN(t) ? -Infinity : t;
+}
+
+// Chronologically latest non-null date string in a list, or null.
 function latestDate(dates: Array<string | null>): string | null {
   const present = dates.filter((d): d is string => !!d);
   if (present.length === 0) return null;
-  return present.reduce((max, d) => (d > max ? d : max));
+  return present.reduce((max, d) => (toTime(d) > toTime(max) ? d : max));
 }
 
 export function computeFingerprint(state: DistrictLensState): BriefFingerprint {

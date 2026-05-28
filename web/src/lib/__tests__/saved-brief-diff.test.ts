@@ -63,3 +63,25 @@ test("equal or older fundraising coverage is not reported", () => {
     diffFingerprints(saved(), { candidateIds: ["c1", "c2"], financeCoverageEndMax: "2026-01-01" }),
   ).toEqual([]);
 });
+
+// Real FEC dates are MM/DD/YYYY. These guard the string-vs-chronological bug
+// that a lexicographic compare gets backwards.
+test("newer MM/DD/YYYY fundraising coverage is reported", () => {
+  const s = saved({ financeCoverageEndMax: "01/15/2026" });
+  const changes = diffFingerprints(s, { candidateIds: ["c1", "c2"], financeCoverageEndMax: "05/21/2026" });
+  expect(changes).toContain("Fundraising updated through 05/21/2026");
+});
+
+test("MM/DD/YYYY across the lexicographic trap: 05/2026 newer than 12/2025", () => {
+  // Lexicographically "05/21/2026" < "12/01/2025", but chronologically it's newer.
+  const s = saved({ financeCoverageEndMax: "12/01/2025" });
+  const changes = diffFingerprints(s, { candidateIds: ["c1", "c2"], financeCoverageEndMax: "05/21/2026" });
+  expect(changes).toContain("Fundraising updated through 05/21/2026");
+});
+
+test("older MM/DD/YYYY coverage is not reported", () => {
+  const s = saved({ financeCoverageEndMax: "05/21/2026" });
+  expect(
+    diffFingerprints(s, { candidateIds: ["c1", "c2"], financeCoverageEndMax: "01/15/2026" }),
+  ).toEqual([]);
+});
