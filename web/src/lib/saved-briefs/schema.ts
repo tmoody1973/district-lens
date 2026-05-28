@@ -47,6 +47,8 @@ export interface SavedBriefDoc {
   freshness: BriefFingerprint;
   created_at: string;
   updated_at: string;
+  // Set when the brief belongs to a journalist research thread (Phase J).
+  thread_id?: string;
 }
 
 export interface SavedDistrictDoc {
