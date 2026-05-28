@@ -67,25 +67,40 @@ function ThreadDetail({
         className="mb-2 w-full resize-none rounded-[2px] border-2 border-slate-200 px-2 py-1 text-[11px] text-slate-700 focus:border-slate-900 focus:outline-none"
       />
       <p className="mb-1 text-[9px] font-bold uppercase tracking-widest text-slate-400">
-        Briefs ({briefs.length})
+        Artifacts ({briefs.length})
       </p>
       {briefs.length === 0 ? (
-        <p className="text-[10px] text-slate-400">Drill into a race and Save to file it here.</p>
+        <p className="text-[10px] text-slate-400">Briefs auto-captured here when a race completes.</p>
       ) : (
         <ul className="space-y-1">
-          {briefs.map((b) => (
-            <li key={b.brief_id}>
-              <button
-                onClick={() => onReopenBrief(b.brief_id)}
-                className="block w-full rounded-[2px] border border-slate-200 bg-white px-2 py-1 text-left text-[11px] text-slate-800 hover:border-slate-400"
-              >
-                {b.race_key}
-                <span className="block text-[9px] text-slate-400">
-                  {new Date(b.created_at).toLocaleDateString()}
-                </span>
-              </button>
-            </li>
-          ))}
+          {briefs.map((b) => {
+            const mode = b.answer_snapshot?.mode ?? "voter";
+            return (
+              <li key={b.brief_id}>
+                <button
+                  onClick={() => onReopenBrief(b.brief_id)}
+                  className="block w-full rounded-[2px] border border-slate-200 bg-white px-2 py-1 text-left text-[11px] text-slate-800 hover:border-slate-400"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      className={[
+                        "shrink-0 rounded-[2px] px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide",
+                        mode === "journalist"
+                          ? "bg-slate-900 text-white"
+                          : "bg-slate-100 text-slate-600",
+                      ].join(" ")}
+                    >
+                      {mode === "journalist" ? "press" : "voter"}
+                    </span>
+                    <span className="truncate">{b.race_key}</span>
+                  </span>
+                  <span className="block text-[9px] text-slate-400 mt-0.5">
+                    {new Date(b.updated_at ?? b.created_at).toLocaleDateString()}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
       {messages.length > 0 && (

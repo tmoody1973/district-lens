@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useCopilotReadable, useCoAgent, useCopilotChat, useCopilotMessagesContext } from "@copilotkit/react-core";
+import { useCopilotReadable, useCoAgent, useCopilotChat, useCopilotMessagesContext, useThreads } from "@copilotkit/react-core";
 import { useAgent, useCopilotKit } from "@copilotkit/react-core/v2";
 import { CopilotChat } from "@copilotkit/react-ui";
 import "@copilotkit/react-ui/styles.css";
@@ -83,7 +83,13 @@ export default function HomePage() {
   });
   const { visibleMessages } = useCopilotChat();
   const { setMessages } = useCopilotMessagesContext();
+  const { setThreadId } = useThreads();
   const lastSavedTranscriptRef = useRef<string>("");
+  // Tracks the raceKey:threadId pair already auto-saved this run so we don't
+  // double-capture the same brief if stage stays "complete" across renders.
+  const autoSavedRef = useRef<string | null>(null);
+  // Tracks the last requested threadId so stale async fetches don't clobber.
+  const openThreadIdRef = useRef<string | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -240,15 +246,63 @@ export default function HomePage() {
   useEffect(() => { loadThreads(); }, [loadThreads]);
 
   const openThread = useCallback(async (threadId: string) => {
+    openThreadIdRef.current = threadId;
     try {
       const res = await fetch(`/api/threads/${threadId}`);
       if (!res.ok) return;
+      // Stale-write guard: bail if user switched to a different thread while
+      // this fetch was in flight.
+      if (openThreadIdRef.current !== threadId) return;
       const data = await res.json();
       setActiveThread({ thread: data.thread, briefs: data.briefs ?? [] });
+      setThreadId(threadId);
+      // Restore chat synchronously from the already-loaded thread doc — no
+      // second round-trip needed.
+      setMessages(data.thread?.messages ?? []);
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [setThreadId, setMessages]);
+
+  // Auto-capture: when a brief completes and a thread is open, silently file
+  // it as an artifact. Dedup via autoSavedRef prevents re-saving the same
+  // raceKey+threadId pair if stage stays "complete" across renders.
+  useEffect(() => {
+    if (agentState.stage !== "complete") return;
+    if (!agentState.currentRaceKey || !activeThread) return;
+    const threadId = activeThread.thread.thread_id;
+    const dedupKey = `${agentState.currentRaceKey}:${threadId}`;
+    if (autoSavedRef.current === dedupKey) return;
+    autoSavedRef.current = dedupKey;
+    const state = agentState;
+    fetch("/api/saved/brief", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ state, threadId }),
+    })
+      .then(async (res) => {
+        if (!res.ok) return;
+        loadBallot();
+        loadThreads();
+        // Refresh the active thread's briefs list without disturbing the live chat.
+        // Calling openThread here would also reset messages, clobbering the conversation.
+        try {
+          const refresh = await fetch(`/api/threads/${threadId}`);
+          if (refresh.ok) {
+            const { briefs } = await refresh.json();
+            setActiveThread((prev) =>
+              prev && prev.thread.thread_id === threadId
+                ? { ...prev, briefs: briefs ?? [] }
+                : prev,
+            );
+          }
+        } catch { /* ignore */ }
+      })
+      .catch(() => {});
+    // agentState used in body but only stage/raceKey are reactive triggers;
+    // dedup key prevents stale captures.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentState.stage, agentState.currentRaceKey, activeThread?.thread.thread_id, loadBallot, loadThreads]);
 
   const createThread = useCallback(async () => {
     try {
@@ -382,6 +436,7 @@ export default function HomePage() {
     setAgentState(DEFAULT_STATE);
     setBriefSnapshot(null);
     setLastBriefMode(null);
+    autoSavedRef.current = null; // reset dedup so new thread can auto-capture
     if (activeThread && activeThread.briefs.length > 0) {
       openSavedBrief(activeThread.briefs[0].brief_id);
     }
@@ -504,7 +559,7 @@ export default function HomePage() {
                 active={activeThread}
                 onNew={createThread}
                 onOpen={openThread}
-                onClose={() => setActiveThread(null)}
+                onClose={() => { setActiveThread(null); setThreadId("voter-global"); }}
                 onRename={renameThread}
                 onSaveNotes={saveThreadNotes}
                 onDelete={deleteThread}
