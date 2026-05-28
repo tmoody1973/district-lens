@@ -83,9 +83,10 @@ export async function updateThread(
   patch: UpdateThreadRequest,
 ): Promise<boolean> {
   const db = await getDb();
-  const set: Record<string, string> = { updated_at: new Date().toISOString() };
+  const set: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (patch.title !== undefined) set.title = patch.title;
   if (patch.notes !== undefined) set.notes = patch.notes;
+  if (patch.messages !== undefined) set.messages = patch.messages;
 
   const res = await db
     .collection<AgentThreadDoc>("agent_threads")
