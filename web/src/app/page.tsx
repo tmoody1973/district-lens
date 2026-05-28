@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useCopilotReadable, useCoAgent, useCopilotChat } from "@copilotkit/react-core";
+import { useCopilotReadable, useCoAgent, useCopilotChat, useCopilotMessagesContext } from "@copilotkit/react-core";
 import { useAgent, useCopilotKit } from "@copilotkit/react-core/v2";
 import { CopilotChat } from "@copilotkit/react-ui";
 import "@copilotkit/react-ui/styles.css";
@@ -82,6 +82,7 @@ export default function HomePage() {
     initialState: DEFAULT_STATE,
   });
   const { visibleMessages } = useCopilotChat();
+  const { setMessages } = useCopilotMessagesContext();
   const lastSavedTranscriptRef = useRef<string>("");
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -376,10 +377,13 @@ export default function HomePage() {
   // Keyed to thread_id only so saves within the same thread don't trigger a re-open.
   // When no thread is active this effect is a no-op (voter mode brief is unaffected).
   useEffect(() => {
-    if (!activeThread || activeThread.briefs.length === 0) return;
-    openSavedBrief(activeThread.briefs[0].brief_id);
-    // openSavedBrief identity changes when setAgentState changes — intentionally omitted
-    // from deps to avoid re-firing on every render; thread_id is the real trigger.
+    // Clear chat and brief on every thread switch so prior thread's content never bleeds.
+    setMessages([]);
+    setOpenedBrief(null);
+    if (activeThread && activeThread.briefs.length > 0) {
+      openSavedBrief(activeThread.briefs[0].brief_id);
+    }
+    // openSavedBrief and setMessages identity intentionally omitted — thread_id is the trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeThread?.thread.thread_id]);
 
