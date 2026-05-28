@@ -1,4 +1,4 @@
-import type { BriefFingerprint } from "@/lib/brief-fingerprint";
+import { toTime, type BriefFingerprint } from "@/lib/brief-fingerprint";
 
 // The subset of fingerprint signals we can cheaply recompute from stored data
 // (candidates + finance) to compare a saved brief against the race today.
@@ -25,9 +25,10 @@ export function diffFingerprints(
     changes.push(`${removed} candidate${removed > 1 ? "s" : ""} no longer listed`);
   }
 
+  // Real FEC dates are MM/DD/YYYY — compare parsed timestamps, not strings.
   if (
     current.financeCoverageEndMax &&
-    (!saved.financeCoverageEndMax || current.financeCoverageEndMax > saved.financeCoverageEndMax)
+    toTime(current.financeCoverageEndMax) > toTime(saved.financeCoverageEndMax)
   ) {
     changes.push(`Fundraising updated through ${current.financeCoverageEndMax}`);
   }

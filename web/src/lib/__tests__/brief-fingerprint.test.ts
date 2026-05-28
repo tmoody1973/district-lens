@@ -64,6 +64,15 @@ test("finance coverage uses the latest coverage-end date and ignores nulls", () 
   expect(computeFingerprint(state).financeCoverageEndMax).toBe("2026-06-30");
 });
 
+test("finance coverage picks chronological latest for real MM/DD/YYYY dates", () => {
+  // "05/21/2026" sorts BEFORE "12/01/2025" lexicographically but is later in time.
+  const state: DistrictLensState = {
+    ...DEFAULT_STATE,
+    finance: [finance("c1", "12/01/2025"), finance("c2", "05/21/2026")],
+  };
+  expect(computeFingerprint(state).financeCoverageEndMax).toBe("05/21/2026");
+});
+
 test("voting and count signals are captured from state", () => {
   const state: DistrictLensState = {
     ...DEFAULT_STATE,
