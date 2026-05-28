@@ -381,6 +381,15 @@ export default function HomePage() {
                         <span className="block text-[9px] text-slate-400">
                           saved {new Date(item.savedAt).toLocaleDateString()}
                         </span>
+                        {item.changes.length > 0 && (
+                          <span className="mt-1 block border-t border-amber-200 pt-1">
+                            {item.changes.map((c) => (
+                              <span key={c} className="block text-[9px] font-medium text-amber-700">
+                                ● {c}
+                              </span>
+                            ))}
+                          </span>
+                        )}
                       </button>
                     </li>
                   ))}

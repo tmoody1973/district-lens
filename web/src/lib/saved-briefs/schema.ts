@@ -67,6 +67,8 @@ export interface SavedBallotItem {
   label: string;
   briefId: string | null;
   savedAt: string;
+  // "What changed since you saved this" — empty when nothing moved.
+  changes: string[];
 }
 
 const OFFICE_NAMES: Record<string, string> = { H: "U.S. House", S: "U.S. Senate", G: "Governor" };
