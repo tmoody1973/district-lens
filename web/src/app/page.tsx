@@ -260,11 +260,13 @@ export default function HomePage() {
       if (!res.ok) return;
       const data = await res.json();
       await loadThreads();
-      setActiveThread({ thread: data.thread, briefs: [] });
+      // Open via the GET path so the active thread has the same clean shape as
+      // every other opened thread (projected, defaults applied).
+      if (data.thread?.thread_id) await openThread(data.thread.thread_id);
     } catch {
       /* ignore */
     }
-  }, [agentState.currentRaceKey, loadThreads]);
+  }, [agentState.currentRaceKey, loadThreads, openThread]);
 
   const renameThread = useCallback(async (threadId: string, title: string) => {
     await fetch(`/api/threads/${threadId}`, {
@@ -304,7 +306,7 @@ export default function HomePage() {
   const activeThreadId = activeThread?.thread.thread_id ?? null;
   useEffect(() => {
     if (!activeThreadId) return;
-    const transcript = visibleMessages.flatMap((m) => {
+    const transcript = (visibleMessages ?? []).flatMap((m) => {
       const role = (m as { role?: unknown }).role;
       const content = (m as { content?: unknown }).content;
       return typeof content === "string" && (role === "user" || role === "assistant")
