@@ -35,7 +35,11 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { briefId } = await createSavedBrief(userId, parsed.data.state as unknown as DistrictLensState);
+    const { briefId } = await createSavedBrief(
+      userId,
+      parsed.data.state as unknown as DistrictLensState,
+      parsed.data.threadId,
+    );
     return NextResponse.json({ success: true, briefId }, { status: 201 });
   } catch (err) {
     console.error("POST /api/saved/brief failed:", err);
