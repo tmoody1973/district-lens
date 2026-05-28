@@ -3,7 +3,12 @@ import { randomUUID } from "crypto";
 import { getDb } from "@/lib/mongodb";
 import type { DistrictLensState } from "@/types/agent-state";
 
-import { buildSavedDocs, type SavedBriefDoc, type SavedDistrictDoc } from "./schema";
+import {
+  buildSavedDocs,
+  type SavedBallotItem,
+  type SavedBriefDoc,
+  type SavedDistrictDoc,
+} from "./schema";
 
 let indexesEnsured = false;
 
@@ -56,4 +61,45 @@ export async function createSavedBrief(
   );
 
   return { briefId: savedBrief.brief_id };
+}
+
+// The user's "My Ballot": one row per bookmarked race (most recent first), each
+// pointing at its latest saved snapshot so the UI can reopen it.
+export async function listSavedBallot(clerkUserId: string): Promise<SavedBallotItem[]> {
+  const db = await getDb();
+  const districts = await db
+    .collection<SavedDistrictDoc>("saved_districts")
+    .find({ clerk_user_id: clerkUserId })
+    .sort({ updated_at: -1 })
+    .toArray();
+
+  return Promise.all(
+    districts.map(async (d): Promise<SavedBallotItem> => {
+      const latest = await db
+        .collection<SavedBriefDoc>("saved_briefs")
+        .find({ clerk_user_id: clerkUserId, race_key: d.race_key })
+        .sort({ created_at: -1 })
+        .limit(1)
+        .next();
+      return {
+        raceKey: d.race_key,
+        districtKey: d.district_key,
+        label: d.label,
+        briefId: latest?.brief_id ?? null,
+        savedAt: latest?.created_at ?? d.updated_at,
+      };
+    }),
+  );
+}
+
+// A single saved snapshot, scoped to its owner so one user can never read
+// another's saved brief.
+export async function getSavedBrief(
+  clerkUserId: string,
+  briefId: string,
+): Promise<SavedBriefDoc | null> {
+  const db = await getDb();
+  return db
+    .collection<SavedBriefDoc>("saved_briefs")
+    .findOne({ clerk_user_id: clerkUserId, brief_id: briefId }, { projection: { _id: 0 } });
 }

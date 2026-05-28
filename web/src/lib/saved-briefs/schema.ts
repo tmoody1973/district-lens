@@ -59,6 +59,16 @@ export interface SavedDistrictDoc {
   updated_at: string;
 }
 
+// One row in the "My Ballot" list: a bookmarked race plus a pointer to its most
+// recent saved snapshot (for reopening).
+export interface SavedBallotItem {
+  raceKey: string;
+  districtKey: string;
+  label: string;
+  briefId: string | null;
+  savedAt: string;
+}
+
 const OFFICE_NAMES: Record<string, string> = { H: "U.S. House", S: "U.S. Senate", G: "Governor" };
 
 // "2026-H-WI-04" -> "WI-04"; "2026-S-WI" -> "WI". The district key is the

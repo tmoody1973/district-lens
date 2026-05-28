@@ -14,6 +14,7 @@ import { ReceiptProgress } from "@/components/canvas/ReceiptProgress";
 import { AgentToolTrace } from "@/components/canvas/AgentToolTrace";
 import { annotateSteps, stepsFromStage } from "@/lib/steps";
 import { pickDisplayedBrief, type DisplayedBrief } from "@/lib/brief-display";
+import type { SavedBallotItem } from "@/lib/saved-briefs/schema";
 import { DEFAULT_STATE, type DistrictLensState, type AppMode } from "@/types/agent-state";
 
 const SYSTEM_PROMPT = `You are DistrictLens, a nonpartisan election-accountability assistant for the 2026 U.S. midterm cycle.
@@ -60,6 +61,10 @@ export default function HomePage() {
   // CopilotKit coagent state so a completed brief is never lost to a hiccup,
   // and is the serializable shape a future "Save brief" button persists.
   const [briefSnapshot, setBriefSnapshot] = useState<DisplayedBrief | null>(null);
+  // "My Ballot" — the signed-in user's saved races, and a brief reopened from it.
+  // An opened saved brief takes display priority over the live/snapshot brief.
+  const [savedItems, setSavedItems] = useState<SavedBallotItem[]>([]);
+  const [openedBrief, setOpenedBrief] = useState<DisplayedBrief | null>(null);
 
   const { agent } = useAgent({ agentId: "districtlens_root" });
   const { copilotkit } = useCopilotKit();
@@ -124,6 +129,7 @@ export default function HomePage() {
     setSuggestions([]);
     setShowSuggestions(false);
     setLastBriefMode("voter");
+    setOpenedBrief(null);
     try {
       agent.addMessage({
         id: crypto.randomUUID(),
@@ -140,6 +146,7 @@ export default function HomePage() {
 
   const handleStateClick = useCallback((stateCode: string) => {
     if (agent.isRunning) return;
+    setOpenedBrief(null);
     agent.addMessage({
       id: crypto.randomUUID(),
       role: "user",
@@ -152,6 +159,7 @@ export default function HomePage() {
     (raceKey: string) => {
       if (agent.isRunning) return;
       setLastBriefMode("journalist");
+      setOpenedBrief(null);
       agent.addMessage({
         id: crypto.randomUUID(),
         role: "user",
@@ -191,6 +199,21 @@ export default function HomePage() {
     setSaveStatus("idle");
   }, [agentState.currentRaceKey]);
 
+  // Load the user's saved ballot. 401 (signed out) just leaves the list empty —
+  // reads never block on auth.
+  const loadBallot = useCallback(async () => {
+    try {
+      const res = await fetch("/api/saved");
+      if (!res.ok) { setSavedItems([]); return; }
+      const data = await res.json();
+      setSavedItems(data.items ?? []);
+    } catch {
+      setSavedItems([]);
+    }
+  }, []);
+
+  useEffect(() => { loadBallot(); }, [loadBallot]);
+
   const saveBrief = useCallback(async (state: DistrictLensState) => {
     setSaveStatus("saving");
     try {
@@ -200,10 +223,29 @@ export default function HomePage() {
         body: JSON.stringify({ state }),
       });
       setSaveStatus(res.ok ? "saved" : "error");
+      if (res.ok) loadBallot();
     } catch {
       setSaveStatus("error");
     }
-  }, []);
+  }, [loadBallot]);
+
+  // Reopen a saved snapshot: fetch it, show it (openedBrief wins over live), and
+  // switch to the tab that loaded it so the canvas renders it.
+  const openSavedBrief = useCallback(
+    async (briefId: string) => {
+      try {
+        const res = await fetch(`/api/saved/brief/${briefId}`);
+        if (!res.ok) return;
+        const { brief } = await res.json();
+        const mode: AppMode = "voter";
+        setOpenedBrief({ mode, state: brief.answer_snapshot as DistrictLensState });
+        setAgentState((prev) => ({ ...DEFAULT_STATE, ...prev, mode }));
+      } catch {
+        /* ignore — reopening is best-effort */
+      }
+    },
+    [setAgentState]
+  );
 
   function handleSuggestionClick(s: string) {
     setAddress(s);
@@ -214,8 +256,9 @@ export default function HomePage() {
   const isJournalist = agentState.mode === "journalist";
   const steps = annotateSteps(stepsFromStage(agentState.stage), agentState);
   const isComplete = agentState.stage === "complete";
-  // Prefer the live brief; fall back to the snapshot if agentState was cleared.
-  const displayed = pickDisplayedBrief(agentState, briefSnapshot, lastBriefMode);
+  // A reopened saved brief wins; otherwise prefer the live brief and fall back
+  // to the snapshot if agentState was cleared.
+  const displayed = openedBrief ?? pickDisplayedBrief(agentState, briefSnapshot, lastBriefMode);
   // A loaded brief shows only in the tab that loaded it; otherwise each tab
   // shows its own home (voter → address entry, journalist → map).
   const showVoterBrief = !isJournalist && displayed?.mode === "voter";
@@ -311,6 +354,40 @@ export default function HomePage() {
               </button>
             ))}
           </div>
+
+          {/* My Ballot — saved briefs, signed-in only */}
+          <Show when="signed-in">
+            {savedItems.length > 0 && (
+              <div className="p-3 border-b border-slate-200">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+                  My Ballot
+                </p>
+                <ul className="space-y-1">
+                  {savedItems.map((item) => (
+                    <li key={item.raceKey}>
+                      <button
+                        onClick={() => item.briefId && openSavedBrief(item.briefId)}
+                        disabled={!item.briefId}
+                        className={[
+                          "block w-full text-left rounded-[2px] border px-2 py-1.5 transition-colors",
+                          openedBrief?.state.currentRaceKey === item.raceKey
+                            ? "border-slate-900 bg-slate-100"
+                            : "border-slate-200 bg-white hover:border-slate-400",
+                        ].join(" ")}
+                      >
+                        <span className="block text-xs font-semibold text-slate-900 truncate">
+                          {item.label}
+                        </span>
+                        <span className="block text-[9px] text-slate-400">
+                          saved {new Date(item.savedAt).toLocaleDateString()}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </Show>
 
           {/* Brief progress */}
           <div className="p-3 flex-1 overflow-y-auto">
