@@ -373,17 +373,18 @@ export default function HomePage() {
     [setAgentState]
   );
 
-  // Restore the latest saved brief for the active thread whenever the thread changes.
-  // Keyed to thread_id only so saves within the same thread don't trigger a re-open.
-  // When no thread is active this effect is a no-op (voter mode brief is unaffected).
+  // On thread switch: wipe ALL state that feeds the center canvas and chat, then
+  // restore the new thread's brief if it has one. Three things feed the canvas:
+  // openedBrief, agentState.currentRaceKey, and briefSnapshot — all must reset.
   useEffect(() => {
-    // Clear chat and brief on every thread switch so prior thread's content never bleeds.
     setMessages([]);
     setOpenedBrief(null);
+    setAgentState(DEFAULT_STATE);
+    setBriefSnapshot(null);
+    setLastBriefMode(null);
     if (activeThread && activeThread.briefs.length > 0) {
       openSavedBrief(activeThread.briefs[0].brief_id);
     }
-    // openSavedBrief and setMessages identity intentionally omitted — thread_id is the trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeThread?.thread.thread_id]);
 
