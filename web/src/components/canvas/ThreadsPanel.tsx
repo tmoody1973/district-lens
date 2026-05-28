@@ -173,6 +173,7 @@ export function ThreadsPanel({
                 </button>
                 {isActive && active && (
                   <ThreadDetail
+                    key={active.thread.thread_id}
                     thread={active.thread}
                     briefs={active.briefs}
                     onRename={onRename}
