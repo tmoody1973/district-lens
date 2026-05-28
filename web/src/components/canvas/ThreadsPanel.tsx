@@ -34,12 +34,14 @@ function ThreadDetail({
   onReopenBrief: (briefId: string) => void;
 }) {
   const [titleDraft, setTitleDraft] = useState(thread.title);
-  const [notesDraft, setNotesDraft] = useState(thread.notes);
+  const [notesDraft, setNotesDraft] = useState(thread.notes ?? "");
+  // Threads created before these fields existed won't have them — default safely.
+  const messages = thread.messages ?? [];
 
   // Re-sync drafts when the selected thread (or its persisted values) changes.
   useEffect(() => {
     setTitleDraft(thread.title);
-    setNotesDraft(thread.notes);
+    setNotesDraft(thread.notes ?? "");
   }, [thread.thread_id, thread.title, thread.notes]);
 
   return (
@@ -86,13 +88,13 @@ function ThreadDetail({
           ))}
         </ul>
       )}
-      {thread.messages.length > 0 && (
+      {messages.length > 0 && (
         <div className="mt-2">
           <p className="mb-1 text-[9px] font-bold uppercase tracking-widest text-slate-400">
             Conversation
           </p>
           <div className="max-h-48 space-y-1 overflow-y-auto rounded-[2px] border border-slate-200 bg-white p-1.5">
-            {thread.messages.map((m, i) => (
+            {messages.map((m, i) => (
               <div key={i} className={m.role === "user" ? "text-right" : "text-left"}>
                 <span
                   className={[
