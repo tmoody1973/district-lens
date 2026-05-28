@@ -184,6 +184,27 @@ export default function HomePage() {
     navigator.clipboard.writeText(text).catch(() => {});
   }, [agentState]);
 
+  // Save-to-ballot status, reset whenever the displayed race changes so a prior
+  // "Saved ✓" never lingers on a different brief.
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  useEffect(() => {
+    setSaveStatus("idle");
+  }, [agentState.currentRaceKey]);
+
+  const saveBrief = useCallback(async (state: DistrictLensState) => {
+    setSaveStatus("saving");
+    try {
+      const res = await fetch("/api/saved/brief", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ state }),
+      });
+      setSaveStatus(res.ok ? "saved" : "error");
+    } catch {
+      setSaveStatus("error");
+    }
+  }, []);
+
   function handleSuggestionClick(s: string) {
     setAddress(s);
     setSuggestions([]);
@@ -331,6 +352,32 @@ export default function HomePage() {
                 >
                   Share brief
                 </button>
+              )}
+              {isComplete && (
+                <Show
+                  when="signed-in"
+                  fallback={
+                    <SignInButton mode="modal">
+                      <button className="w-full rounded-[2px] border-2 border-slate-900 bg-white px-2 py-1.5 text-[10px] font-semibold text-slate-900 transition-colors hover:bg-slate-100">
+                        Sign in to save
+                      </button>
+                    </SignInButton>
+                  }
+                >
+                  <button
+                    onClick={() => saveBrief(displayed?.state ?? agentState)}
+                    disabled={saveStatus === "saving" || saveStatus === "saved"}
+                    className="w-full rounded-[2px] border-2 border-slate-900 bg-white px-2 py-1.5 text-[10px] font-semibold text-slate-900 transition-colors hover:bg-slate-100 disabled:opacity-60"
+                  >
+                    {saveStatus === "saving"
+                      ? "Saving…"
+                      : saveStatus === "saved"
+                        ? "Saved to ballot ✓"
+                        : saveStatus === "error"
+                          ? "Save failed — retry"
+                          : "Save to my ballot"}
+                  </button>
+                </Show>
               )}
             </div>
           )}
