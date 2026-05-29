@@ -433,7 +433,9 @@ export default function HomePage() {
   useEffect(() => {
     setMessages([]);
     setOpenedBrief(null);
-    setAgentState(DEFAULT_STATE);
+    // Reset content but preserve the current lens (mode) — switching threads
+    // must not yank a journalist back to the voter canvas.
+    setAgentState((prev) => ({ ...DEFAULT_STATE, mode: prev?.mode ?? DEFAULT_STATE.mode }));
     setBriefSnapshot(null);
     setLastBriefMode(null);
     autoSavedRef.current = null; // reset dedup so new thread can auto-capture
