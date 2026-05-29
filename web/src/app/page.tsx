@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useCopilotReadable, useCoAgent, useCopilotChat, useCopilotMessagesContext, useThreads } from "@copilotkit/react-core";
+import { useCopilotReadable, useCoAgent, useCopilotChat, useCopilotMessagesContext } from "@copilotkit/react-core";
 import { useAgent, useCopilotKit } from "@copilotkit/react-core/v2";
 import { CopilotChat } from "@copilotkit/react-ui";
 import "@copilotkit/react-ui/styles.css";
@@ -83,7 +83,6 @@ export default function HomePage() {
   });
   const { visibleMessages } = useCopilotChat();
   const { setMessages } = useCopilotMessagesContext();
-  const { setThreadId } = useThreads();
   const lastSavedTranscriptRef = useRef<string>("");
   // Tracks the raceKey:threadId pair already auto-saved this run so we don't
   // double-capture the same brief if stage stays "complete" across renders.
@@ -255,14 +254,17 @@ export default function HomePage() {
       if (openThreadIdRef.current !== threadId) return;
       const data = await res.json();
       setActiveThread({ thread: data.thread, briefs: data.briefs ?? [] });
-      setThreadId(threadId);
       // Restore chat synchronously from the already-loaded thread doc — no
-      // second round-trip needed.
+      // second round-trip needed. We do NOT call setThreadId(): switching
+      // CopilotKit's thread flips it into explicit-threadId mode, which makes
+      // it reconnect the agent and reset coagent state (mode → voter) on every
+      // thread open. ADK is stateless and we own message history here, so the
+      // runtime threadId is not load-bearing.
       setMessages(data.thread?.messages ?? []);
     } catch {
       /* ignore */
     }
-  }, [setThreadId, setMessages]);
+  }, [setMessages]);
 
   // Auto-capture: when a brief completes and a thread is open, silently file
   // it as an artifact. Dedup via autoSavedRef prevents re-saving the same
@@ -561,7 +563,7 @@ export default function HomePage() {
                 active={activeThread}
                 onNew={createThread}
                 onOpen={openThread}
-                onClose={() => { setActiveThread(null); setThreadId("voter-global"); }}
+                onClose={() => setActiveThread(null)}
                 onRename={renameThread}
                 onSaveNotes={saveThreadNotes}
                 onDelete={deleteThread}
