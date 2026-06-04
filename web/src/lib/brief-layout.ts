@@ -46,6 +46,19 @@ export function deriveSeatType(candidates: CandidateCard[]): SeatType {
   return candidates.some((c) => c.status === "incumbent") ? "incumbent" : "open";
 }
 
+// Build a {party: winnerName} map from cards NBC flagged as primary winners.
+// Lets the status banner reflect the same projected results the cards already show,
+// without claiming an official call. First winner per party wins ties.
+export function deriveProjectedWinners(candidates: CandidateCard[]): Record<string, string> {
+  const winners: Record<string, string> = {};
+  for (const c of candidates) {
+    if (!c.isPrimaryWinner) continue;
+    const party = c.party.toUpperCase();
+    if (!winners[party]) winners[party] = c.name;
+  }
+  return winners;
+}
+
 const PHASE_LABEL: Record<RacePhase, string> = {
   primary: "Primary · winner advances to November",
   called: "Nominee called · general",

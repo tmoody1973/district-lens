@@ -1,10 +1,33 @@
 import { test, expect } from "vitest";
-import { derivePhase, deriveSeatType, type RaceStatus } from "../brief-layout";
-import type { CandidateCard } from "@/types/agent-state";
+import { derivePhase, deriveProjectedWinners, deriveSeatType, type RaceStatus } from "../brief-layout";
+import type { CandidateCard, PartyCode } from "@/types/agent-state";
 
 const cand = (status: string): CandidateCard => ({
   candidateId: status, name: status, party: "DEM", status,
   photoUrl: "", photoSource: "placeholder", raceKey: "2026-H-WI-04",
+});
+
+const winnerCard = (party: PartyCode, name: string, isPrimaryWinner: boolean): CandidateCard => ({
+  candidateId: name, name, party, status: "open_seat",
+  photoUrl: "", photoSource: "placeholder", raceKey: "2026-H-IL-07", isPrimaryWinner,
+});
+
+test("deriveProjectedWinners returns empty for no candidates", () => {
+  expect(deriveProjectedWinners([])).toEqual({});
+});
+
+test("deriveProjectedWinners includes only primary winners", () => {
+  const cards = [winnerCard("DEM", "Koppie", true), winnerCard("DEM", "Ford", false)];
+  expect(deriveProjectedWinners(cards)).toEqual({ DEM: "Koppie" });
+});
+
+test("deriveProjectedWinners keys winners by uppercased party", () => {
+  expect(deriveProjectedWinners([winnerCard("dem", "Koppie", true)])).toEqual({ DEM: "Koppie" });
+});
+
+test("deriveProjectedWinners keeps the first winner per party", () => {
+  const cards = [winnerCard("DEM", "Koppie", true), winnerCard("DEM", "Runner-Up", true)];
+  expect(deriveProjectedWinners(cards)).toEqual({ DEM: "Koppie" });
 });
 
 const rs = (status: string): RaceStatus => ({

@@ -1,5 +1,6 @@
 "use client";
-import type { RaceStatus } from "@/lib/brief-layout";
+import { deriveProjectedWinners, type RaceStatus } from "@/lib/brief-layout";
+import type { CandidateCard } from "@/types/agent-state";
 
 const PARTY_DOT: Record<string, string> = {
   DEM: "bg-blue-600",
@@ -85,7 +86,13 @@ function Banner({
   );
 }
 
-export function NomineeStatusBanner({ status }: { status: RaceStatus | null }) {
+export function NomineeStatusBanner({
+  status,
+  candidates = [],
+}: {
+  status: RaceStatus | null;
+  candidates?: CandidateCard[];
+}) {
   if (!status) return null;
   const data = status;
 
@@ -93,6 +100,7 @@ export function NomineeStatusBanner({ status }: { status: RaceStatus | null }) {
   const hasWinners = Object.keys(data.winners ?? {}).length > 0;
   const isProjected = (data.flaggedReason ?? "").includes("projected");
   const viaNbc = data.confirmationBasis?.includes("nbc_decision_desk");
+  const cardWinners = deriveProjectedWinners(candidates);
 
   if (data.status === "confirmed") {
     return (
@@ -116,6 +124,15 @@ export function NomineeStatusBanner({ status }: { status: RaceStatus | null }) {
       <Banner tone="indigo" label="Projected · unofficial">
         <WinnerList winners={data.winners} />
         <SourceLine source="news projection — not an official call" date={date} citation={data.citation} />
+      </Banner>
+    );
+  }
+
+  if (data.status === "provisional" && Object.keys(cardWinners).length > 0) {
+    return (
+      <Banner tone="indigo" label="Projected · unofficial">
+        <WinnerList winners={cardWinners} />
+        <SourceLine source="NBC Decision Desk — not an official call" date={date} citation={data.citation} />
       </Banner>
     );
   }

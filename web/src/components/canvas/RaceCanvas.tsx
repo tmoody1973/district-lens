@@ -120,7 +120,7 @@ export function RaceCanvas({ state }: Props) {
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-5">
       <DecisionHeader facts={layout.header} />
-      <NomineeStatusBanner status={raceStatus} />
+      <NomineeStatusBanner status={raceStatus} candidates={state.candidates} />
       {isVoter && stateCode && <CanVoteStrip stateCode={stateCode} />}
       {layout.sections.map(renderSection)}
     </div>
