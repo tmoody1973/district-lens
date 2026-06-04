@@ -10,6 +10,7 @@ import { VotingRecordCard } from "./VotingRecordCard";
 import { NewsCard } from "./NewsCard";
 import { NewsAccordion } from "./NewsAccordion";
 import { IssueAccordion } from "./IssueAccordion";
+import { PositionsEmptyState } from "./PositionsEmptyState";
 import { CanVoteStrip } from "./CanVoteStrip";
 import { buildBriefLayout, type SectionPlan } from "@/lib/brief-layout";
 import { sortByEvidenceStrength } from "@/lib/evidence-strength";
@@ -64,20 +65,36 @@ export function RaceCanvas({ state }: Props) {
           </CollapsibleSection>
         );
       }
-      case "positions":
+      case "positions": {
+        // A candidate is "no-footprint" only when no position matches by id AND
+        // none by name — conservative so we never wrongly tell a voter a
+        // candidate has no positions when they do.
+        const idsWithPositions = new Set(
+          state.positions.map((card) => card.candidateId).filter(Boolean),
+        );
+        const namesWithPositions = new Set(state.positions.map((card) => card.candidateName));
+        const noFootprint = state.candidates.filter(
+          (candidate) =>
+            !idsWithPositions.has(candidate.candidateId) &&
+            !namesWithPositions.has(candidate.name),
+        );
         return (
           <CollapsibleSection key="positions" title="Issue positions · Perplexity" defaultOpen={plan.defaultOpen}>
-            {state.positions.length === 0 ? (
-              <p className="text-sm text-slate-500">No position evidence found in indexed sources.</p>
-            ) : (
+            {state.positions.length > 0 && (
               <div className="space-y-2">
                 {groupByIssue(state.positions).map(([issue, cards], index) => (
                   <IssueAccordion key={issue} issue={issue} cards={sortByEvidenceStrength(cards)} defaultOpen={index === 0} />
                 ))}
               </div>
             )}
+            {noFootprint.length > 0 ? (
+              <PositionsEmptyState candidates={noFootprint} hasOthers={state.positions.length > 0} />
+            ) : state.positions.length === 0 ? (
+              <p className="text-sm text-slate-500">No position evidence found in indexed sources.</p>
+            ) : null}
           </CollapsibleSection>
         );
+      }
       case "money":
         return (
           <CollapsibleSection key="money" title="Campaign finance · FEC" defaultOpen={plan.defaultOpen}>

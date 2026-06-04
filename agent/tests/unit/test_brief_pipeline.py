@@ -277,6 +277,7 @@ async def test_positions_cache_hit_flattens_to_cards(monkeypatch):
     assert len(positions) == 1
     card = positions[0]
     assert card["candidateName"] == "A"  # added from the cached doc
+    assert card["candidateId"] == "H1"  # stable key for the no-footprint UI (T5)
     assert card["issue"] == "housing"
     assert card["sources"][0]["sourceDocumentId"] == "d1"  # archived fields preserved
     assert handles.research_calls == []  # cache hit → no live research

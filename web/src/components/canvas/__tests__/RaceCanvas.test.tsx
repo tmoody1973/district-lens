@@ -24,12 +24,15 @@ test("renders the decision header for a resolved race", () => {
   expect(screen.getByText(/Competitiveness rating — not yet available/)).toBeInTheDocument();
 });
 
-test("shows the honest empty state when there are no positions", () => {
+test("shows a per-candidate honest empty state when a candidate has no positions", () => {
   vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
   render(<RaceCanvas state={state({
     candidates: [{ candidateId: "1", name: "Jane Doe", party: "DEM", status: "open_seat", photoUrl: "", photoSource: "placeholder", raceKey: "2026-H-WI-03" }],
   })} />);
-  expect(screen.getByText(/No position evidence found in indexed sources/i)).toBeInTheDocument();
+  // T5: the no-footprint candidate is acknowledged (by name), not silently dropped.
+  // (The name also appears in the candidate card above, hence getAllByText.)
+  expect(screen.getAllByText("Jane Doe").length).toBeGreaterThan(0);
+  expect(screen.getByText(/No public positions found in indexed sources yet/i)).toBeInTheDocument();
 });
 
 test("journalist mode renders campaign finance before issue positions", () => {

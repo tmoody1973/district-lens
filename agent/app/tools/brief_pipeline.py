@@ -278,7 +278,7 @@ class VoterBriefPipeline(BaseAgent):
         doc = await self._read_or_fill(candidate_id, card, race_key)
         if not doc:
             return []
-        return self._flatten_positions(doc)
+        return self._flatten_positions(doc, candidate_id)
 
     async def _read_or_fill(
         self, candidate_id: str, card: dict, race_key: str
@@ -326,11 +326,17 @@ class VoterBriefPipeline(BaseAgent):
         }
 
     @staticmethod
-    def _flatten_positions(doc: dict) -> list[dict]:
-        """Flatten a candidate_positions doc into per-issue EvidenceCard dicts."""
+    def _flatten_positions(doc: dict, candidate_id: str) -> list[dict]:
+        """Flatten a candidate_positions doc into per-issue EvidenceCard dicts.
+
+        Each card carries ``candidateId`` so the canvas can reliably tell which
+        candidates have positions and which are a no-footprint empty state, even
+        when display names differ in form.
+        """
         candidate_name = doc.get("candidate_name", "")
         return [
             {
+                "candidateId": candidate_id,
                 "candidateName": candidate_name,
                 "issue": position.get("issue", ""),
                 "answer": position.get("answer", ""),

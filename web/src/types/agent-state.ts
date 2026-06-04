@@ -82,6 +82,10 @@ export interface NewsItem {
 
 export interface EvidenceCard {
   candidateName: string;
+  // The owning candidate's stable id (Phase 1 T5) — lets the canvas tell which
+  // candidates have positions vs. a no-footprint empty state. Optional for
+  // backward-compat with cards that predate the field.
+  candidateId?: string;
   issue: string;
   answer: string;
   // How strong the evidence is: "direct_quote" | "reported" | "questionnaire" |
