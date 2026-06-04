@@ -28,12 +28,67 @@ def _make_ctx(user_text: str) -> SimpleNamespace:
     return SimpleNamespace(session=session, user_content=content)
 
 
-def _patch_fetchers(monkeypatch, *, positions_raises: bool = False) -> None:
+def _cached_doc() -> dict:
+    """A fresh candidate_positions cache doc (cache HIT), archived sources."""
+    return {
+        "candidate_id": "H1",
+        "candidate_name": "A",
+        "status": "found",
+        "positions": [
+            {
+                "issue": "housing",
+                "answer": "x",
+                "evidenceType": "direct_quote",
+                "sources": [
+                    {
+                        "url": "https://x",
+                        "archived": True,
+                        "archivedAt": "2026-01-01T00:00:00+00:00",
+                        "sourceDocumentId": "d1",
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def _research_doc() -> dict:
+    """A shallow research result (cache MISS lazy fill), reported source."""
+    return {
+        "candidate_id": "H1",
+        "candidate_name": "A",
+        "status": "found",
+        "positions": [
+            {
+                "issue": "economy",
+                "answer": "y",
+                "evidenceType": "reported",
+                "sources": [{"url": "https://news"}],
+            }
+        ],
+    }
+
+
+def _patch_fetchers(
+    monkeypatch,
+    *,
+    positions_raises: bool = False,
+    cache_miss: bool = False,
+    fill_sleep: float = 0.0,
+) -> SimpleNamespace:
     async def fake_resolve(address):
         return {"raceKey": "2026-H-WI-04", "stateCode": "WI"}
 
     async def fake_candidates(race_key):
-        return [{"candidateId": "H1", "name": "A", "raceKey": race_key}]
+        return [
+            {
+                "candidateId": "H1",
+                "name": "A",
+                "party": "DEM",
+                "status": "incumbent",
+                "raceKey": race_key,
+            }
+        ]
 
     async def fake_finance(race_key):
         return [{"candidateId": "H1", "name": "A"}]
@@ -41,16 +96,30 @@ def _patch_fetchers(monkeypatch, *, positions_raises: bool = False) -> None:
     async def fake_legislation(race_key):
         return [{"billId": "hr1", "title": "T", "memberName": "A"}]
 
-    async def fake_positions(candidates, state_code):
-        if positions_raises:
-            raise RuntimeError("perplexity timeout")
-        return [{"candidateName": "A", "issue": "housing", "answer": "x", "sources": []}]
-
     async def fake_voting_record(race_key):
         return {"raceKey": race_key, "incumbentName": "A", "votes": []}
 
     async def fake_mcp_count(collection, query):
         return 4
+
+    research_calls: list = []
+    upserts: list = []
+
+    async def fake_get_cached(candidate_id, **kwargs):
+        if positions_raises:
+            raise RuntimeError("mongo down")
+        return None if cache_miss else _cached_doc()
+
+    async def fake_research(candidate, *, tier):
+        research_calls.append((candidate, tier))
+        if positions_raises:
+            raise RuntimeError("research boom")
+        if fill_sleep:
+            await asyncio.sleep(fill_sleep)
+        return _research_doc()
+
+    async def fake_upsert(doc, **kwargs):
+        upserts.append(doc)
 
     monkeypatch.setattr(brief_pipeline, "resolve_race_from_address", fake_resolve)
     monkeypatch.setattr(brief_pipeline, "fetch_candidate_cards", fake_candidates)
@@ -58,7 +127,10 @@ def _patch_fetchers(monkeypatch, *, positions_raises: bool = False) -> None:
     monkeypatch.setattr(brief_pipeline, "fetch_legislation_records", fake_legislation)
     monkeypatch.setattr(brief_pipeline, "fetch_voting_record", fake_voting_record)
     monkeypatch.setattr(brief_pipeline, "mongodb_mcp_count", fake_mcp_count)
-    monkeypatch.setattr(brief_pipeline, "gather_candidate_positions", fake_positions)
+    monkeypatch.setattr(brief_pipeline, "get_cached_positions", fake_get_cached)
+    monkeypatch.setattr(brief_pipeline, "research_candidate_positions", fake_research)
+    monkeypatch.setattr(brief_pipeline, "upsert_positions", fake_upsert)
+    return SimpleNamespace(research_calls=research_calls, upserts=upserts)
 
 
 async def _collect_deltas(pipeline, ctx) -> list[dict]:
@@ -188,6 +260,77 @@ def test_pipeline_imports_voting_record_fetcher():
 
 
 # ---------------------------------------------------------------------------
+# T4 — cached positions wiring
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_positions_cache_hit_flattens_to_cards(monkeypatch):
+    handles = _patch_fetchers(monkeypatch)
+    pipeline = VoterBriefPipeline(name="voter_brief_pipeline")
+    ctx = _make_ctx("Build a complete voter brief for: 123 Oak St, Racine WI")
+
+    deltas = await _collect_deltas(pipeline, ctx)
+
+    positions = next(d for d in deltas if d.get("stage") == "complete")["positions"]
+    assert len(positions) == 1
+    card = positions[0]
+    assert card["candidateName"] == "A"  # added from the cached doc
+    assert card["issue"] == "housing"
+    assert card["sources"][0]["sourceDocumentId"] == "d1"  # archived fields preserved
+    assert handles.research_calls == []  # cache hit → no live research
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_positions_cache_miss_lazy_fills_and_writes_through(monkeypatch):
+    handles = _patch_fetchers(monkeypatch, cache_miss=True)
+    pipeline = VoterBriefPipeline(name="voter_brief_pipeline")
+    ctx = _make_ctx("Build a complete voter brief for: 123 Oak St, Racine WI")
+
+    deltas = await _collect_deltas(pipeline, ctx)
+
+    positions = next(d for d in deltas if d.get("stage") == "complete")["positions"]
+    assert positions[0]["issue"] == "economy"  # from the shallow research doc
+    # shallow tier on miss, and the result was written through to the cache
+    assert handles.research_calls[0][1] == "shallow"
+    assert len(handles.upserts) == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_positions_lazy_fill_maps_candidate_to_snake_case(monkeypatch):
+    handles = _patch_fetchers(monkeypatch, cache_miss=True)
+    pipeline = VoterBriefPipeline(name="voter_brief_pipeline")
+    ctx = _make_ctx("Build a complete voter brief for: 123 Oak St, Racine WI")
+
+    await _collect_deltas(pipeline, ctx)
+
+    candidate, _tier = handles.research_calls[0]
+    assert candidate["candidate_id"] == "H1"
+    assert candidate["race_key"] == "2026-H-WI-04"
+    assert candidate["incumbent_challenge_status"] == "incumbent"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_positions_lazy_fill_timeout_returns_empty_and_completes(monkeypatch):
+    # research sleeps longer than the (shrunk) lazy timeout → graceful empty.
+    handles = _patch_fetchers(monkeypatch, cache_miss=True, fill_sleep=0.2)
+    monkeypatch.setattr(brief_pipeline, "_LAZY_POSITIONS_TIMEOUT", 0.02)
+    pipeline = VoterBriefPipeline(name="voter_brief_pipeline")
+    ctx = _make_ctx("Build a complete voter brief for: 123 Oak St, Racine WI")
+
+    deltas = await _collect_deltas(pipeline, ctx)
+
+    complete = next(d for d in deltas if d.get("stage") == "complete")
+    assert complete["briefReady"] is True
+    assert complete["positions"] == []  # nothing yet; fills on next view
+    assert handles.upserts == []  # timed-out research is not written through
+
+
+# ---------------------------------------------------------------------------
 # T3 — source archival wired into the pipeline
 # ---------------------------------------------------------------------------
 
@@ -216,13 +359,31 @@ def _card(sources: list[dict]) -> dict:
 
 
 async def _complete_delta(monkeypatch, cards: list[dict], fetch):
-    """Run the brief with archival; return (complete_delta, all_deltas)."""
+    """Run the brief with archival; return (complete_delta, all_deltas).
+
+    Injects the given EvidenceCards through the cached-positions path (a cache
+    hit whose positions flatten back to ``cards``), so the archive step runs on
+    exactly those sources.
+    """
     _patch_fetchers(monkeypatch)
 
-    async def fake_positions(candidates, state_code):
-        return cards
+    async def fake_get_cached(candidate_id, **kwargs):
+        return {
+            "candidate_id": candidate_id,
+            "candidate_name": cards[0].get("candidateName", "") if cards else "",
+            "status": "found",
+            "positions": [
+                {
+                    "issue": c.get("issue", ""),
+                    "answer": c.get("answer", ""),
+                    "evidenceType": c.get("evidenceType", "reported"),
+                    "sources": c.get("sources", []),
+                }
+                for c in cards
+            ],
+        }
 
-    monkeypatch.setattr(brief_pipeline, "gather_candidate_positions", fake_positions)
+    monkeypatch.setattr(brief_pipeline, "get_cached_positions", fake_get_cached)
     monkeypatch.setattr(brief_pipeline, "fetch_and_store_source", fetch)
 
     pipeline = VoterBriefPipeline(name="voter_brief_pipeline")
@@ -333,6 +494,27 @@ async def test_archive_fetch_raising_does_not_abort_brief(monkeypatch):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_already_archived_source_is_not_refetched(monkeypatch):
+    """A cached source carrying sourceDocumentId is skipped by the archive step."""
+    calls: list[str] = []
+
+    async def fetch(url):
+        calls.append(url)
+        return _ref("doc2")
+
+    archived_src = {
+        "url": "https://a.gov/p",
+        "archived": True,
+        "archivedAt": "2026-01-01T00:00:00+00:00",
+        "sourceDocumentId": "d1",
+    }
+    complete, _ = await _complete_delta(monkeypatch, [_card([archived_src])], fetch)
+    assert calls == []  # already archived → no redundant re-fetch
+    assert complete["positions"][0]["sources"][0]["sourceDocumentId"] == "d1"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_enrich_does_not_mutate_input_sources(monkeypatch):
     original = _src("https://a.gov/p")
 
@@ -351,10 +533,15 @@ async def test_empty_positions_archiving_is_noop(monkeypatch):
 
     _patch_fetchers(monkeypatch)
 
-    async def no_positions(candidates, state_code):
-        return []
+    async def empty_cached(candidate_id, **kwargs):
+        return {
+            "candidate_id": candidate_id,
+            "candidate_name": "A",
+            "status": "no_positions_found",
+            "positions": [],
+        }
 
-    monkeypatch.setattr(brief_pipeline, "gather_candidate_positions", no_positions)
+    monkeypatch.setattr(brief_pipeline, "get_cached_positions", empty_cached)
     monkeypatch.setattr(brief_pipeline, "fetch_and_store_source", fetch)
 
     pipeline = VoterBriefPipeline(name="voter_brief_pipeline")

@@ -25,6 +25,8 @@ from google.adk.events import Event, EventActions
 
 from app.services.evidence.schema import SourceDocumentRef
 from app.services.evidence.store import fetch_and_store_source
+from app.services.positions.research import research_candidate_positions
+from app.services.positions.store import get_cached_positions, upsert_positions
 from app.tools.district_lookup import resolve_race_from_address
 from app.tools.mongodb_mcp_query import mongodb_mcp_count
 from app.tools.mongodb_tools import (
@@ -33,7 +35,6 @@ from app.tools.mongodb_tools import (
     fetch_legislation_records,
     fetch_voting_record,
 )
-from app.tools.position_search import gather_candidate_positions
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,11 @@ _BRIEF_RACE_PREFIX = "Build a complete voter brief for race:"
 # capped so a source-heavy brief can't blow the Firecrawl quota or stall the demo.
 _MAX_ARCHIVE_FETCHES = 12
 _ARCHIVE_TIMEOUT_SECONDS = 10.0
+
+# Cache-miss lazy fill: a shallow per-issue research pass, awaited only briefly so
+# a long-tail candidate never stalls the brief — if it overruns we return what we
+# have and fill on the next view (the scheduled deep job covers the priority set).
+_LAZY_POSITIONS_TIMEOUT = 12.0
 
 
 def extract_brief_address(message_text: str) -> str | None:
@@ -174,7 +180,7 @@ class VoterBriefPipeline(BaseAgent):
             },
         )
 
-        positions = await self._fetch_positions(candidates, state_code)
+        positions = await self._fetch_positions(candidates, race_key)
 
         # Archive the cited sources so each citation links to a dated, hashed copy
         # we stored — not just a link we found. Streamed as its own step; degrades
@@ -236,15 +242,103 @@ class VoterBriefPipeline(BaseAgent):
             return None
 
     async def _fetch_positions(
-        self, candidates: list[dict], state_code: str | None
+        self, candidates: list[dict], race_key: str | None
     ) -> list[dict]:
-        if not candidates or not state_code:
+        """Read each candidate's cached positions (lazy-filling on miss), flattened.
+
+        Per ADR 0001 every candidate is researched concurrently inside this one
+        step and the result is yielded once. A cache hit is a fast Mongo read; a
+        miss fires a short, shallow on-demand fill written through to the cache.
+        One candidate failing never aborts the step.
+        """
+        if not candidates or not race_key:
             return []
+        results = await asyncio.gather(
+            *(self._positions_for_candidate(card, race_key) for card in candidates),
+            return_exceptions=True,
+        )
+        cards: list[dict] = []
+        for card, result in zip(candidates, results, strict=True):
+            if isinstance(result, Exception):
+                logger.warning(
+                    "voter_brief positions failed for %s: %s",
+                    card.get("candidateId", "?"),
+                    result,
+                )
+                continue
+            cards.extend(result)
+        return cards
+
+    async def _positions_for_candidate(
+        self, card: dict, race_key: str
+    ) -> list[dict]:
+        candidate_id = card.get("candidateId")
+        if not candidate_id:
+            return []
+        doc = await self._read_or_fill(candidate_id, card, race_key)
+        if not doc:
+            return []
+        return self._flatten_positions(doc)
+
+    async def _read_or_fill(
+        self, candidate_id: str, card: dict, race_key: str
+    ) -> dict | None:
+        """Return the fresh cached doc, else a shallow lazy fill, else None."""
         try:
-            return await gather_candidate_positions(candidates, state_code)
-        except Exception as exc:  # any failure must not abort the brief
-            logger.warning("voter_brief positions step failed: %s", exc)
-            return []
+            doc = await get_cached_positions(candidate_id)
+        except Exception as exc:  # cache read failure must not abort the brief
+            logger.warning("voter_brief positions cache read failed: %s", exc)
+            doc = None
+        if doc is not None:
+            return doc
+        return await self._lazy_fill(card, race_key)
+
+    async def _lazy_fill(self, card: dict, race_key: str) -> dict | None:
+        """Shallow on-demand research + write-through, bounded by a short timeout."""
+        candidate = self._research_candidate(card, race_key)
+        try:
+            doc = await asyncio.wait_for(
+                research_candidate_positions(candidate, tier="shallow"),
+                timeout=_LAZY_POSITIONS_TIMEOUT,
+            )
+        except Exception as exc:  # timeout or any failure → fill on next view
+            logger.warning(
+                "voter_brief positions lazy fill skipped for %s: %s",
+                card.get("candidateId", "?"),
+                exc,
+            )
+            return None
+        try:
+            await upsert_positions(doc)  # write-through so the next view is a hit
+        except Exception as exc:  # a failed write must not drop the result
+            logger.warning("voter_brief positions write-through failed: %s", exc)
+        return doc
+
+    @staticmethod
+    def _research_candidate(card: dict, race_key: str) -> dict:
+        """Map a camelCase CandidateCard to the snake_case research input shape."""
+        return {
+            "candidate_id": card.get("candidateId"),
+            "name": card.get("name", ""),
+            "party": card.get("party", ""),
+            "race_key": race_key,
+            "incumbent_challenge_status": card.get("status", ""),
+        }
+
+    @staticmethod
+    def _flatten_positions(doc: dict) -> list[dict]:
+        """Flatten a candidate_positions doc into per-issue EvidenceCard dicts."""
+        candidate_name = doc.get("candidate_name", "")
+        return [
+            {
+                "candidateName": candidate_name,
+                "issue": position.get("issue", ""),
+                "answer": position.get("answer", ""),
+                "evidenceType": position.get("evidenceType", "reported"),
+                "sources": position.get("sources", []),
+            }
+            for position in doc.get("positions", [])
+        ]
 
     async def _archive_sources(self, positions: list[dict]) -> list[dict]:
         """Archive each cited source URL, returning cards enriched with archival refs.
@@ -274,12 +368,18 @@ class VoterBriefPipeline(BaseAgent):
 
     @staticmethod
     def _unique_cited_urls(positions: list[dict]) -> list[str]:
-        """Cited source URLs across all cards, de-duplicated, order preserved."""
+        """Cited URLs that still need archiving, de-duplicated, order preserved.
+
+        Sources already carrying a ``sourceDocumentId`` were archived upstream
+        (cached deep-research positions). Skipping them avoids a redundant Mongo
+        freshness lookup per already-archived citation on every brief view; the
+        un-archived shallow/reported sources are still fetched and archived.
+        """
         urls = [
             url
             for card in positions
             for source in card.get("sources", [])
-            if (url := source.get("url"))
+            if (url := source.get("url")) and not source.get("sourceDocumentId")
         ]
         return list(dict.fromkeys(urls))
 
