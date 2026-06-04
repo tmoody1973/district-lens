@@ -35,6 +35,15 @@ resource "google_secret_manager_secret_iam_member" "positions_job_firecrawl" {
   member    = "serviceAccount:${google_service_account.positions_job_sa.email}"
 }
 
+# The position extractor calls Gemini via Vertex AI; the job SA needs the same
+# aiplatform.user role the agent service SA has (iam.tf app_sa_roles). Without it
+# Gemini returns 403 PERMISSION_DENIED and every candidate degrades to empty.
+resource "google_project_iam_member" "positions_job_aiplatform" {
+  project = var.project_id
+  role    = "roles/aiplatform.user"
+  member  = "serviceAccount:${google_service_account.positions_job_sa.email}"
+}
+
 resource "google_cloud_run_v2_job" "refresh_positions" {
   name                = "${var.project_name}-refresh-positions"
   location            = var.region
@@ -102,6 +111,24 @@ resource "google_cloud_run_v2_job" "refresh_positions" {
           value = "0.8"
         }
 
+        # Gemini (Vertex) config for the per-issue position extractor — without
+        # these the extract step raises "GOOGLE_CLOUD_PROJECT not set" and every
+        # candidate degrades to no_positions_found. Mirrors the service (service.tf).
+        env {
+          name  = "GOOGLE_CLOUD_PROJECT"
+          value = var.project_id
+        }
+
+        env {
+          name  = "GOOGLE_CLOUD_LOCATION"
+          value = "global"
+        }
+
+        env {
+          name  = "GOOGLE_GENAI_USE_VERTEXAI"
+          value = "True"
+        }
+
         env {
           name  = "REFRESH_TRIGGER"
           value = "scheduled"
@@ -126,6 +153,7 @@ resource "google_cloud_run_v2_job" "refresh_positions" {
     google_secret_manager_secret_iam_member.positions_job_mongodb,
     google_secret_manager_secret_iam_member.positions_job_perplexity,
     google_secret_manager_secret_iam_member.positions_job_firecrawl,
+    google_project_iam_member.positions_job_aiplatform,
   ]
 }
 
