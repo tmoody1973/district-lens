@@ -81,6 +81,7 @@ def _ref_from_doc(doc: dict[str, Any]) -> SourceDocumentRef:
         url=doc["url"],
         fetched_at=doc["fetched_at"],
         content_hash=doc["content_hash"],
+        content_length=len(doc.get("markdown") or ""),
     )
 
 

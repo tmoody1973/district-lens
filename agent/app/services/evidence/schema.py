@@ -54,6 +54,10 @@ class SourceDocumentRef:
     url: str
     fetched_at: datetime
     content_hash: str
+    # Size of the archived markdown. Lets callers tell a rich page (extraction
+    # genuinely found no stance) from a thin JS-shell page (a real browser might
+    # do better) when a scrape succeeds but extraction comes back empty.
+    content_length: int = 0
 
 
 def sha256_text(text: str) -> str:

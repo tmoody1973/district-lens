@@ -272,6 +272,30 @@ async def test_returns_candidate_positions_shape():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_scrape_ok_but_empty_extraction_is_logged(caplog):
+    import logging
+
+    own = _src("https://janedoe.com/issues")
+    refs = {own["url"]: _ref(own["url"], "doc-1")}
+    with caplog.at_level(logging.INFO):
+        await research_candidate_positions(
+            CANDIDATE,
+            tier="deep",
+            search_fn=_discovery_search([own]),
+            scrape_fn=_scrape_returning(refs),
+            structure_fn=_structure_no_support(),  # scraped ok, extracted nothing
+        )
+    # The instrumentation event the browser-fallback decision will be measured from.
+    record = next(
+        (r for r in caplog.records if "scrape_ok_extract_empty" in r.getMessage()), None
+    )
+    assert record is not None
+    assert "H8GA06123" in record.getMessage()  # candidate id present
+    assert "janedoe.com" in record.getMessage()  # scraped url present
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_no_supported_stance_is_no_positions_found():
     own = _src("https://janedoe.com/issues")
     refs = {own["url"]: _ref(own["url"], "doc-1")}

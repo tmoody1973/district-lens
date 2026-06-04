@@ -171,6 +171,7 @@ def _archived_source(source: dict, ref: SourceDocumentRef) -> dict:
         "archived": True,
         "archivedAt": ref.fetched_at.isoformat() if ref.fetched_at else None,
         "sourceDocumentId": ref.id,
+        "contentLength": ref.content_length,
     }
 
 
@@ -285,6 +286,27 @@ async def _shallow_fanout(disambiguation: str, search_fn: SearchFn) -> list[dict
 # ---------------------------------------------------------------------------
 
 
+def _log_scrape_ok_extract_empty(candidate: dict[str, Any], scraped: list[dict]) -> None:
+    """Instrument the one case a browser fallback might ever help: pages scraped +
+    archived successfully, yet extraction produced no stance.
+
+    Emits the scraped content sizes so a THIN-shell empty (a real browser might
+    render more text) can be separated from a rich-page empty (the page genuinely
+    states no position). Query in Cloud Logging: ``scrape_ok_extract_empty``.
+    """
+    sizes = [int(source.get("contentLength") or 0) for source in scraped]
+    logger.info(
+        "positions.scrape_ok_extract_empty candidate=%s race=%s scraped=%d "
+        "min_chars=%d max_chars=%d urls=%s",
+        candidate.get("candidate_id", "?"),
+        candidate.get("race_key", "?"),
+        len(scraped),
+        min(sizes) if sizes else 0,
+        max(sizes) if sizes else 0,
+        [source.get("url") for source in scraped],
+    )
+
+
 def _build_doc(
     candidate: dict[str, Any],
     *,
@@ -371,6 +393,8 @@ async def research_candidate_positions(
                 # We read the candidate's own pages — trust extraction's verdict,
                 # including an honest empty (no inference / no fan-out).
                 positions = await _extract(name, scraped, structure_fn)
+                if not positions:
+                    _log_scrape_ok_extract_empty(candidate, scraped)
                 return _build_doc(
                     candidate,
                     disambiguation=disambiguation,

@@ -285,6 +285,19 @@ async def test_first_fetch_seeds_retrieval_history(_firecrawl_key):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_ref_carries_content_length(_firecrawl_key):
+    """The ref reports the scraped markdown size — distinguishes a rich page from
+    a thin JS-shell page when extraction comes back empty (browser-fallback signal)."""
+    col = _FakeCollection()
+    db = _FakeDb(col)
+    ref = await fetch_and_store_source(
+        URL, db=db, client_factory=_factory(_FakePostClient(_ok_response("Body A")))
+    )
+    assert ref.content_length == len("Body A")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_returns_ref_with_all_fields(_firecrawl_key):
     col = _FakeCollection()
     db = _FakeDb(col)
