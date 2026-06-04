@@ -26,6 +26,8 @@ import pymongo
 import pymongo.errors
 from google.adk.tools import ToolContext
 
+from app.tools.candidate_reconcile import reconcile_roster
+
 logger = logging.getLogger(__name__)
 
 CONGRESS_GOV_URL = "https://www.congress.gov"
@@ -124,7 +126,7 @@ _FINANCE_PROJECTION = {
 
 def _to_candidate_card(candidate: dict, race_key: str) -> dict[str, Any]:
     """Build the camelCase CandidateCard shape the frontend canvas reads."""
-    return {
+    card = {
         "candidateId": candidate["candidate_id"],
         "name": candidate["name"],
         "party": candidate["party"],
@@ -133,6 +135,12 @@ def _to_candidate_card(candidate: dict, race_key: str) -> dict[str, Any]:
         "photoSource": "bioguide" if candidate.get("bioguide_id") else "placeholder",
         "raceKey": race_key,
     }
+    # Phase 2: NBC primary result, present only on a reconciled (NBC-backed) roster.
+    if candidate.get("vote_share") is not None:
+        card["voteSharePct"] = candidate["vote_share"]
+    if candidate.get("is_primary_winner"):
+        card["isPrimaryWinner"] = True
+    return card
 
 
 def _to_finance_summary(candidate: dict, finance: dict | None) -> dict[str, Any]:
@@ -177,15 +185,25 @@ def _to_voting_record(summary: dict) -> dict[str, Any]:
     }
 
 
+def _roster_for(db: Any, race_key: str) -> list[dict[str, Any]]:
+    """Candidate docs for a race: NBC's actual ballot (FEC-enriched) when we have
+    a stored roster, else the FEC roster with phantom filings dropped (Phase 2)."""
+    nbc = db.ballot_rosters.find_one({"race_key": race_key})
+    fec_candidates = _active_candidate_docs(db, race_key)
+    nbc_candidates = (nbc or {}).get("candidates") or []
+    if nbc_candidates:
+        return reconcile_roster(fec_candidates, nbc_candidates)
+    return fec_candidates
+
+
 def _query_candidate_cards(race_key: str) -> list[dict[str, Any]]:
     db = _get_db()
-    candidates = _active_candidate_docs(db, race_key)
-    return [_to_candidate_card(c, race_key) for c in candidates]
+    return [_to_candidate_card(c, race_key) for c in _roster_for(db, race_key)]
 
 
 def _query_finance_summaries(race_key: str) -> list[dict[str, Any]]:
     db = _get_db()
-    candidates = _active_candidate_docs(db, race_key)
+    candidates = _roster_for(db, race_key)
     candidate_ids = [c["candidate_id"] for c in candidates]
     finance_by_id = {
         f["candidate_id"]: f
