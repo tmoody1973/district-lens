@@ -231,6 +231,7 @@ _NO_INFO_MARKERS = (
     "no available information",
     "no direct statement",
     "no record of",
+    "no voting record",
     "could not find",
     "couldn't find",
     "unable to find",
@@ -241,13 +242,16 @@ _NO_INFO_MARKERS = (
 
 
 def _is_no_info_answer(answer: str) -> bool:
-    """True when a shallow answer leads with a 'found nothing' disclaimer.
+    """True when a per-issue shallow answer signals 'found no stance' anywhere.
 
-    Only the opening clause is checked so an answer that states a real stance and
-    merely notes a gap on a sub-topic later is kept.
+    The whole answer is scanned (not just the opening): live Perplexity prose
+    often leads with a biographical preamble and only later admits 'no documented
+    stance', which is still the search-monologue the empty state replaces. For a
+    single-issue shallow card the presence of a no-info marker means no usable
+    stance, so dropping it is the right call.
     """
-    head = answer.strip().lower()[:200]
-    return any(marker in head for marker in _NO_INFO_MARKERS)
+    body = answer.strip().lower()
+    return any(marker in body for marker in _NO_INFO_MARKERS)
 
 
 async def _shallow_fanout(disambiguation: str, search_fn: SearchFn) -> list[dict]:

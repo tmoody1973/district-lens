@@ -322,6 +322,18 @@ def test_is_no_info_answer_detects_no_documented_position():
 
 
 @pytest.mark.unit
+def test_is_no_info_answer_detects_buried_disclaimer():
+    # Leads with a biographical preamble, admits "no documented stance" only later.
+    text = (
+        "Morgan W. W. Murphy is a Republican candidate for U.S. House in Alabama's "
+        "7th District. No voting record exists for him on federal health care "
+        "legislation, since he is not an incumbent. Based on currently available "
+        "credible sources, there is no documented, issue-specific stance from him."
+    )
+    assert _is_no_info_answer(text) is True
+
+
+@pytest.mark.unit
 def test_is_no_info_answer_keeps_real_stance():
     text = (
         "Murphy supports cutting the federal income tax and replacing it with a "
