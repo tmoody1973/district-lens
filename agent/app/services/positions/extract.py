@@ -30,11 +30,18 @@ _MAX_PAGE_CHARS = 12_000
 _EXTRACT_SYSTEM = (
     "You are a nonpartisan civic data extractor. You are given the archived text "
     "of a congressional candidate's source pages. Extract the candidate's policy "
-    "stances GROUNDED ONLY in the provided page text. For each stance, write one "
-    "concise factual statement and name the issue. Use only what the text states; "
-    "NEVER infer a position from party, donors, or omission. If the text supports "
-    "no stance, return an empty positions list. Return ONLY valid JSON matching "
-    "the requested schema."
+    "stances GROUNDED ONLY in the provided page text. "
+    "Be exhaustive: extract EVERY distinct issue the text actually addresses — a "
+    "candidate's issues page commonly covers many topics (economy and jobs, taxes, "
+    "health care, Social Security and Medicare, immigration, education, "
+    "reproductive rights, climate and energy, guns, veterans, foreign policy, and "
+    "more). Do NOT stop after the first one or two; emit a separate entry for each "
+    "issue the page supports. "
+    "For each stance, write one concise factual statement and name the issue. "
+    "Use only what the text states; NEVER infer a position from party, donors, or "
+    "omission — a stance the text does not support must be omitted, not guessed. "
+    "If the text supports no stance at all, return an empty positions list. "
+    "Return ONLY valid JSON matching the requested schema."
 )
 
 _EXTRACT_SCHEMA = {

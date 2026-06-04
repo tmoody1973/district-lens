@@ -46,7 +46,12 @@ _BROAD_TRIGGERS = {"", "all", "general", "overview", "issues", "everything"}
 _STRUCTURE_SYSTEM = (
     "You are a nonpartisan civic data extractor. You are given a research summary "
     "about a congressional candidate's policy stances, with numbered sources. "
-    "Group the candidate's stances by policy issue. For each issue, write one concise "
+    "Group the candidate's stances by policy issue. Be exhaustive: produce a "
+    "separate entry for EVERY distinct issue the summary addresses (economy and "
+    "jobs, taxes, health care, Social Security and Medicare, immigration, "
+    "education, reproductive rights, climate and energy, guns, veterans, foreign "
+    "policy, and more). Do NOT stop after the first one or two issues. "
+    "For each issue, write one concise "
     "factual statement of the candidate's position, classify the evidence_type as one "
     "of: 'direct_quote' (the candidate's own words), 'reported' (a credible outlet "
     "describing their position), 'questionnaire' (a candidate questionnaire such as "
