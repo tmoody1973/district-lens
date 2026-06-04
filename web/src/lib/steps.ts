@@ -7,6 +7,7 @@ const STEP_LABELS = [
   "Finance pulled",
   "Legislation loaded",
   "Positions searched",
+  "Sources archived",
   "Brief complete",
 ] as const;
 
@@ -18,7 +19,8 @@ const STAGE_DONE_COUNT: Record<ResearchStage, number> = {
   finance: 3,
   legislation: 4,
   positions: 5,
-  complete: 7,
+  archiving: 6,
+  complete: STEP_LABELS.length, // every step done
 };
 
 const STAGE_RUNNING_INDEX: Record<ResearchStage, number | null> = {
@@ -29,6 +31,7 @@ const STAGE_RUNNING_INDEX: Record<ResearchStage, number | null> = {
   finance: 3,
   legislation: 4,
   positions: 5,
+  archiving: 6,
   complete: null,
 };
 
@@ -52,7 +55,16 @@ const STEP_SOURCE: Record<string, string> = {
   "Finance pulled": "FEC",
   "Legislation loaded": "Congress.gov",
   "Positions searched": "Perplexity",
+  "Sources archived": "Firecrawl",
 };
+
+// Count the cited sources the pipeline archived, across every evidence card.
+function archivedSourceCount(state: DistrictLensState): number {
+  return state.positions.reduce(
+    (total, card) => total + card.sources.filter((s) => s.archived).length,
+    0,
+  );
+}
 
 function stepDetail(label: string, state: DistrictLensState): string {
   const candidateCount = state.candidates.length;
@@ -72,6 +84,10 @@ function stepDetail(label: string, state: DistrictLensState): string {
       return state.legislation.length ? `${state.legislation.length} bills` : "";
     case "Positions searched":
       return state.positions.length ? `${state.positions.length} issues` : "";
+    case "Sources archived": {
+      const archived = archivedSourceCount(state);
+      return archived ? `${archived} archived` : "";
+    }
     default:
       return "";
   }

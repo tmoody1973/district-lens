@@ -77,6 +77,14 @@ export function EvidenceCard({ evidence, compact = false }: Props) {
                   {s.title}
                 </a>
                 {s.date && <span className="text-xs text-slate-400 ml-1">· {s.date}</span>}
+                {s.archived && (
+                  <span
+                    className="ml-1.5 inline-flex items-center gap-0.5 rounded-[2px] bg-green-50 px-1 py-0.5 text-[10px] font-medium text-green-700"
+                    title="DistrictLens fetched and stored this page as dated evidence"
+                  >
+                    ✓ archived{s.archivedAt ? ` ${s.archivedAt.slice(0, 10)}` : ""}
+                  </span>
+                )}
               </div>
             </div>
           ))}

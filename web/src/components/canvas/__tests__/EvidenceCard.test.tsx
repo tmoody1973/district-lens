@@ -79,3 +79,29 @@ test("answer containing 'no direct statement' gets 'no statement found'", () => 
   render(<EvidenceCard evidence={noEvidence} />);
   expect(screen.getByText("no statement found")).toBeInTheDocument();
 });
+
+test("archived source renders an 'archived' badge with the date", () => {
+  const archived = {
+    candidateName: "Test",
+    issue: "housing",
+    answer: "Some position statement here.",
+    sources: [
+      {
+        title: "Campaign site",
+        url: "https://candidate.example.gov/positions",
+        date: "2026-03-14",
+        snippet: "",
+        archived: true,
+        archivedAt: "2026-06-04T02:14:58+00:00",
+        sourceDocumentId: "doc1",
+      },
+    ],
+  };
+  render(<EvidenceCard evidence={archived} />);
+  expect(screen.getByText(/archived 2026-06-04/)).toBeInTheDocument();
+});
+
+test("un-archived source renders no archived badge", () => {
+  render(<EvidenceCard evidence={mockEvidence} />);
+  expect(screen.queryByText(/archived/i)).not.toBeInTheDocument();
+});

@@ -39,6 +39,38 @@ test("complete stage marks all steps done", () => {
   expect(steps.every((s) => s.status === "done")).toBe(true);
 });
 
+test("archiving stage marks positions done and Sources archived running", () => {
+  const steps = stepsFromStage("archiving");
+  const positions = steps.find((s) => s.label === "Positions searched")!;
+  const archiving = steps.find((s) => s.label === "Sources archived")!;
+  expect(positions.status).toBe("done");
+  expect(archiving.status).toBe("running");
+  expect(steps.find((s) => s.label === "Brief complete")!.status).toBe("pending");
+});
+
+test("Sources archived step is sourced to Firecrawl with an archived count", () => {
+  const state: DistrictLensState = {
+    ...DEFAULT_STATE,
+    stage: "complete",
+    positions: [
+      {
+        candidateName: "A",
+        issue: "housing",
+        answer: "x",
+        sources: [
+          { title: "T", url: "https://a.gov/p", date: null, snippet: "", archived: true },
+          { title: "U", url: "https://b.gov/q", date: null, snippet: "" },
+        ],
+      },
+    ],
+  };
+  const archived = annotateSteps(stepsFromStage("complete"), state).find(
+    (s) => s.label === "Sources archived",
+  )!;
+  expect(archived.source).toBe("Firecrawl");
+  expect(archived.detail).toBe("1 archived");
+});
+
 test("district stage shows first step as running", () => {
   const steps = stepsFromStage("district");
   expect(steps[0].status).toBe("running");

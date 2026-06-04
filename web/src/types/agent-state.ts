@@ -6,6 +6,7 @@ export type ResearchStage =
   | "finance"
   | "legislation"
   | "positions"
+  | "archiving"
   | "complete";
 
 export type StepStatus = "pending" | "running" | "done";
@@ -86,7 +87,18 @@ export interface EvidenceCard {
   // How strong the evidence is: "direct_quote" | "reported" | "questionnaire" |
   // "voting_record". Optional for backward-compat with cards that predate the field.
   evidenceType?: string;
-  sources: Array<{ title: string; url: string; date: string | null; snippet: string }>;
+  // Archival fields (Phase 1 T3/T4) — present only on sources the brief pipeline
+  // archived via the evidence store. Optional for backward-compat with cards that
+  // predate archival; un-archived sources render as plain links.
+  sources: Array<{
+    title: string;
+    url: string;
+    date: string | null;
+    snippet: string;
+    archived?: boolean;
+    archivedAt?: string | null;
+    sourceDocumentId?: string;
+  }>;
 }
 
 export interface RaceRow {
