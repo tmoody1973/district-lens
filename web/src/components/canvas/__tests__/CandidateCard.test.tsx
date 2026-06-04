@@ -38,3 +38,22 @@ test("renders PAC percentage", () => {
   render(<CandidateCard candidate={candidate} finance={finance} />);
   expect(screen.getByText(/61%/)).toBeInTheDocument();
 });
+
+// Phase 2: NBC primary result badge.
+test("shows the primary vote share when present", () => {
+  render(<CandidateCard candidate={{ ...candidate, voteSharePct: 39.17 }} />);
+  expect(screen.getByText(/39\.2%/)).toBeInTheDocument();
+  expect(screen.getByText(/primary/i)).toBeInTheDocument();
+});
+
+test("marks the primary winner", () => {
+  render(
+    <CandidateCard candidate={{ ...candidate, voteSharePct: 62, isPrimaryWinner: true }} />,
+  );
+  expect(screen.getByText(/won primary/i)).toBeInTheDocument();
+});
+
+test("renders no primary badge when there is no vote share", () => {
+  render(<CandidateCard candidate={candidate} finance={finance} />);
+  expect(screen.queryByText(/primary/i)).not.toBeInTheDocument();
+});

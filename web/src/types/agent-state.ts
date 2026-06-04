@@ -38,6 +38,10 @@ export interface CandidateCard {
   photoUrl: string;
   photoSource: PhotoSource;
   raceKey: string;
+  // Primary result from NBC's reconciled ballot roster (Phase 2). Present only on
+  // races NBC covered; absent for FEC-only/uncontested races.
+  voteSharePct?: number;
+  isPrimaryWinner?: boolean;
 }
 
 export interface FinanceSummary {

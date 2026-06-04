@@ -60,6 +60,19 @@ export function CandidateCard({ candidate, finance }: Props) {
             {candidate.party}
           </span>
           <span className="text-xs text-slate-500">{statusLabel}</span>
+          {candidate.voteSharePct != null && (
+            <span
+              className={`rounded-full border px-2 py-0.5 text-xs font-medium ${
+                candidate.isPrimaryWinner
+                  ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                  : "bg-slate-100 text-slate-600 border-slate-200"
+              }`}
+              title="Primary result · NBC Decision Desk"
+            >
+              {candidate.isPrimaryWinner ? "✓ Won primary" : "Primary"} ·{" "}
+              {candidate.voteSharePct.toFixed(1)}%
+            </span>
+          )}
         </div>
       </div>
       {total !== null && (
