@@ -26,6 +26,9 @@ import app.refresh.gate as gate_mod
 import app.refresh.nbc_results as nbc_mod
 import app.refresh.nominee_resolver as resolver_mod
 from app.refresh.race_status_store import RaceStatusStore
+from app.services.positions.research import research_candidate_positions
+from app.services.positions.store import upsert_positions
+from app.tools.position_search import _search_name
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +42,18 @@ _OUTCOME_ERROR = "error"
 
 _DEFAULT_PARTIES = ("REP", "DEM")
 _PRE_PRIMARY_STATUS = "pre_primary"
+
+# T6: when a nominee is confirmed post-primary, deep-research their positions
+# inline (this job runs daily). Bounded per run so a busy primary day can't
+# balloon Firecrawl/Gemini spend; the per-candidate research is itself graceful.
+_DEFAULT_RERESEARCH_CAP = 25
+_RERESEARCH_FIELDS = (
+    "candidate_id",
+    "name",
+    "party",
+    "race_key",
+    "incumbent_challenge_status",
+)
 
 # NBC Decision Desk is the primary, structured (no-LLM) confirm source.
 _NBC_CONFIDENCE = 0.95
@@ -377,6 +392,9 @@ async def execute_resolution(
     structure_fn: StructureFn = resolver_mod._heuristic_structure,
     client_factory: Callable[[str], pymongo.MongoClient] = pymongo.MongoClient,
     now_fn: Callable[[], datetime] = _utcnow,
+    research_fn: Callable[..., Any] = research_candidate_positions,
+    upsert_fn: Callable[..., Any] = upsert_positions,
+    reresearch_cap: int = _DEFAULT_RERESEARCH_CAP,
 ) -> dict[str, Any]:
     """Orchestrate the confirm-or-flag pipeline for recently-closed primaries.
 
@@ -429,6 +447,9 @@ async def execute_resolution(
             fetch_fn=fetch_fn,
             nbc_fetch_fn=nbc_fetch_fn,
             structure_fn=structure_fn,
+            research_fn=research_fn,
+            upsert_fn=upsert_fn,
+            reresearch_cap=reresearch_cap,
         )
 
         runs_col.update_one(
@@ -462,6 +483,62 @@ async def execute_resolution(
         client.close()
 
 
+def _norm_name(name: str) -> str:
+    """Natural-order, lowercased name for cross-source winner↔candidate matching."""
+    return " ".join(_search_name(name).lower().split())
+
+
+def _winner_candidates(status_doc: dict, cand_docs: list[dict]) -> list[dict]:
+    """Match a confirmed race's winner names to its candidate docs (research views).
+
+    ``race_status.winners`` is ``{party: name}``; candidate names are FEC form.
+    Normalize both and return the matched candidates trimmed to the research input
+    fields. Losers in the race are excluded.
+    """
+    winner_names = {_norm_name(n) for n in (status_doc.get("winners") or {}).values()}
+    return [
+        {field: cand.get(field) for field in _RERESEARCH_FIELDS}
+        for cand in cand_docs
+        if _norm_name(cand.get("name", "")) in winner_names
+    ]
+
+
+async def _reresearch_confirmed_winners(
+    winners: list[dict],
+    *,
+    db: Any,
+    research_fn: Callable[..., Any],
+    upsert_fn: Callable[..., Any],
+    cap: int,
+) -> int:
+    """Deep-research each newly-confirmed nominee and write it through to the cache.
+
+    Deduped by candidate_id and bounded by ``cap``. Every candidate is guarded: a
+    re-research failure is logged and skipped, never aborting the resolve run.
+    """
+    seen: set = set()
+    unique: list[dict] = []
+    for cand in winners:
+        candidate_id = cand.get("candidate_id")
+        if candidate_id and candidate_id not in seen:
+            seen.add(candidate_id)
+            unique.append(cand)
+
+    count = 0
+    for cand in unique[:cap]:
+        try:
+            doc = await research_fn(cand, tier="deep")
+            await upsert_fn(doc, db=db)
+            count += 1
+        except Exception as exc:  # a re-research failure must not abort the run
+            logger.warning(
+                "resolve_nominees positions re-research failed for %s: %s",
+                cand.get("candidate_id", "?"),
+                exc,
+            )
+    return count
+
+
 async def _run_resolution_batch(
     *,
     db: Any,
@@ -470,6 +547,9 @@ async def _run_resolution_batch(
     fetch_fn: FetchFn,
     nbc_fetch_fn: NbcFetchFn | None = None,
     structure_fn: StructureFn = resolver_mod._heuristic_structure,
+    research_fn: Callable[..., Any] = research_candidate_positions,
+    upsert_fn: Callable[..., Any] = upsert_positions,
+    reresearch_cap: int = _DEFAULT_RERESEARCH_CAP,
 ) -> dict[str, int]:
     """Resolve every in-window race and return the tally of outcomes.
 
@@ -510,6 +590,7 @@ async def _run_resolution_batch(
     confirmed_count = 0
     flagged_count = 0
     error_count = 0
+    confirmed_winners: list[dict] = []
 
     for state, _kind, contest_date in closed_contests:
         # All races in this state for the cycle. The "already confirmed" filter
@@ -546,16 +627,31 @@ async def _run_resolution_batch(
             )
             if outcome == _OUTCOME_CONFIRMED:
                 confirmed_count += 1
+                # T6: a freshly-confirmed race → deep re-research its winner(s).
+                new_status = status_col.find_one({"race_key": race_key})
+                if new_status:
+                    confirmed_winners.extend(
+                        _winner_candidates(new_status, cand_docs)
+                    )
             elif outcome == _OUTCOME_FLAGGED:
                 flagged_count += 1
             else:
                 error_count += 1
+
+    reresearched = await _reresearch_confirmed_winners(
+        confirmed_winners,
+        db=db,
+        research_fn=research_fn,
+        upsert_fn=upsert_fn,
+        cap=reresearch_cap,
+    )
 
     return {
         "races_checked": races_checked,
         "confirmed": confirmed_count,
         "flagged": flagged_count,
         "errors": error_count,
+        "positions_reresearched": reresearched,
     }
 
 
@@ -571,6 +667,9 @@ def main() -> int:
         logger.error("PERPLEXITY_API_KEY not set; cannot run resolve_nominees job")
         return 1
     trigger = os.environ.get("REFRESH_TRIGGER", "scheduled")
+    reresearch_cap = int(
+        os.environ.get("POSITIONS_RERESEARCH_CAP", _DEFAULT_RERESEARCH_CAP)
+    )
 
     # Import the real Perplexity search function at runtime only (avoids import
     # errors when the API key is absent during tests or static analysis).
@@ -586,6 +685,7 @@ def main() -> int:
                 fetch_fn=fetch_results_page,
                 nbc_fetch_fn=nbc_mod.fetch_nbc_results,
                 structure_fn=resolver_mod._structure_winners_with_gemini,
+                reresearch_cap=reresearch_cap,
             )
         )
     except Exception:

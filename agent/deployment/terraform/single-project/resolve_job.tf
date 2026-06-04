@@ -27,6 +27,22 @@ resource "google_secret_manager_secret_iam_member" "resolve_job_perplexity" {
   member    = "serviceAccount:${google_service_account.resolve_job_sa.email}"
 }
 
+# T6: on confirming a nominee, this job deep-researches their positions inline,
+# which scrapes via Firecrawl and extracts via Gemini. Grant the same Firecrawl
+# secret + Vertex AI access the positions job has (data.firecrawl is declared in
+# positions_job.tf). Without these the inline re-research degrades to empty.
+resource "google_secret_manager_secret_iam_member" "resolve_job_firecrawl" {
+  secret_id = data.google_secret_manager_secret.firecrawl.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.resolve_job_sa.email}"
+}
+
+resource "google_project_iam_member" "resolve_job_aiplatform" {
+  project = var.project_id
+  role    = "roles/aiplatform.user"
+  member  = "serviceAccount:${google_service_account.resolve_job_sa.email}"
+}
+
 resource "google_cloud_run_v2_job" "resolve_nominees" {
   name                = "${var.project_name}-resolve-nominees"
   location            = var.region
@@ -71,6 +87,33 @@ resource "google_cloud_run_v2_job" "resolve_nominees" {
           }
         }
 
+        # Firecrawl + Gemini for the T6 inline position re-research (mirrors the
+        # positions job). Without them the re-research step degrades to empty.
+        env {
+          name = "FIRECRAWL_API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = data.google_secret_manager_secret.firecrawl.secret_id
+              version = "latest"
+            }
+          }
+        }
+
+        env {
+          name  = "GOOGLE_CLOUD_PROJECT"
+          value = var.project_id
+        }
+
+        env {
+          name  = "GOOGLE_CLOUD_LOCATION"
+          value = "global"
+        }
+
+        env {
+          name  = "GOOGLE_GENAI_USE_VERTEXAI"
+          value = "True"
+        }
+
         env {
           name  = "REFRESH_TRIGGER"
           value = "scheduled"
@@ -94,6 +137,8 @@ resource "google_cloud_run_v2_job" "resolve_nominees" {
     google_project_service.services,
     google_secret_manager_secret_iam_member.resolve_job_mongodb,
     google_secret_manager_secret_iam_member.resolve_job_perplexity,
+    google_secret_manager_secret_iam_member.resolve_job_firecrawl,
+    google_project_iam_member.resolve_job_aiplatform,
   ]
 }
 

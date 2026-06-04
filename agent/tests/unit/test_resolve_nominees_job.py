@@ -619,3 +619,131 @@ def test_main_returns_1_on_failure(monkeypatch):
 
     monkeypatch.setattr(job_mod, "execute_resolution", boom)
     assert job_mod.main() == 1
+
+
+# ---------------------------------------------------------------------------
+# T6 — inline deep re-research of confirmed nominees
+# ---------------------------------------------------------------------------
+
+
+def test_winner_candidates_matches_by_normalized_name():
+    status_doc = {"winners": {"REP": "Jane Doe"}}
+    out = job_mod._winner_candidates(status_doc, [GA_CAND_REP, GA_CAND_DEM])
+    assert len(out) == 1
+    assert out[0]["candidate_id"] == "H0GA07001"
+    assert out[0]["race_key"] == "2026-H-GA-07"
+    assert out[0]["incumbent_challenge_status"] == "incumbent"
+
+
+def test_winner_candidates_empty_when_no_winners():
+    assert job_mod._winner_candidates({"winners": {}}, [GA_CAND_REP]) == []
+
+
+def _research_spy():
+    calls: list = []
+
+    async def _fn(candidate, *, tier):
+        calls.append((candidate["candidate_id"], tier))
+        return {"candidate_id": candidate["candidate_id"], "positions": []}
+
+    _fn.calls = calls  # type: ignore[attr-defined]
+    return _fn
+
+
+def _upsert_spy():
+    saved: list = []
+
+    async def _fn(doc, *, db=None):
+        saved.append(doc)
+
+    _fn.saved = saved  # type: ignore[attr-defined]
+    return _fn
+
+
+def _winner(cid: str) -> dict:
+    return {"candidate_id": cid, "name": cid, "party": "DEM",
+            "race_key": "2026-H-GA-07", "incumbent_challenge_status": "challenger"}
+
+
+@pytest.mark.asyncio
+async def test_reresearch_calls_research_deep_and_upsert():
+    research, upsert = _research_spy(), _upsert_spy()
+    n = await job_mod._reresearch_confirmed_winners(
+        [_winner("A")], db=None, research_fn=research, upsert_fn=upsert, cap=25
+    )
+    assert n == 1
+    assert research.calls[0] == ("A", "deep")
+    assert len(upsert.saved) == 1
+
+
+@pytest.mark.asyncio
+async def test_reresearch_dedups_and_caps():
+    research, upsert = _research_spy(), _upsert_spy()
+    winners = [_winner("A"), _winner("A"), _winner("B"), _winner("C")]
+    n = await job_mod._reresearch_confirmed_winners(
+        winners, db=None, research_fn=research, upsert_fn=upsert, cap=2
+    )
+    assert n == 2
+    assert [cid for cid, _ in research.calls] == ["A", "B"]  # dedup A, cap 2
+
+
+@pytest.mark.asyncio
+async def test_reresearch_one_failure_does_not_abort():
+    upsert = _upsert_spy()
+
+    async def research(candidate, *, tier):
+        if candidate["candidate_id"] == "A":
+            raise RuntimeError("boom")
+        return {"candidate_id": candidate["candidate_id"], "positions": []}
+
+    n = await job_mod._reresearch_confirmed_winners(
+        [_winner("A"), _winner("B")], db=None, research_fn=research, upsert_fn=upsert, cap=25
+    )
+    assert n == 1
+    assert len(upsert.saved) == 1  # B still written
+
+
+async def _confirm_resolve_one(race_doc, *, store, **kwargs):
+    store.status_col.update_one(
+        {"race_key": race_doc["race_key"]},
+        {"$set": {"status": "confirmed", "winners": {"REP": "Jane Doe"}}},
+        upsert=True,
+    )
+    return job_mod._OUTCOME_CONFIRMED
+
+
+async def _flag_resolve_one(race_doc, **kwargs):
+    return job_mod._OUTCOME_FLAGGED
+
+
+@pytest.mark.asyncio
+async def test_confirmed_race_triggers_deep_reresearch(monkeypatch):
+    research, upsert = _research_spy(), _upsert_spy()
+    monkeypatch.setattr(job_mod, "_resolve_one_race", _confirm_resolve_one)
+    counts = await job_mod._run_resolution_batch(
+        db=FakeDB(_ga_cols()),
+        resolved_today=_TODAY,
+        search_fn=_make_search_fn("", []),
+        fetch_fn=_make_fetch_fn(),
+        research_fn=research,
+        upsert_fn=upsert,
+    )
+    assert counts["positions_reresearched"] == 1
+    assert research.calls[0] == ("H0GA07001", "deep")  # Jane Doe (REP)
+    assert len(upsert.saved) == 1
+
+
+@pytest.mark.asyncio
+async def test_non_confirmed_race_triggers_no_reresearch(monkeypatch):
+    research, upsert = _research_spy(), _upsert_spy()
+    monkeypatch.setattr(job_mod, "_resolve_one_race", _flag_resolve_one)
+    counts = await job_mod._run_resolution_batch(
+        db=FakeDB(_ga_cols()),
+        resolved_today=_TODAY,
+        search_fn=_make_search_fn("", []),
+        fetch_fn=_make_fetch_fn(),
+        research_fn=research,
+        upsert_fn=upsert,
+    )
+    assert counts["positions_reresearched"] == 0
+    assert research.calls == []
