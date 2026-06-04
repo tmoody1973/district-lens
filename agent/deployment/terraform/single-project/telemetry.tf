@@ -179,6 +179,14 @@ resource "google_bigquery_table" "genai_logs_table" {
   # avoid sink write failures for optional fields (e.g. trace, spanId, labels).
   schema = file("${path.module}/../shared/genai_logs_schema.json")
 
+  lifecycle {
+    # Cloud Logging owns this table's schema and evolves it (adds columns) as it
+    # exports. Terraform must NOT reconcile the schema, or a removed/changed
+    # field force-replaces the table and drops the exported rows. Mirrors the
+    # service's image ignore_changes; the schema file is only the create-time seed.
+    ignore_changes = [schema]
+  }
+
   depends_on = [google_bigquery_dataset.telemetry_dataset]
 }
 

@@ -80,9 +80,13 @@ resource "google_cloud_run_v2_job" "resolve_nominees" {
   }
 
   # The image is deployed out of band via gcloud (mirrors the existing service).
+  # client/client_version are metadata gcloud stamps on every `--image` update;
+  # ignore them so out-of-band image deploys don't show as perpetual TF drift.
   lifecycle {
     ignore_changes = [
       template[0].template[0].containers[0].image,
+      client,
+      client_version,
     ]
   }
 
