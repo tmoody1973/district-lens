@@ -75,7 +75,41 @@ def _not_found(message: str, source: str = "") -> dict[str, Any]:
 _CANDIDATE_PROJECTION = {
     "_id": 0, "candidate_id": 1, "name": 1, "party": 1,
     "incumbent_challenge_status": 1, "primary_committee_id": 1, "bioguide_id": 1,
+    "fec_status": 1,
 }
+
+
+def _is_phantom_filing(candidate: dict[str, Any], funded_ids: set[str]) -> bool:
+    """A not-yet-statutory FEC filing with no finance activity is a phantom.
+
+    FEC ``CAND_STATUS == 'N'`` means the person filed Form 2 but never became a
+    statutory candidate; with zero finance it is an abandoned/exploratory filing
+    (e.g. someone who filed for one office then ran for another) — not a real
+    ballot candidate. Status 'C', or 'N' WITH finance, are always kept.
+    """
+    return (
+        candidate.get("fec_status") == "N"
+        and candidate.get("candidate_id") not in funded_ids
+    )
+
+
+def _active_candidate_docs(db: Any, race_key: str) -> list[dict[str, Any]]:
+    """Candidate docs for a race with phantom (status-N, unfunded) filings dropped."""
+    candidates = list(
+        db.candidates.find({"race_key": race_key}, _CANDIDATE_PROJECTION).sort(
+            _CANDIDATE_SORT
+        )
+    )
+    if not candidates:
+        return candidates
+    funded_ids = {
+        f["candidate_id"]
+        for f in db.finance_summaries.find(
+            {"candidate_id": {"$in": [c["candidate_id"] for c in candidates]}},
+            {"_id": 0, "candidate_id": 1},
+        )
+    }
+    return [c for c in candidates if not _is_phantom_filing(c, funded_ids)]
 
 # Deterministic candidate ordering, shared by every candidate query so the
 # candidates/finance stages never reorder rows (candidate_id breaks status ties).
@@ -145,21 +179,13 @@ def _to_voting_record(summary: dict) -> dict[str, Any]:
 
 def _query_candidate_cards(race_key: str) -> list[dict[str, Any]]:
     db = _get_db()
-    candidates = list(
-        db.candidates.find({"race_key": race_key}, _CANDIDATE_PROJECTION).sort(
-            _CANDIDATE_SORT
-        )
-    )
+    candidates = _active_candidate_docs(db, race_key)
     return [_to_candidate_card(c, race_key) for c in candidates]
 
 
 def _query_finance_summaries(race_key: str) -> list[dict[str, Any]]:
     db = _get_db()
-    candidates = list(
-        db.candidates.find({"race_key": race_key}, _CANDIDATE_PROJECTION).sort(
-            _CANDIDATE_SORT
-        )
-    )
+    candidates = _active_candidate_docs(db, race_key)
     candidate_ids = [c["candidate_id"] for c in candidates]
     finance_by_id = {
         f["candidate_id"]: f

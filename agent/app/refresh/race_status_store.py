@@ -11,10 +11,31 @@ from typing import Any
 
 
 class RaceStatusStore:
-    def __init__(self, *, status_col, events_col, citations_col):
+    def __init__(self, *, status_col, events_col, citations_col, roster_col=None):
         self.status_col = status_col
         self.events_col = events_col
         self.citations_col = citations_col
+        self.roster_col = roster_col
+
+    def store_nbc_roster(self, *, race_key: str, slug: str, source_url: str,
+                         candidates: list[dict[str, Any]]) -> None:
+        """Persist NBC Decision Desk's full ballot roster for a race.
+
+        NBC's per-seat feed lists every candidate with vote share + winner flag —
+        ground-truth ballot data for a covered, past-primary contest. One doc per
+        race_key, updated in place. No-op when roster persistence isn't wired.
+        """
+        if self.roster_col is None:
+            return
+        now = datetime.datetime.now(datetime.UTC)
+        self.roster_col.update_one(
+            {"race_key": race_key},
+            {"$set": {
+                "race_key": race_key, "slug": slug, "source": "nbc_decision_desk",
+                "source_url": source_url, "candidates": candidates, "fetched_at": now,
+            }},
+            upsert=True,
+        )
 
     def store_citation(self, *, race_key: str, url: str, publisher: str, snippet: str, content: str) -> Any:
         now = datetime.datetime.now(datetime.UTC)

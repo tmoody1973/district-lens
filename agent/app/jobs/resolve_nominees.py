@@ -151,6 +151,24 @@ async def _try_nbc_confirm(
     if not races:
         return None
 
+    # Persist NBC's full ballot roster (not just the winner) — ground-truth
+    # candidates for this covered race, available to reconcile the FEC roster.
+    store.store_nbc_roster(
+        race_key=race_key,
+        slug=slug,
+        source_url=nbc_mod.results_url(slug),
+        candidates=[
+            {
+                "name": candidate.full_name,
+                "party": candidate.party,
+                "percent_vote": candidate.percent_vote,
+                "is_winner": candidate.is_winner,
+            }
+            for race in races
+            for candidate in race.candidates
+        ],
+    )
+
     decision = nbc_mod.decide_seat(races)
     if decision.status == nbc_mod.NBC_INSUFFICIENT:
         return None  # not enough to confirm — fall back to Perplexity signal
@@ -568,6 +586,7 @@ async def _run_resolution_batch(
         status_col=status_col,
         events_col=events_col,
         citations_col=citations_col,
+        roster_col=db["ballot_rosters"],
     )
 
     # Load the primary calendar and narrow to closed contests in the window.
