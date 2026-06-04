@@ -7,10 +7,13 @@ abort the brief when a single slow/failed step (e.g. positions) raises.
 
 from __future__ import annotations
 
+import asyncio
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
 
+from app.services.evidence.schema import SourceDocumentRef
 from app.tools import brief_pipeline
 from app.tools.brief_pipeline import VoterBriefPipeline
 
@@ -76,7 +79,8 @@ async def test_pipeline_runs_every_step_in_fixed_order(monkeypatch):
 
     stages = [d["stage"] for d in deltas if "stage" in d]
     assert stages == [
-        "district", "candidates", "mcp", "finance", "legislation", "positions", "complete"
+        "district", "candidates", "mcp", "finance", "legislation",
+        "positions", "archiving", "complete",
     ]
 
 
@@ -181,3 +185,184 @@ def test_pipeline_imports_voting_record_fetcher():
     # The deterministic pipeline must call the voting-record core as a step.
     import app.tools.brief_pipeline as bp
     assert hasattr(bp, "fetch_voting_record")
+
+
+# ---------------------------------------------------------------------------
+# T3 — source archival wired into the pipeline
+# ---------------------------------------------------------------------------
+
+
+def _ref(doc_id: str) -> SourceDocumentRef:
+    return SourceDocumentRef(
+        id=doc_id,
+        url="stored",
+        fetched_at=datetime(2026, 6, 4, tzinfo=UTC),
+        content_hash="hash",
+    )
+
+
+def _src(url: str, **extra) -> dict:
+    return {"title": "T", "url": url, "date": None, "snippet": "s", **extra}
+
+
+def _card(sources: list[dict]) -> dict:
+    return {
+        "candidateName": "A",
+        "issue": "housing",
+        "answer": "x",
+        "evidenceType": "reported",
+        "sources": sources,
+    }
+
+
+async def _complete_delta(monkeypatch, cards: list[dict], fetch):
+    """Run the brief with archival; return (complete_delta, all_deltas)."""
+    _patch_fetchers(monkeypatch)
+
+    async def fake_positions(candidates, state_code):
+        return cards
+
+    monkeypatch.setattr(brief_pipeline, "gather_candidate_positions", fake_positions)
+    monkeypatch.setattr(brief_pipeline, "fetch_and_store_source", fetch)
+
+    pipeline = VoterBriefPipeline(name="voter_brief_pipeline")
+    ctx = _make_ctx("Build a complete voter brief for: 123 Oak St, Racine WI")
+    deltas = await _collect_deltas(pipeline, ctx)
+    complete = next(d for d in deltas if d.get("stage") == "complete")
+    return complete, deltas
+
+
+@pytest.mark.unit
+def test_pipeline_imports_evidence_store():
+    """T3 wiring: the pipeline must reference the evidence-store entry points."""
+    assert hasattr(brief_pipeline, "fetch_and_store_source")
+    assert hasattr(brief_pipeline, "SourceDocumentRef")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_archiving_stage_precedes_complete(monkeypatch):
+    async def fetch(url):
+        return _ref("doc1")
+
+    _, deltas = await _complete_delta(monkeypatch, [_card([_src("https://a.gov/p")])], fetch)
+    stages = [d["stage"] for d in deltas if "stage" in d]
+    assert stages.index("archiving") < stages.index("complete")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_archived_source_carries_archival_fields(monkeypatch):
+    async def fetch(url):
+        return _ref("doc1")
+
+    complete, _ = await _complete_delta(monkeypatch, [_card([_src("https://a.gov/p")])], fetch)
+    src = complete["positions"][0]["sources"][0]
+    assert src["archived"] is True
+    assert src["archivedAt"] == "2026-06-04T00:00:00+00:00"
+    assert src["sourceDocumentId"] == "doc1"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_unarchived_source_keeps_original_fields(monkeypatch):
+    async def fetch(url):
+        return None  # e.g. Firecrawl key unset / over budget
+
+    complete, _ = await _complete_delta(monkeypatch, [_card([_src("https://a.gov/p")])], fetch)
+    src = complete["positions"][0]["sources"][0]
+    assert "archived" not in src
+    assert src["url"] == "https://a.gov/p"
+    assert complete["briefReady"] is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_duplicate_urls_fetched_once(monkeypatch):
+    url = "https://a.gov/p"
+    calls: list[str] = []
+
+    async def fetch(u):
+        calls.append(u)
+        return _ref("doc1")
+
+    cards = [_card([_src(url)]), _card([_src(url)])]
+    await _complete_delta(monkeypatch, cards, fetch)
+    assert len(calls) == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_archive_fetches_capped_at_12(monkeypatch):
+    calls: list[str] = []
+
+    async def fetch(u):
+        calls.append(u)
+        return _ref("doc1")
+
+    sources = [_src(f"https://a.gov/p{i}") for i in range(15)]
+    await _complete_delta(monkeypatch, [_card(sources)], fetch)
+    assert len(calls) == 12
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_slow_source_times_out_gracefully(monkeypatch):
+    monkeypatch.setattr(brief_pipeline, "_ARCHIVE_TIMEOUT_SECONDS", 0.01)
+
+    async def slow_fetch(url):
+        await asyncio.sleep(1)
+        return _ref("doc1")
+
+    complete, _ = await _complete_delta(monkeypatch, [_card([_src("https://a.gov/p")])], slow_fetch)
+    src = complete["positions"][0]["sources"][0]
+    assert "archived" not in src
+    assert complete["briefReady"] is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_archive_fetch_raising_does_not_abort_brief(monkeypatch):
+    async def boom(url):
+        raise RuntimeError("firecrawl down")
+
+    complete, _ = await _complete_delta(monkeypatch, [_card([_src("https://a.gov/p")])], boom)
+    assert complete["briefReady"] is True
+    assert "archived" not in complete["positions"][0]["sources"][0]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_enrich_does_not_mutate_input_sources(monkeypatch):
+    original = _src("https://a.gov/p")
+
+    async def fetch(url):
+        return _ref("doc1")
+
+    await _complete_delta(monkeypatch, [_card([original])], fetch)
+    assert "archived" not in original  # the input source dict is untouched
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_empty_positions_archiving_is_noop(monkeypatch):
+    async def fetch(url):
+        raise AssertionError("must not fetch when there are no positions")
+
+    _patch_fetchers(monkeypatch)
+
+    async def no_positions(candidates, state_code):
+        return []
+
+    monkeypatch.setattr(brief_pipeline, "gather_candidate_positions", no_positions)
+    monkeypatch.setattr(brief_pipeline, "fetch_and_store_source", fetch)
+
+    pipeline = VoterBriefPipeline(name="voter_brief_pipeline")
+    ctx = _make_ctx("Build a complete voter brief for: 123 Oak St, Racine WI")
+    deltas = await _collect_deltas(pipeline, ctx)
+
+    stages = [d["stage"] for d in deltas if "stage" in d]
+    complete = next(d for d in deltas if d.get("stage") == "complete")
+    assert "archiving" in stages
+    assert complete["positions"] == []
+    assert complete["briefReady"] is True

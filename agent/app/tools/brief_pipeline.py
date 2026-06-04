@@ -14,6 +14,7 @@ and the complete signal still reach the canvas.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -22,6 +23,8 @@ from google.adk.agents import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 
+from app.services.evidence.schema import SourceDocumentRef
+from app.services.evidence.store import fetch_and_store_source
 from app.tools.district_lookup import resolve_race_from_address
 from app.tools.mongodb_mcp_query import mongodb_mcp_count
 from app.tools.mongodb_tools import (
@@ -36,6 +39,11 @@ logger = logging.getLogger(__name__)
 
 _BRIEF_TRIGGER_PREFIX = "Build a complete voter brief for:"
 _BRIEF_RACE_PREFIX = "Build a complete voter brief for race:"
+
+# Archival budget per brief: dedup'd cited source URLs are fetched concurrently,
+# capped so a source-heavy brief can't blow the Firecrawl quota or stall the demo.
+_MAX_ARCHIVE_FETCHES = 12
+_ARCHIVE_TIMEOUT_SECONDS = 10.0
 
 
 def extract_brief_address(message_text: str) -> str | None:
@@ -167,6 +175,16 @@ class VoterBriefPipeline(BaseAgent):
         )
 
         positions = await self._fetch_positions(candidates, state_code)
+
+        # Archive the cited sources so each citation links to a dated, hashed copy
+        # we stored — not just a link we found. Streamed as its own step; degrades
+        # gracefully (un-archived sources stay cited as plain links).
+        yield self._delta(
+            ctx,
+            {"stage": "archiving", "status_message": "Archiving cited sources…"},
+        )
+        positions = await self._archive_sources(positions)
+
         yield self._delta(
             ctx,
             {
@@ -227,3 +245,69 @@ class VoterBriefPipeline(BaseAgent):
         except Exception as exc:  # any failure must not abort the brief
             logger.warning("voter_brief positions step failed: %s", exc)
             return []
+
+    async def _archive_sources(self, positions: list[dict]) -> list[dict]:
+        """Archive each cited source URL, returning cards enriched with archival refs.
+
+        Deduped and capped per brief; every fetch is graceful. Any failure leaves
+        the sources un-archived (still cited as links) and never aborts the brief.
+        """
+        if not positions:
+            return positions
+        try:
+            urls = self._unique_cited_urls(positions)[:_MAX_ARCHIVE_FETCHES]
+            if not urls:
+                return positions
+            refs = await asyncio.gather(
+                *(self._archive_one(url) for url in urls),
+                return_exceptions=True,
+            )
+            archived = {
+                url: ref
+                for url, ref in zip(urls, refs, strict=True)
+                if isinstance(ref, SourceDocumentRef)
+            }
+            return [self._enrich_card(card, archived) for card in positions]
+        except Exception as exc:  # archival must never abort the brief
+            logger.warning("voter_brief archive step failed: %s", exc)
+            return positions
+
+    @staticmethod
+    def _unique_cited_urls(positions: list[dict]) -> list[str]:
+        """Cited source URLs across all cards, de-duplicated, order preserved."""
+        urls = [
+            url
+            for card in positions
+            for source in card.get("sources", [])
+            if (url := source.get("url"))
+        ]
+        return list(dict.fromkeys(urls))
+
+    async def _archive_one(self, url: str) -> SourceDocumentRef | None:
+        """Archive one URL with a per-source timeout; None on any failure."""
+        try:
+            return await asyncio.wait_for(
+                fetch_and_store_source(url), timeout=_ARCHIVE_TIMEOUT_SECONDS
+            )
+        except Exception as exc:  # per-source failure must not abort the brief
+            logger.warning("voter_brief archive source failed %s: %s", url, exc)
+            return None
+
+    @staticmethod
+    def _enrich_card(card: dict, archived: dict[str, SourceDocumentRef]) -> dict:
+        """Return a new card whose archived sources carry the archival fields."""
+        new_sources = []
+        for source in card.get("sources", []):
+            ref = archived.get(source.get("url"))
+            if ref is None:
+                new_sources.append(source)
+            else:
+                new_sources.append(
+                    {
+                        **source,
+                        "archived": True,
+                        "archivedAt": ref.fetched_at.isoformat(),
+                        "sourceDocumentId": ref.id,
+                    }
+                )
+        return {**card, "sources": new_sources}
