@@ -214,6 +214,42 @@ async def _extract(
         return []
 
 
+# A shallow answer that LEADS with one of these is the model narrating that it
+# found nothing (or confusing a different person) — not a stance. It must never
+# become a ``reported`` card; that's the search-monologue the empty state replaces.
+_NO_INFO_MARKERS = (
+    "no documented",
+    "no public position",
+    "no public stance",
+    "no verified",
+    "no specific position",
+    "no stated position",
+    "no official position",
+    "no clear position",
+    "no known position",
+    "no information available",
+    "no available information",
+    "no direct statement",
+    "no record of",
+    "could not find",
+    "couldn't find",
+    "unable to find",
+    "i found no",
+    "we found no",
+    "does not appear to have",
+)
+
+
+def _is_no_info_answer(answer: str) -> bool:
+    """True when a shallow answer leads with a 'found nothing' disclaimer.
+
+    Only the opening clause is checked so an answer that states a real stance and
+    merely notes a gap on a sub-topic later is kept.
+    """
+    head = answer.strip().lower()[:200]
+    return any(marker in head for marker in _NO_INFO_MARKERS)
+
+
 async def _shallow_fanout(disambiguation: str, search_fn: SearchFn) -> list[dict]:
     """Per-issue Perplexity fan-out → ``reported`` positions (no scrape)."""
 
@@ -224,11 +260,12 @@ async def _shallow_fanout(disambiguation: str, search_fn: SearchFn) -> list[dict
         except Exception as exc:
             logger.warning("research: shallow fan-out failed for %s: %s", issue, exc)
             return None
-        if len(answer.strip()) <= 200:
+        answer = answer.strip()
+        if len(answer) <= 200 or _is_no_info_answer(answer):
             return None
         return {
             "issue": issue,
-            "answer": answer.strip(),
+            "answer": answer,
             "evidenceType": "reported",
             "sources": sources or [],
         }

@@ -24,6 +24,7 @@ import pytest
 
 from app.services.evidence.schema import SourceDocumentRef
 from app.services.positions.research import (
+    _is_no_info_answer,
     build_disambiguation,
     rank_sources,
     research_candidate_positions,
@@ -308,6 +309,54 @@ async def test_all_scrapes_fail_falls_back_to_reported():
 # ---------------------------------------------------------------------------
 # Degrade: nothing anywhere → honest empty
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_is_no_info_answer_detects_no_documented_position():
+    # The exact shape the live dogfood surfaced for a no-footprint challenger.
+    text = (
+        "There is no documented public position specifically from Morgan W. W. "
+        "Murphy on the economy and jobs that can be verified from credible sources."
+    )
+    assert _is_no_info_answer(text) is True
+
+
+@pytest.mark.unit
+def test_is_no_info_answer_keeps_real_stance():
+    text = (
+        "Murphy supports cutting the federal income tax and replacing it with a "
+        "national sales tax, and has campaigned on abolishing the IRS."
+    )
+    assert _is_no_info_answer(text) is False
+
+
+def _no_info_search():
+    """search_fn whose answers are substantive in length but state no stance."""
+
+    async def _fn(query: str):
+        return (
+            "There is no documented public position from this candidate on this "
+            "issue that can be verified from credible sources as of now. " * 3,
+            [],
+        )
+
+    return _fn
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_shallow_no_info_answers_yield_honest_empty():
+    # No primary sources → shallow fan-out; every fan-out answer is a no-info
+    # narration → must NOT become reported cards, must be an honest empty.
+    doc = await research_candidate_positions(
+        CANDIDATE,
+        tier="deep",
+        search_fn=_no_info_search(),
+        scrape_fn=_scrape_all_fail(),
+        structure_fn=_structure_echo(),
+    )
+    assert doc["status"] == STATUS_EMPTY
+    assert doc["positions"] == []
 
 
 @pytest.mark.unit
