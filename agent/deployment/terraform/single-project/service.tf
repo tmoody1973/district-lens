@@ -112,6 +112,19 @@ resource "google_cloud_run_v2_service" "app" {
           }
         }
       }
+      # Firecrawl scrape key for the evidence archive (Phase 1). Resolved from
+      # Secret Manager like every other app secret; the brief degrades gracefully
+      # (sources stay cited as plain links) when the secret is absent. Free tier:
+      # 1,000 pages/month. EVIDENCE_TTL defaults to 30 days in code (store.py).
+      env {
+        name = "FIRECRAWL_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "districtlens-firecrawl-api-key"
+            version = "latest"
+          }
+        }
+      }
     }
 
     service_account                  = google_service_account.app_sa.email
