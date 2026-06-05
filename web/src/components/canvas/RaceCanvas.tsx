@@ -15,6 +15,8 @@ import { CanVoteStrip } from "./CanVoteStrip";
 import { buildBriefLayout, type SectionPlan } from "@/lib/brief-layout";
 import { sortByEvidenceStrength } from "@/lib/evidence-strength";
 import { useRaceStatus } from "@/lib/useRaceStatus";
+import { useElectionDates } from "@/lib/useElectionDates";
+import { deriveKeyDates } from "@/lib/election-dates";
 import { stateCodeFromRaceKey } from "@/lib/states";
 
 interface Props {
@@ -31,6 +33,9 @@ function groupByIssue(positions: EvidenceCard[]): Array<[string, EvidenceCard[]]
 
 export function RaceCanvas({ state }: Props) {
   const raceStatus = useRaceStatus(state.currentRaceKey);
+  const electionDates = useElectionDates(
+    state.currentRaceKey ? stateCodeFromRaceKey(state.currentRaceKey) : null,
+  );
 
   if (state.stage === "idle" || !state.currentRaceKey) {
     return (
@@ -43,6 +48,7 @@ export function RaceCanvas({ state }: Props) {
   const layout = buildBriefLayout(state, raceStatus);
   const financeByCandidate = Object.fromEntries(state.finance.map((s) => [s.candidateId, s]));
   const stateCode = stateCodeFromRaceKey(state.currentRaceKey);
+  const keyDates = deriveKeyDates(electionDates, new Date().toISOString().slice(0, 10));
   const isVoter = state.mode === "voter";
 
   const renderSection = (plan: SectionPlan) => {
@@ -121,7 +127,7 @@ export function RaceCanvas({ state }: Props) {
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-5">
       <DecisionHeader facts={layout.header} />
       <NomineeStatusBanner status={raceStatus} candidates={state.candidates} />
-      {isVoter && stateCode && <CanVoteStrip stateCode={stateCode} />}
+      {isVoter && stateCode && <CanVoteStrip stateCode={stateCode} keyDates={keyDates} />}
       {layout.sections.map(renderSection)}
     </div>
   );
