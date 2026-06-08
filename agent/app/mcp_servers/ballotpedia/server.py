@@ -8,6 +8,7 @@ Compatible with Claude Desktop and Claude Code for agentic research workflows.
 """
 
 import asyncio
+import os
 import re
 import json
 import logging
@@ -50,6 +51,54 @@ TIMEOUT = httpx.Timeout(20.0, connect=10.0)
 
 FETCH_RETRIES = 3
 RETRY_BACKOFF_SECONDS = 1.5
+_FIRECRAWL_SCRAPE_ENDPOINT = "https://api.firecrawl.dev/v2/scrape"
+FIRECRAWL_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
+
+
+async def _fetch_via_firecrawl(url: str, *, post: Any = None) -> BeautifulSoup | None:
+    """Fetch a page through Firecrawl's stealth proxy, returning soup or None.
+
+    Used as a fallback when a direct request is bot-challenged. Firecrawl runs a
+    real browser through residential proxies, which clears Ballotpedia's Cloudflare
+    challenge. We request `rawHtml` (not the cleaned `html`, which strips the
+    MediaWiki structure the parsers rely on). Returns None — never raises — when
+    the key is unset, the call errors, or the body is unusable, so the caller can
+    surface one honest failure. Never logs the API key.
+    """
+    api_key = os.environ.get("FIRECRAWL_API_KEY", "")
+    if not api_key:
+        return None
+
+    body = {"url": url, "formats": ["rawHtml"], "proxy": "stealth"}
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    try:
+        if post is not None:
+            response = await post(_FIRECRAWL_SCRAPE_ENDPOINT, json=body, headers=headers)
+        else:
+            async with httpx.AsyncClient(timeout=FIRECRAWL_TIMEOUT) as client:
+                response = await client.post(
+                    _FIRECRAWL_SCRAPE_ENDPOINT, json=body, headers=headers
+                )
+    except Exception as exc:  # transport/timeout — degrade to None
+        logger.warning("Firecrawl fallback error for %s: %s", url, exc)
+        return None
+
+    if response.status_code // 100 != 2:
+        logger.warning(
+            "Firecrawl fallback non-2xx for %s (status=%d)", url, response.status_code
+        )
+        return None
+    try:
+        payload = response.json()
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(payload, dict) or payload.get("success") is not True:
+        return None
+    raw_html = (payload.get("data") or {}).get("rawHtml") or ""
+    if not raw_html:
+        return None
+    logger.info("Firecrawl stealth fallback succeeded for %s", url)
+    return BeautifulSoup(raw_html, "html.parser")
 
 
 async def fetch_page(
@@ -57,14 +106,17 @@ async def fetch_page(
     params: dict | None = None,
     *,
     transport: httpx.AsyncBaseTransport | None = None,
+    firecrawl_post: Any = None,
 ) -> BeautifulSoup:
     """Fetch a Ballotpedia page and return a BeautifulSoup object.
 
     Ballotpedia fronts pages with Cloudflare, which can answer datacenter IPs
     (e.g. Cloud Run) with an HTTP 202 bot-challenge instead of the real page.
     raise_for_status() does NOT treat 202 as an error, so we'd silently parse the
-    challenge page. Retry any non-200 with backoff, then raise so callers fail
-    honestly rather than returning empty results from a challenge page.
+    challenge page. Strategy: try a direct request (retrying non-200) — free when
+    not challenged — then fall back to Firecrawl's stealth proxy, which clears the
+    challenge. Only if both fail do we raise, so callers never parse a challenge
+    page silently.
     """
     async with httpx.AsyncClient(
         headers=HEADERS, timeout=TIMEOUT, follow_redirects=True, transport=transport
@@ -77,15 +129,21 @@ async def fetch_page(
             if attempt < FETCH_RETRIES - 1:
                 await asyncio.sleep(RETRY_BACKOFF_SECONDS * (attempt + 1))
 
-        # Out of retries without a 200. raise_for_status covers 4xx/5xx; a stuck
-        # 2xx-but-not-200 (the 202 challenge) needs an explicit raise.
-        response.raise_for_status()
-        raise httpx.HTTPStatusError(
-            f"Ballotpedia returned HTTP {response.status_code} (likely a bot "
-            f"challenge) for {url}",
-            request=response.request,
-            response=response,
-        )
+    # Direct fetch stayed non-200 (e.g. the 202 challenge). Pay for Firecrawl
+    # stealth only now, on the full URL including any query params.
+    firecrawl_url = f"{url}?{urlencode(params)}" if params else url
+    soup = await _fetch_via_firecrawl(firecrawl_url, post=firecrawl_post)
+    if soup is not None:
+        return soup
+
+    # Both paths failed — raise so the caller returns an honest error.
+    response.raise_for_status()
+    raise httpx.HTTPStatusError(
+        f"Ballotpedia returned HTTP {response.status_code} (likely a bot "
+        f"challenge) for {url}; Firecrawl fallback also failed",
+        request=response.request,
+        response=response,
+    )
 
 
 def clean_text(text: str) -> str:
