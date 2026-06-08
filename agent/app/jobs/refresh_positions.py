@@ -32,7 +32,7 @@ import pymongo
 
 from app.services.positions.research import research_candidate_positions
 from app.services.positions.schema import STATUS_FOUND
-from app.services.positions.store import upsert_positions
+from app.services.positions.store import get_cached_positions, upsert_positions
 from app.tools.position_search import _search_name
 
 logger = logging.getLogger(__name__)
@@ -73,7 +73,23 @@ def _norm_name(name: str) -> str:
 
 
 def _research_view(candidate: dict[str, Any]) -> dict[str, Any]:
-    return {field: candidate.get(field) for field in _RESEARCH_FIELDS}
+    view = {field: candidate.get(field) for field in _RESEARCH_FIELDS}
+    # The broad tier anchors on the Ballotpedia profile URL when present.
+    view["ballotpedia_url"] = candidate.get("ballotpedia_profile_url")
+    return view
+
+
+def select_race_candidates(db: Any, race_keys: list[str]) -> list[dict[str, Any]]:
+    """Select EVERY candidate in the given races (incumbents and challengers alike).
+
+    Used to warm a focused, demo/active set of races end-to-end — unlike the
+    priority selection, which cherry-picks incumbents/nominees/top-funded across
+    all races. Returns research-view dicts, deduped by candidate id.
+    """
+    selected: dict[str, dict[str, Any]] = {}
+    for cand in db["candidates"].find({"race_key": {"$in": list(race_keys)}}):
+        selected[cand["candidate_id"]] = _research_view(cand)
+    return list(selected.values())
 
 
 def _confirmed_nominee_ids(db: Any) -> set[str]:
@@ -176,6 +192,8 @@ async def _run_positions_batch(
     monthly_cap: int,
     downgrade_pct: float,
     per_run_limit: int,
+    force_tier: str | None = None,
+    cached_fn: Callable[..., Any] | None = None,
 ) -> dict[str, int]:
     candidates = select_fn(db, top_funded_limit=TOP_FUNDED_LIMIT)
     if per_run_limit and per_run_limit > 0:
@@ -188,12 +206,26 @@ async def _run_positions_batch(
         "no_positions": 0,
         "deep": 0,
         "shallow": 0,
+        "broad": 0,
+        "skipped": 0,
         "errors": 0,
     }
 
     for candidate in candidates:
         counts["candidates"] += 1
-        tier = _choose_tier(usage, monthly_cap=monthly_cap, downgrade_pct=downgrade_pct)
+
+        # Skip a candidate already freshly cached — never re-pay for fresh data.
+        if cached_fn is not None:
+            try:
+                if await cached_fn(candidate.get("candidate_id"), db=db) is not None:
+                    counts["skipped"] += 1
+                    continue
+            except Exception as exc:  # a cache read failure must not skip the work
+                logger.warning("refresh_positions: cache check failed: %s", exc)
+
+        tier = force_tier or _choose_tier(
+            usage, monthly_cap=monthly_cap, downgrade_pct=downgrade_pct
+        )
         try:
             doc = await research_fn(candidate, tier=tier)
             await upsert_fn(doc, db=db)
@@ -206,11 +238,9 @@ async def _run_positions_batch(
             counts["errors"] += 1
             continue
 
-        if tier == "deep":
-            counts["deep"] += 1
+        counts[tier] = counts.get(tier, 0) + 1
+        if tier == "deep":  # only the scrape tier spends Firecrawl credits
             usage += _doc_scrape_count(doc)
-        else:
-            counts["shallow"] += 1
 
         if doc.get("status") == STATUS_FOUND:
             counts["found"] += 1
@@ -233,8 +263,20 @@ async def execute_refresh_positions(
     monthly_cap: int = DEFAULT_MONTHLY_CAP,
     downgrade_pct: float = DEFAULT_DOWNGRADE_PCT,
     per_run_limit: int = 0,
+    race_keys: list[str] | None = None,
+    force_tier: str | None = None,
+    cached_fn: Callable[..., Any] | None = get_cached_positions,
 ) -> dict[str, Any]:
-    """Run the priority-set refresh and record a ``refresh_runs`` audit doc."""
+    """Run a positions refresh and record a ``refresh_runs`` audit doc.
+
+    Default: the priority-set deep/shallow refresh. Warm mode: pass ``race_keys``
+    to scope to a focused set of races (every candidate in them), ``force_tier``
+    ("broad") to use the synthesis path, and ``cached_fn`` skips already-fresh
+    candidates so re-runs are cheap.
+    """
+    if race_keys:
+        keys = list(race_keys)
+        select_fn = lambda db, **_: select_race_candidates(db, keys)  # noqa: E731
     run_id = uuid.uuid4().hex
     started_at = now_fn()
     client = client_factory(mongo_uri)
@@ -265,6 +307,8 @@ async def execute_refresh_positions(
             monthly_cap=monthly_cap,
             downgrade_pct=downgrade_pct,
             per_run_limit=per_run_limit,
+            force_tier=force_tier,
+            cached_fn=cached_fn,
         )
 
         runs_col.update_one(
@@ -300,6 +344,12 @@ def main() -> int:
     downgrade_pct = float(os.environ.get("FIRECRAWL_DOWNGRADE_PCT", DEFAULT_DOWNGRADE_PCT))
     per_run_limit = int(os.environ.get("POSITIONS_REFRESH_LIMIT", "0"))
 
+    # Warm mode (opt-in): scope to a CSV of race keys and force the broad synthesis
+    # tier. Unset → the default priority-set deep/shallow refresh, unchanged.
+    races_env = os.environ.get("POSITIONS_REFRESH_RACES", "").strip()
+    race_keys = [k.strip() for k in races_env.split(",") if k.strip()] or None
+    force_tier = os.environ.get("POSITIONS_REFRESH_TIER", "").strip() or None
+
     try:
         asyncio.run(
             execute_refresh_positions(
@@ -308,6 +358,8 @@ def main() -> int:
                 monthly_cap=monthly_cap,
                 downgrade_pct=downgrade_pct,
                 per_run_limit=per_run_limit,
+                race_keys=race_keys,
+                force_tier=force_tier,
             )
         )
     except Exception:

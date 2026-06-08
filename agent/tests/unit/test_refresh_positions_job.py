@@ -463,3 +463,72 @@ async def test_client_always_closed():
 def test_main_returns_1_without_mongo_uri(monkeypatch):
     monkeypatch.delenv("MONGODB_URI", raising=False)
     assert refresh_positions.main() == 1
+
+
+# ---------------------------------------------------------------------------
+# Warm-mode additions: bp_url threading, race scoping, forced broad tier,
+# freshness skip (position-search broad-tier warm job)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_research_view_threads_ballotpedia_url():
+    from app.jobs.refresh_positions import _research_view
+
+    view = _research_view(
+        {"candidate_id": "X", "name": "Doe, Jane", "party": "DEM",
+         "race_key": "2026-H-WI-04", "ballotpedia_profile_url": "https://ballotpedia.org/Jane_Doe"}
+    )
+    assert view["ballotpedia_url"] == "https://ballotpedia.org/Jane_Doe"
+
+
+@pytest.mark.unit
+def test_select_race_candidates_returns_every_candidate_in_the_races():
+    from app.jobs.refresh_positions import select_race_candidates
+
+    db = _selection_db()
+    picked = {c["candidate_id"] for c in select_race_candidates(db, ["2026-H-GA-06"])}
+    assert picked == {"NOM1", "LOSE1"}  # all of the race, incl. the challenger
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_forces_broad_tier_for_every_candidate():
+    research = _research_recorder()
+    result = await execute_refresh_positions(
+        mongo_uri="mongodb://x",
+        research_fn=research,
+        upsert_fn=_upsert_recorder(),
+        usage_fn=lambda db, *, now: 0,
+        select_fn=lambda db, **kw: _two_candidates(),
+        client_factory=_client_factory({}),
+        now_fn=lambda: NOW,
+        force_tier="broad",
+        cached_fn=None,
+    )
+    assert {tier for _cid, tier in research.calls} == {"broad"}  # type: ignore[attr-defined]
+    assert result["counts"]["broad"] == 2
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_skips_candidates_already_freshly_cached():
+    research = _research_recorder()
+
+    async def fake_cached(cid, *, db=None):
+        return {"candidate_id": cid} if cid == "A" else None  # A is fresh, B is not
+
+    result = await execute_refresh_positions(
+        mongo_uri="mongodb://x",
+        research_fn=research,
+        upsert_fn=_upsert_recorder(),
+        usage_fn=lambda db, *, now: 0,
+        select_fn=lambda db, **kw: _two_candidates(),
+        client_factory=_client_factory({}),
+        now_fn=lambda: NOW,
+        force_tier="broad",
+        cached_fn=fake_cached,
+    )
+    researched = {cid for cid, _tier in research.calls}  # type: ignore[attr-defined]
+    assert researched == {"B"}  # A was skipped as fresh
+    assert result["counts"]["skipped"] == 1
