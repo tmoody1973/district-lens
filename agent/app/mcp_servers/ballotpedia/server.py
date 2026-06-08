@@ -165,6 +165,41 @@ def soup_section_text(soup: BeautifulSoup, heading: str, max_chars: int = 2000) 
     return ""
 
 
+# Ballotpedia frames the Endorsements section with boilerplate we must strip:
+# an intro ("X received the following endorsements.") and a call-to-action
+# ("To send us additional endorsements, click here."). Remove those phrases
+# explicitly (NOT by splitting on every period — that would break org names like
+# "U.S. Chamber of Commerce").
+_ENDORSE_INTRO = re.compile(
+    r".*?received the following endorsements\.?\s*", re.IGNORECASE | re.DOTALL
+)
+_ENDORSE_INSTRUCTION = re.compile(
+    r"to send us additional endorsements,?\s*click here\.?\s*", re.IGNORECASE
+)
+_ENDORSE_LEFTOVER = re.compile(
+    r"click here|send us|received the following|see also|submit|^note\b",
+    re.IGNORECASE,
+)
+
+
+def _parse_endorsements(section_text: str) -> list[str]:
+    """Extract endorsement names from the Endorsements section text.
+
+    Strips Ballotpedia's intro/instruction boilerplate, then splits the remainder
+    on list delimiters (not periods, to preserve abbreviated org names).
+    """
+    if not section_text:
+        return []
+    text = _ENDORSE_INTRO.sub("", section_text)
+    text = _ENDORSE_INSTRUCTION.sub("", text)
+    names: list[str] = []
+    for segment in re.split(r"[•·\n;]", text):
+        name = clean_text(segment).rstrip(".").strip()
+        if name and not _ENDORSE_LEFTOVER.search(name):
+            names.append(name)
+    return names[:15]
+
+
 # ── Shared lookup: 2-letter state abbreviation → full state name ──────────────
 STATE_ABBREVS = {
     "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas",
@@ -657,12 +692,9 @@ async def summarize_candidate_platform(
             break
 
     # ── Endorsements ─────────────────────────────────────────────────────────
-    endorsements: list[str] = []
-    endorse_text = soup_section_text(soup, "Endorsements", max_chars=1500)
-    if endorse_text:
-        # Split by common delimiters
-        raw = re.split(r"[•·\n;]", endorse_text)
-        endorsements = [clean_text(e) for e in raw if clean_text(e)][:15]
+    endorsements = _parse_endorsements(
+        soup_section_text(soup, "Endorsements", max_chars=1500)
+    )
 
     # ── Committee assignments ─────────────────────────────────────────────────
     committees: list[str] = []
