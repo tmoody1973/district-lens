@@ -25,11 +25,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
 
+from app.refresh.nominee_resolver import STATE_NAMES
 from app.services.evidence.schema import SourceDocumentRef
 from app.services.evidence.store import fetch_and_store_source
 from app.services.positions.schema import (
@@ -39,7 +41,11 @@ from app.services.positions.schema import (
     STATUS_FOUND,
     positions_content_hash,
 )
-from app.tools.position_search import _perplexity_search, _search_name
+from app.tools.position_search import (
+    _perplexity_search,
+    _search_name,
+    structure_positions,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +66,8 @@ _SHALLOW_ISSUES = (
 SearchFn = Callable[[str], Awaitable[tuple[str, list[dict]]]]
 ScrapeFn = Callable[[str], Awaitable[SourceDocumentRef | None]]
 StructureFn = Callable[[str, list[dict]], Awaitable[list[dict]]]
+# Broad-tier structurer: (candidate_name, answer, sources) → per-issue cards.
+BroadStructureFn = Callable[[str, str, list[dict]], Awaitable[list[dict]]]
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +122,116 @@ def build_disambiguation(candidate: dict[str, Any]) -> str:
     pieces.append(seat)
     pieces.append(f"{CYCLE} election")
     return " ".join(p for p in pieces if p)
+
+
+# ---------------------------------------------------------------------------
+# Broad-tier prompt — the live brief path (Perplexity synthesis, Gemini structure)
+# ---------------------------------------------------------------------------
+
+
+def _ordinal(number: int) -> str:
+    """Return an ordinal string: 1 → '1st', 4 → '4th', 22 → '22nd'."""
+    if 10 <= number % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(number % 10, "th")
+    return f"{number}{suffix}"
+
+
+def _spelled_seat(state_code: str, district: str, office: str) -> str:
+    """Spell the seat the way news and campaign pages write it.
+
+    Search engines match the words on candidate coverage — which says "Wisconsin's
+    4th Congressional District" or a place name, not "WI-04". For a challenger this
+    human-readable form is what lets Perplexity find the right person.
+    """
+    state = STATE_NAMES.get(state_code.upper(), state_code) if state_code else ""
+    if office == "U.S. Senate":
+        return f"{state} (U.S. Senate seat)".strip()
+    if district and district != "00" and district.isdigit():
+        return f"{state}'s {_ordinal(int(district))} Congressional District".strip()
+    return f"{state} (U.S. House)".strip() or office
+
+
+def _broad_prompt(candidate: dict[str, Any]) -> str:
+    """Build the disambiguated broad-research prompt.
+
+    Two identity signals carry the search: the spelled-out district (human/news
+    readable) and the candidate's Ballotpedia profile URL when we have one — a
+    direct handle to *this* person that sidesteps the city-vs-district recall gap.
+    """
+    name = _natural_name(candidate)
+    office, state, district = _parse_race_key(candidate.get("race_key", ""))
+    seat = _spelled_seat(state, district, office)
+    ballotpedia_url = candidate.get("ballotpedia_url")
+    anchor = f" Their Ballotpedia profile is {ballotpedia_url}." if ballotpedia_url else ""
+    return (
+        f"Research {name}, a {CYCLE} candidate for {seat}.{anchor} "
+        "Summarize their stance on the issues (health care, economy and taxes, "
+        "education, public safety, immigration, foreign policy, housing). Draw on "
+        "their campaign website, Ballotpedia Candidate Connection, Vote411 and League "
+        "of Women Voters questionnaires, local news, interviews, and public social "
+        "media. For each issue state the position and cite the source. Only include "
+        "positions supported by public evidence; say so if none exists."
+    )
+
+
+def _is_total_non_answer(answer: str) -> bool:
+    """True only when the WHOLE broad answer is a non-answer (the candidate wasn't
+    found at all) — not when a rich multi-issue answer merely notes a gap on one
+    topic. A broad answer legitimately says "no clear position on housing" while
+    documenting six other issues; gating the whole thing on that would nuke real
+    content (the Gwen Moore bug). So we only gate a LEADING or SHORT non-answer.
+    """
+    body = answer.strip().replace("’", "'")  # noqa: RUF001 — normalize the curly apostrophe
+    if not body:
+        return True
+    if _NO_INFO_RE.search(body[:200]):
+        return True
+    return len(body) < 400 and bool(_NO_INFO_RE.search(body))
+
+
+async def _broad_research(
+    candidate: dict[str, Any],
+    name: str,
+    search_fn: SearchFn,
+    structure_fn: BroadStructureFn,
+) -> list[dict]:
+    """One disambiguated Perplexity call → Gemini-structured per-issue positions.
+
+    A TOTAL non-answer is gated to an honest empty before structuring; after
+    structuring, any single card that is itself a no-info narration (e.g. the
+    fallback "key positions" card) is dropped. NEVER raises.
+    """
+    prompt = _broad_prompt(candidate)
+    try:
+        answer, sources = await search_fn(prompt)
+    except Exception as exc:  # missing key / transport error → honest empty
+        logger.warning("research: broad search failed for %s: %s", name, exc)
+        return []
+    if _is_total_non_answer(answer):
+        return []
+    try:
+        cards = await structure_fn(name, answer, sources)
+    except Exception as exc:  # structuring failure → honest empty
+        logger.warning("research: broad structuring failed for %s: %s", name, exc)
+        return []
+    return [
+        {
+            "issue": card.get("issue", ""),
+            "answer": card.get("answer", ""),
+            "evidenceType": card.get("evidenceType", "reported"),
+            "sources": card.get("sources", []),
+        }
+        for card in cards
+        if isinstance(card, dict)
+        and card.get("answer")
+        # Drop the "key positions" fallback structure_positions emits when Gemini
+        # can't break the answer into issues — an unstructured blob, often a
+        # non-answer. The brief shows only real per-issue stances.
+        and card.get("issue", "").strip().lower() != "key positions"
+        and not _is_no_info_answer(card["answer"])
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -215,44 +333,31 @@ async def _extract(
         return []
 
 
-# A shallow answer that LEADS with one of these is the model narrating that it
-# found nothing (or confusing a different person) — not a stance. It must never
-# become a ``reported`` card; that's the search-monologue the empty state replaces.
-_NO_INFO_MARKERS = (
-    "no documented",
-    "no public position",
-    "no public stance",
-    "no verified",
-    "no specific position",
-    "no stated position",
-    "no official position",
-    "no clear position",
-    "no known position",
-    "no information available",
-    "no available information",
-    "no direct statement",
-    "no record of",
-    "no voting record",
-    "could not find",
-    "couldn't find",
-    "unable to find",
-    "i found no",
-    "we found no",
-    "does not appear to have",
+# A pattern catches "found no stance" narration that must never become a card.
+# Pattern-based (not a fixed phrase list) because Perplexity phrases the same
+# non-answer many ways: "no specific, publicly documented position", "no detailed
+# comments available", "could not find any credible source". The "no … <noun>"
+# arm allows up to four intervening modifier words so commas/qualifiers don't
+# defeat it; \bno\b avoids matching the tail of words like "Latino".
+_NO_INFO_RE = re.compile(
+    # negated search verb: could not / couldn't / unable to / did not + find/locate/identify/confirm
+    r"(?:could ?n't|could not|can ?not|cannot|did ?n't|did not|unable to|was unable to)"
+    r"\s+(?:find|locate|identify|confirm)"
+    r"|found no\b|\bi found no\b|\bwe found no\b|does not appear to have"
+    r"|no public evidence|no credible source|no reliable (?:public )?information"
+    r"|no information available|no available information"
+    r"|\bno(?:\s+[\w,]+){0,4}\s+(?:positions?|stances?|comments?|information|evidence|record)\b",
+    re.IGNORECASE,
 )
 
 
 def _is_no_info_answer(answer: str) -> bool:
-    """True when a per-issue shallow answer signals 'found no stance' anywhere.
+    """True when an answer (or single card) is a 'found no stance' narration.
 
-    The whole answer is scanned (not just the opening): live Perplexity prose
-    often leads with a biographical preamble and only later admits 'no documented
-    stance', which is still the search-monologue the empty state replaces. For a
-    single-issue shallow card the presence of a no-info marker means no usable
-    stance, so dropping it is the right call.
+    Pattern-based so phrasing variants don't leak through. The typographic
+    apostrophe (U+2019) Perplexity returns is normalized to ASCII first.
     """
-    body = answer.strip().lower()
-    return any(marker in body for marker in _NO_INFO_MARKERS)
+    return bool(_NO_INFO_RE.search(answer.replace("’", "'")))  # noqa: RUF001 — normalize curly apostrophe
 
 
 async def _shallow_fanout(disambiguation: str, search_fn: SearchFn) -> list[dict]:
@@ -364,6 +469,7 @@ async def research_candidate_positions(
     search_fn: SearchFn = _perplexity_search,
     scrape_fn: ScrapeFn = fetch_and_store_source,
     structure_fn: StructureFn = _default_structure_fn,
+    broad_structure_fn: BroadStructureFn = structure_positions,
 ) -> dict[str, Any]:
     """Research one candidate's positions into a ``candidate_positions`` doc.
 
@@ -372,6 +478,12 @@ async def research_candidate_positions(
     """
     disambiguation = build_disambiguation(candidate)
     name = _natural_name(candidate)
+
+    if tier == "broad":
+        positions = await _broad_research(candidate, name, search_fn, broad_structure_fn)
+        return _build_doc(
+            candidate, disambiguation=disambiguation, tier="broad", positions=positions
+        )
 
     cap = _TIER_SCRAPE_CAP.get(tier, 3)
 

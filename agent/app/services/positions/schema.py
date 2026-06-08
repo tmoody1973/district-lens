@@ -19,7 +19,7 @@ from app.services.evidence.schema import sha256_text
 
 COLLECTION_NAME = "candidate_positions"
 
-RESEARCH_TIERS = ("deep", "shallow", "discovery_only")
+RESEARCH_TIERS = ("deep", "shallow", "discovery_only", "broad")
 EVIDENCE_TYPES = ("direct_quote", "questionnaire", "voting_record", "reported")
 STATUS_FOUND = "found"
 STATUS_EMPTY = "no_positions_found"

@@ -295,3 +295,24 @@ async def test_upsert_changed_hash_appends_history_not_new_doc():
     assert col.inserts == 0  # same candidate → in-place update, not a new doc
     assert len(col.docs) == 1
     assert len(col.docs[0]["retrieval_history"]) == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upsert_keeps_found_positions_when_a_later_run_is_empty():
+    # Perplexity is non-deterministic: a flaky empty re-research must NOT clobber a
+    # good cached result. Keep the found positions; record the empty attempt.
+    existing = _doc(answer="REAL STANCE")  # status "found", has positions
+    col = _FakeCollection([existing])
+    empty = {
+        **existing,
+        "status": "no_positions_found",
+        "positions": [],
+        "content_hash": "empty-hash-xyz",
+    }
+    await upsert_positions(empty, db=_FakeDb(col))
+    assert col.docs[0]["positions"][0]["answer"] == "REAL STANCE"  # preserved
+    assert col.docs[0]["status"] == "found"
+    assert col.inserts == 0
+    # the empty attempt is still audited in history
+    assert any(r.get("status") == "no_positions_found" for r in col.docs[0]["retrieval_history"])

@@ -19,7 +19,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from app.services.positions.schema import COLLECTION_NAME
+from app.services.positions.schema import COLLECTION_NAME, STATUS_FOUND
 
 _DEFAULT_TTL_DAYS = 21
 
@@ -93,6 +93,16 @@ async def upsert_positions(doc: dict[str, Any], *, db: Any = None) -> dict[str, 
         return to_insert
 
     if existing.get("content_hash") == doc.get("content_hash"):
+        await asyncio.to_thread(
+            collection.update_one,
+            {"candidate_id": doc["candidate_id"]},
+            {"$push": {"retrieval_history": record}},
+        )
+        return existing
+
+    # Perplexity is non-deterministic: a flaky empty re-research must not clobber a
+    # good cached result. Keep the found positions, record the empty attempt only.
+    if existing.get("status") == STATUS_FOUND and existing.get("positions") and not doc.get("positions"):
         await asyncio.to_thread(
             collection.update_one,
             {"candidate_id": doc["candidate_id"]},
