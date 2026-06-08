@@ -23,6 +23,7 @@ import asyncio
 import logging
 import os
 from collections.abc import Awaitable, Callable
+from urllib.parse import urlparse
 
 import httpx
 
@@ -35,6 +36,30 @@ _MODEL = "gemini-3.5-flash"  # grounded retrieval ONLY (project mandate); never 
 _DEFAULT_LOCATION = "global"
 _THINKING_LEVEL = "MEDIUM"
 _RESOLVE_TIMEOUT_SECONDS = 15.0
+
+# Archiving budget per candidate: cap the Firecrawl calls grounding can trigger.
+# Grounding routinely returns 15+ chunks; archiving all of them is slow and burns
+# quota on low-value pages. We archive the first N article-like sources and leave the
+# rest as un-archived (still citable; the brief pipeline archives lazily on display).
+_MAX_ARCHIVE = 8
+
+# Hosts Firecrawl cannot render to useful markdown (video/social) — return the URL as
+# a citable source but never spend a scrape on it.
+_NO_ARCHIVE_HOSTS = frozenset(
+    {
+        "youtube.com",
+        "youtu.be",
+        "m.youtube.com",
+        "vimeo.com",
+        "x.com",
+        "twitter.com",
+        "facebook.com",
+        "instagram.com",
+        "tiktok.com",
+        "bsky.app",
+        "threads.net",
+    }
+)
 
 # A grounding chunk reduced to (real-domain title, redirect uri).
 GroundedChunk = tuple[str, str]
@@ -111,40 +136,43 @@ async def _default_resolve(uri: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def _build_source(title: str, url: str, ref: SourceDocumentRef | None) -> dict:
-    """Build a T4 source dict; carry ``sourceDocumentId`` only when archived."""
-    source: dict = {
-        "title": title or url,
-        "url": url,
-        "date": None,
-        "snippet": "",
-        "archived": ref is not None,
-    }
-    if ref is not None:
-        source["archivedAt"] = ref.fetched_at.isoformat() if ref.fetched_at else None
-        source["sourceDocumentId"] = ref.id
-        source["contentLength"] = ref.content_length
-    return source
+def _is_archivable(url: str) -> bool:
+    """True unless the host is a video/social page Firecrawl can't render usefully."""
+    host = (urlparse(url).hostname or "").lower()
+    host = host[4:] if host.startswith("www.") else host
+    return host not in _NO_ARCHIVE_HOSTS
 
 
-async def _resolve_and_archive(
-    title: str, uri: str, resolve_fn: ResolveFn, scrape_fn: ScrapeFn
-) -> dict | None:
-    """Resolve one redirect, archive the real page, return its source dict.
-
-    A redirect that won't resolve is dropped (None). A resolve that succeeds but
-    fails to archive is KEPT with ``archived: False`` (no ``sourceDocumentId``) — the
-    URL is still a real, citable handle and the brief pipeline archives lazily later.
-    """
+async def _resolve_source(title: str, uri: str, resolve_fn: ResolveFn) -> dict | None:
+    """Resolve one grounding redirect into an un-archived source dict (None if it
+    won't resolve)."""
     real_url = await resolve_fn(uri)
     if not real_url:
         return None
+    return {
+        "title": title or real_url,
+        "url": real_url,
+        "date": None,
+        "snippet": "",
+        "archived": False,
+    }
+
+
+async def _safe_scrape(url: str, scrape_fn: ScrapeFn) -> SourceDocumentRef | None:
+    """Archive one URL; an archive failure returns None (the source is kept un-archived)."""
     try:
-        ref = await scrape_fn(real_url)
-    except Exception as exc:  # archive failure must not drop a real source
-        logger.warning("gemini_ground: archive failed for %s: %s", real_url, exc)
-        ref = None
-    return _build_source(title, real_url, ref)
+        return await scrape_fn(url)
+    except Exception as exc:
+        logger.warning("gemini_ground: archive failed for %s: %s", url, exc)
+        return None
+
+
+def _apply_ref(source: dict, ref: SourceDocumentRef) -> None:
+    """Stamp a source dict with its archived-evidence ids, in place."""
+    source["archived"] = True
+    source["archivedAt"] = ref.fetched_at.isoformat() if ref.fetched_at else None
+    source["sourceDocumentId"] = ref.id
+    source["contentLength"] = ref.content_length
 
 
 async def gemini_grounded_search(
@@ -154,22 +182,32 @@ async def gemini_grounded_search(
     resolve_fn: ResolveFn = _default_resolve,
     scrape_fn: ScrapeFn = fetch_and_store_source,
 ) -> tuple[str, list[dict]]:
-    """Grounded retrieve → resolve+archive each source → (answer, citable sources).
+    """Grounded retrieve → resolve all sources, archive the top article-like few →
+    (answer, citable sources).
 
     ``SearchFn``-compatible so it slots straight into ``_broad_research``. A
-    ``generate_fn`` failure propagates (the caller turns it into an honest empty);
-    per-source failures degrade. Sources are deduped by resolved URL.
+    ``generate_fn`` failure propagates (the caller turns it into an honest empty).
+    EVERY resolved source is returned; archiving (the Firecrawl spend) is limited to
+    the first ``_MAX_ARCHIVE`` non-video/social sources to bound cost and latency.
+    Sources are deduped by resolved URL.
     """
     answer, chunks = await generate_fn(prompt)
-    results = await asyncio.gather(
-        *(_resolve_and_archive(title, uri, resolve_fn, scrape_fn) for title, uri in chunks)
+    resolved = await asyncio.gather(
+        *(_resolve_source(title, uri, resolve_fn) for title, uri in chunks)
     )
 
     sources: list[dict] = []
     seen: set[str] = set()
-    for source in results:
+    for source in resolved:
         if source is None or source["url"] in seen:
             continue
         seen.add(source["url"])
         sources.append(source)
+
+    eligible = [s for s in sources if _is_archivable(s["url"])][:_MAX_ARCHIVE]
+    refs = await asyncio.gather(*(_safe_scrape(s["url"], scrape_fn) for s in eligible))
+    for source, ref in zip(eligible, refs, strict=True):
+        if ref is not None:
+            _apply_ref(source, ref)
+
     return answer, sources

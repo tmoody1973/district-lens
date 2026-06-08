@@ -492,6 +492,23 @@ def test_select_race_candidates_returns_every_candidate_in_the_races():
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("value", ["true", "1", "yes", "on", "TRUE"])
+def test_force_env_disables_freshness_skip(monkeypatch, value):
+    from app.jobs.refresh_positions import _cached_fn_from_env
+
+    monkeypatch.setenv("POSITIONS_REFRESH_FORCE", value)
+    assert _cached_fn_from_env() is None  # None => no skip, re-research everything
+
+
+@pytest.mark.unit
+def test_no_force_env_keeps_freshness_cache(monkeypatch):
+    from app.jobs.refresh_positions import _cached_fn_from_env, get_cached_positions
+
+    monkeypatch.delenv("POSITIONS_REFRESH_FORCE", raising=False)
+    assert _cached_fn_from_env() is get_cached_positions
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_run_forces_broad_tier_for_every_candidate():
     research = _research_recorder()

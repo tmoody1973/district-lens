@@ -330,6 +330,22 @@ async def execute_refresh_positions(
         client.close()
 
 
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
+
+
+def _cached_fn_from_env() -> Callable[..., Any] | None:
+    """Choose the freshness gate from ``POSITIONS_REFRESH_FORCE``.
+
+    Default → ``get_cached_positions`` (skip docs fresher than the TTL, the normal
+    cost-controlled behavior). Truthy → ``None``, which disables the skip so every
+    selected candidate is re-researched. Use this for a one-time re-warm after the
+    broad-tier engine changes (otherwise fresh docs are skipped for the full TTL).
+    """
+    if os.environ.get("POSITIONS_REFRESH_FORCE", "").strip().lower() in _TRUTHY:
+        return None
+    return get_cached_positions
+
+
 def main() -> int:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
@@ -360,6 +376,7 @@ def main() -> int:
                 per_run_limit=per_run_limit,
                 race_keys=race_keys,
                 force_tier=force_tier,
+                cached_fn=_cached_fn_from_env(),
             )
         )
     except Exception:
