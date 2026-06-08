@@ -231,14 +231,24 @@ async def get_ballot_by_zip(
 
 def _classify_office(title: str) -> str:
     title_lower = title.lower()
-    if "senate" in title_lower and ("u.s." in title_lower or "federal" in title_lower):
+    federal = (
+        "u.s." in title_lower
+        or "federal" in title_lower
+        or "united states" in title_lower
+        or "congress" in title_lower
+    )
+    if "senate" in title_lower and federal:
         return "U.S. Senate"
-    if "house" in title_lower or "representative" in title_lower:
+    if ("house" in title_lower or "representative" in title_lower) and federal:
         return "U.S. House"
+    # State chambers must be matched before the generic house/senate fallbacks so
+    # "State House" isn't misread as the U.S. House.
+    if "assembly" in title_lower or "state house" in title_lower or "state rep" in title_lower:
+        return "State Assembly"
     if "senate" in title_lower:
         return "State Senate"
-    if "assembly" in title_lower or "state rep" in title_lower:
-        return "State Assembly"
+    if "house" in title_lower or "representative" in title_lower:
+        return "U.S. House"
     if "governor" in title_lower or "gubernatorial" in title_lower:
         return "Governor"
     if "ballot measure" in title_lower or "amendment" in title_lower or "proposition" in title_lower:
@@ -759,6 +769,96 @@ def _parse_measures_page(soup: BeautifulSoup, state: str, year: int) -> list[dic
     return measures
 
 
+# Anchor link text Ballotpedia repeats next to each office ("Click here") plus
+# common call-to-action labels — never an office name.
+_GENERIC_LINK_TEXT = {"click here", "click", "learn more", "here", "read more"}
+
+
+def _is_office_link(text: str, href: str, year: int) -> bool:
+    """True if a link in the 'Offices on the ballot' section names a real race.
+
+    Real office links point at an internal race page whose slug carries both an
+    election token and the year (e.g. /Wisconsin_State_Senate_elections,_2026).
+    This rejects the duplicate "Click here" anchors and editorial links such as
+    "Ballotpedia's scope" → /Elections_editorial_approach (no year).
+    """
+    label = text.strip().lower()
+    if len(label) < 3 or label in _GENERIC_LINK_TEXT:
+        return False
+    # Match against the path only — ignore #anchors and ?query so a stray year or
+    # token there can't smuggle a non-race link through.
+    path = href.split("#")[0].split("?")[0]
+    if not href.startswith("/") or ":" in path:
+        return False
+    path_lower = path.lower()
+    is_election_page = "election" in path_lower or "gubernatorial" in path_lower
+    return is_election_page and str(year) in path
+
+
+def _find_section_heading(content: BeautifulSoup, target: str):
+    """Return the first h2/h3 whose text contains `target` (case-insensitive)."""
+    for heading in content.find_all(["h2", "h3"]):
+        if target.lower() in heading.get_text().lower():
+            return heading
+    return None
+
+
+def _parse_state_elections_page(soup: BeautifulSoup, year: int) -> list[dict]:
+    """Extract the real races from a state's '..._elections,_YEAR' page.
+
+    Ballotpedia lists the offices actually on the ballot as a link list under the
+    'Offices on the ballot' heading. The page's other h2/h3 headings ('What's on
+    your ballot?', 'List of candidates', ...) are section labels, NOT races — the
+    old parser mistook them for races. We walk only the offices section.
+    """
+    content = soup.find("div", {"id": "mw-content-text"}) or soup
+    heading = _find_section_heading(content, "Offices on the ballot")
+    if heading is None:
+        return []
+
+    # The heading may be bare, or wrapped in a <div class="mw-heading"> (newer
+    # MediaWiki). Walk siblings of whichever node actually sits in the flow.
+    parent = heading.parent
+    is_mw_heading_wrapper = (
+        parent is not None
+        and parent.name == "div"
+        and "mw-heading" in (parent.get("class") or [])
+    )
+    start = parent if is_mw_heading_wrapper else heading
+
+    races: list[dict] = []
+    seen: set[str] = set()
+    for sibling in start.next_siblings:
+        name = getattr(sibling, "name", None)
+        if name is None:
+            continue
+        is_next_heading = name == "h2" or (
+            name == "div" and "mw-heading" in (sibling.get("class") or [])
+        )
+        if is_next_heading:
+            break
+        if not hasattr(sibling, "find_all"):
+            continue
+        for link in sibling.find_all("a", href=True):
+            text = clean_text(link.get_text())
+            href = link["href"]
+            if not _is_office_link(text, href, year):
+                continue
+            full_url = BASE_URL + href if href.startswith("/") else href
+            dedupe_key = full_url.split("#")[0]
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            races.append({
+                "title": text,
+                "url": full_url,
+                "date": f"November 3, {year}",
+                "office_type": _classify_office(text),
+                "candidates_preview": [],
+            })
+    return races
+
+
 # ── Tool 5: Election overview by state ───────────────────────────────────────
 @mcp.tool()
 async def get_elections_by_state(
@@ -787,72 +887,12 @@ async def get_elections_by_state(
     sources: list[str] = []
     state_slug = state_full.replace(" ", "_")
 
-    # Try the main state elections index page
+    # Parse the offices actually on the ballot from the state elections index page.
     url = f"{BASE_URL}/{state_slug}_elections,_{year}"
     try:
         soup = await fetch_page(url)
         sources.append(url)
-
-        content = soup.find("div", {"id": "mw-content-text"})
-        if content:
-            # Extract all section headers that look like race names
-            for h in content.find_all(["h2", "h3"]):
-                heading_text = clean_text(h.get_text())
-                if not heading_text or heading_text in ["See also", "External links", "Footnotes"]:
-                    continue
-                if any(skip in heading_text for skip in ["edit", "Contents", "Navigation"]):
-                    continue
-
-                # Look for links in this section
-                preview_links = []
-                for sibling in h.find_next_siblings():
-                    if sibling.name in ["h2", "h3"]:
-                        break
-                    for a in sibling.find_all("a", href=True):
-                        a_text = clean_text(a.get_text())
-                        a_href = a["href"]
-                        if (
-                            a_text and len(a_text) > 3
-                            and re.match(r"^/[A-Z]", a_href)
-                            and ":" not in a_href
-                        ):
-                            full_url = BASE_URL + a_href
-                            if full_url not in [p["url"] for p in preview_links]:
-                                preview_links.append({"name": a_text, "url": full_url})
-
-                elections.append({
-                    "title": heading_text,
-                    "url": url + f"#{heading_text.replace(' ', '_')}",
-                    "date": f"November 3, {year}",
-                    "office_type": _classify_office(heading_text),
-                    "candidates_preview": preview_links[:5],
-                })
-    except httpx.HTTPStatusError:
-        # Try alternative URL patterns
-        alt_urls = [
-            f"{BASE_URL}/{state_slug}_state_elections,_{year}",
-            f"{BASE_URL}/Elections_in_{state_slug},_{year}",
-        ]
-        for alt_url in alt_urls:
-            try:
-                soup = await fetch_page(alt_url)
-                sources.append(alt_url)
-                for link in soup.find_all("a", href=True):
-                    text = clean_text(link.get_text())
-                    href = link["href"]
-                    if str(year) in href and state_slug.lower() in href.lower():
-                        full = BASE_URL + href if href.startswith("/") else href
-                        if full not in [e["url"] for e in elections]:
-                            elections.append({
-                                "title": text,
-                                "url": full,
-                                "date": f"November 3, {year}",
-                                "office_type": _classify_office(text),
-                                "candidates_preview": [],
-                            })
-                break
-            except Exception:
-                continue
+        elections = _parse_state_elections_page(soup, year)
     except Exception as e:
         return {"error": f"Could not load elections for {state_full} {year}: {e}", "sources": sources}
 
