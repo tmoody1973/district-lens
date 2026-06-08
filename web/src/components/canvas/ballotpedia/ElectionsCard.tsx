@@ -21,20 +21,33 @@ export interface ElectionsData {
   elections: ElectionRace[];
 }
 
-// Ballotpedia's elections page leaks section headers into the row list; these are
-// navigation labels, not races.
-const NOISE_TITLES = [
+// Ballotpedia's elections page leaks navigation/section links into the row list
+// (e.g. "Statewide election dates", "Sample Ballot Lookup", "List of candidates").
+// These are page furniture, not races. Match as substrings — the live rows are
+// prefixed/suffixed ("Statewide election dates"), so an exact/startsWith check
+// misses them. Patterns are specific multi-word phrases so real race titles
+// (office names) never match.
+const NOISE_PATTERNS = [
   "election dates",
   "offices on the ballot",
-  "ballot measures",
+  "ballot measure",
   "see also",
   "how to vote",
+  "how to run for office",
+  "sample ballot",
+  "list of candidates",
+  "local election official",
+  "noteworthy election",
+  "on your ballot",
+  "voter registration",
+  "absentee",
+  "polling place",
 ];
 
 function isRealRace(race: ElectionRace): boolean {
   const title = race.title?.trim().toLowerCase() ?? "";
   if (!title) return false;
-  return !NOISE_TITLES.some((noise) => title === noise || title.startsWith(noise));
+  return !NOISE_PATTERNS.some((noise) => title.includes(noise));
 }
 
 export function ElectionsCard({ data }: { data: ElectionsData | null }) {

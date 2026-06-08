@@ -39,3 +39,43 @@ test("filters section-header noise rows", () => {
   render(<ElectionsCard data={data} />);
   expect(screen.queryByText("Offices on the ballot")).not.toBeInTheDocument();
 });
+
+test("filters real-world Ballotpedia section-link noise but keeps actual races", () => {
+  // These are the exact junk rows the live get_elections_by_state returned for WI —
+  // page-section links the scraper mistakes for races. None are real elections.
+  const noiseTitles = [
+    "Statewide election dates",
+    "Noteworthy elections",
+    "Statewide ballot measures",
+    "What's on your ballot?",
+    "Sample Ballot Lookup",
+    "List of candidates",
+    "Local election officials",
+  ];
+  const realRace = {
+    title: "Governor of Wisconsin",
+    url: "https://ballotpedia.org/WI_Gov",
+    date: "November 3, 2026",
+    office_type: "Governor",
+    candidates_preview: [{ name: "Jane Doe", url: "https://ballotpedia.org/Jane_Doe" }],
+  };
+  const mixed = {
+    state: "Wisconsin",
+    year: 2026,
+    elections: [
+      ...noiseTitles.map((title) => ({
+        title,
+        url: "https://ballotpedia.org/x",
+        date: "November 3, 2026",
+        office_type: "other",
+        candidates_preview: [],
+      })),
+      realRace,
+    ],
+  };
+  render(<ElectionsCard data={mixed} />);
+  expect(screen.getByText("Governor of Wisconsin")).toBeInTheDocument();
+  for (const title of noiseTitles) {
+    expect(screen.queryByText(title)).not.toBeInTheDocument();
+  }
+});
