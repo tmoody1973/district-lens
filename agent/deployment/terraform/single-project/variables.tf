@@ -18,6 +18,12 @@ variable "project_name" {
   default     = "districtlens-agent"
 }
 
+variable "positions_warm_races" {
+  type        = string
+  description = "Comma-separated race keys the positions job warms with the broad synthesis tier (POSITIONS_REFRESH_RACES). Expand to grow coverage. Empty = fall back to the nationwide priority deep refresh."
+  default     = "2026-H-WI-04,2026-H-IL-07"
+}
+
 variable "project_id" {
   type        = string
   description = "Google Cloud Project ID for resource deployment."

@@ -133,6 +133,21 @@ resource "google_cloud_run_v2_job" "refresh_positions" {
           name  = "REFRESH_TRIGGER"
           value = "scheduled"
         }
+
+        # Warm mode: scope to a focused set of races and use the broad synthesis
+        # tier (the path that produces voter-grade brief positions). Skips
+        # already-fresh candidates, so re-runs are cheap. Expand the race list via
+        # the positions_warm_races variable; empty falls back to the nationwide
+        # priority deep refresh. See app/jobs/refresh_positions.py.
+        env {
+          name  = "POSITIONS_REFRESH_TIER"
+          value = "broad"
+        }
+
+        env {
+          name  = "POSITIONS_REFRESH_RACES"
+          value = var.positions_warm_races
+        }
       }
     }
   }
