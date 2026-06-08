@@ -32,6 +32,7 @@ from app.tools.brief_pipeline import (
     is_brief_trigger,
 )
 from app.tools.ballotpedia_mcp_toolset import create_ballotpedia_mcp_toolset
+from app.tools.district_by_city import find_district_by_city
 from app.tools.district_lookup import lookup_district
 from app.tools.finish_brief import finish_brief
 from app.tools.mongodb_mcp_toolset import create_mongodb_mcp_toolset
@@ -73,6 +74,7 @@ def _build_tools() -> list:
     """
     tools: list = [
         lookup_district,
+        find_district_by_city,
         get_state_races,
         get_race_candidates,
         get_race_finance_brief,

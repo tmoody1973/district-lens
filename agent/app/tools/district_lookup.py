@@ -20,6 +20,10 @@ import pymongo
 import pymongo.errors
 from google.adk.tools import ToolContext
 
+from app.services.districts.cities import (
+    format_city_coverage_line,
+    get_district_cities,
+)
 from app.services.geocodio import GeocodioClient, GeocodioError
 from app.services.geocodio.models import DistrictResult
 
@@ -46,6 +50,30 @@ def _get_mongo_collection() -> pymongo.collection.Collection | None:  # type: ig
     if _mongo_client is None:
         _mongo_client = pymongo.MongoClient(uri)
     return _mongo_client["districtlens"]["district_lookups"]
+
+
+def _get_districts_collection() -> pymongo.collection.Collection | None:  # type: ignore[type-arg]
+    """Accessor for the `districts` geography collection (reuses the cache client)."""
+    if _get_mongo_collection() is None:  # ensures URI present + client initialised
+        return None
+    return _mongo_client["districtlens"]["districts"]  # type: ignore[index]
+
+
+def _maybe_append_city_coverage(response_text: str, result: DistrictResult) -> str:
+    """Append an approximate "Covers (approx.): …" line. Never raises."""
+    primary = result.primary_district
+    if primary is None or result.is_zip_ambiguous:
+        return response_text
+    try:
+        collection = _get_districts_collection()
+        if collection is None:
+            return response_text
+        cities_info = get_district_cities(collection, primary.race_key)
+        line = format_city_coverage_line(cities_info) if cities_info else ""
+        return f"{response_text}\n{line}" if line else response_text
+    except Exception as exc:  # geography is a nicety; never break the lookup
+        logger.warning("district_lookup.city_coverage_error: %s", exc)
+        return response_text
 
 
 def _get_geocodio_client() -> GeocodioClient:
@@ -245,7 +273,7 @@ def lookup_district(address_or_zip: str, tool_context: ToolContext) -> str:
         )
 
     result = results[0]
-    response_text = _format_response(result)
+    response_text = _maybe_append_city_coverage(_format_response(result), result)
     _push_district_state_from_result(tool_context, result)
 
     # Write to cache (DECISIONS_LOG §4.3 R3, R6)
