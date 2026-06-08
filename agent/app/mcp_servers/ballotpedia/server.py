@@ -676,18 +676,25 @@ async def get_ballot_measures(
                                 if len(cols) >= 2:
                                     title_td = cell_for(cols, "title", "measure") or cols[0]
                                     type_td = cell_for(cols, "type")
-                                    desc_td = cell_for(cols, "description", "subject", "summary")
+                                    subject_td = cell_for(cols, "subject")
+                                    desc_td = cell_for(cols, "description", "summary")
                                     link = title_td.find("a")
                                     title = clean_text(title_td.get_text())
                                     href = link["href"] if link and link.get("href") else ""
                                     measure_url = BASE_URL + href if href.startswith("/") else href
                                     mtype = clean_text(type_td.get_text()) if type_td else ""
+                                    subject = clean_text(subject_td.get_text()) if subject_td else ""
                                     desc = clean_text(desc_td.get_text()) if desc_td else ""
+                                    # Fall back to subject text for description only when
+                                    # there is no dedicated description column.
+                                    if not desc and subject:
+                                        desc = subject
                                     if title and title not in [m["title"] for m in measures]:
                                         measures.append({
                                             "title": title,
                                             "state": state_full,
                                             "type": mtype,
+                                            "subject": subject,
                                             "description": desc,
                                             "status": "on_ballot",
                                             "url": measure_url,
@@ -742,6 +749,9 @@ def _parse_measures_page(soup: BeautifulSoup, state: str, year: int) -> list[dic
                     "title": title,
                     "state": state,
                     "type": row_data.get("type", ""),
+                    # Subject is its own column; keep it distinct from description
+                    # so the generative-UI card can group measures by subject.
+                    "subject": row_data.get("subject", ""),
                     "description": row_data.get("description", row_data.get("summary", "")),
                     "status": row_data.get("status", ""),
                     "url": row_data.get("title_url", row_data.get("measure_url", "")),
