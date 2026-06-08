@@ -48,12 +48,44 @@ HEADERS = {
 TIMEOUT = httpx.Timeout(20.0, connect=10.0)
 
 
-async def fetch_page(url: str, params: dict | None = None) -> BeautifulSoup:
-    """Fetch a Ballotpedia page and return a BeautifulSoup object."""
-    async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT, follow_redirects=True) as client:
-        response = await client.get(url, params=params)
+FETCH_RETRIES = 3
+RETRY_BACKOFF_SECONDS = 1.5
+
+
+async def fetch_page(
+    url: str,
+    params: dict | None = None,
+    *,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> BeautifulSoup:
+    """Fetch a Ballotpedia page and return a BeautifulSoup object.
+
+    Ballotpedia fronts pages with Cloudflare, which can answer datacenter IPs
+    (e.g. Cloud Run) with an HTTP 202 bot-challenge instead of the real page.
+    raise_for_status() does NOT treat 202 as an error, so we'd silently parse the
+    challenge page. Retry any non-200 with backoff, then raise so callers fail
+    honestly rather than returning empty results from a challenge page.
+    """
+    async with httpx.AsyncClient(
+        headers=HEADERS, timeout=TIMEOUT, follow_redirects=True, transport=transport
+    ) as client:
+        response = None
+        for attempt in range(FETCH_RETRIES):
+            response = await client.get(url, params=params)
+            if response.status_code == 200:
+                return BeautifulSoup(response.text, "html.parser")
+            if attempt < FETCH_RETRIES - 1:
+                await asyncio.sleep(RETRY_BACKOFF_SECONDS * (attempt + 1))
+
+        # Out of retries without a 200. raise_for_status covers 4xx/5xx; a stuck
+        # 2xx-but-not-200 (the 202 challenge) needs an explicit raise.
         response.raise_for_status()
-        return BeautifulSoup(response.text, "html.parser")
+        raise httpx.HTTPStatusError(
+            f"Ballotpedia returned HTTP {response.status_code} (likely a bot "
+            f"challenge) for {url}",
+            request=response.request,
+            response=response,
+        )
 
 
 def clean_text(text: str) -> str:
