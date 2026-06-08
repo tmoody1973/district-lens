@@ -104,6 +104,30 @@ def test_returns_empty_when_offices_section_absent():
     assert server._parse_state_elections_page(soup, 2026) == []
 
 
+def test_parses_absolute_hrefs_from_firecrawl_rendered_html():
+    # Firecrawl (browser-rendered) returns ABSOLUTE hrefs, unlike raw httpx which
+    # returns "/relative" links. The parser must accept both internal forms.
+    server = _load_server()
+    html = """
+    <div id="mw-content-text">
+      <h2>Offices on the ballot</h2>
+      <div class="election-card">
+        <a href="https://ballotpedia.org/Wisconsin_gubernatorial_and_lieutenant_gubernatorial_election,_2026">Governor</a>
+        <a href="https://ballotpedia.org/Wisconsin_gubernatorial_and_lieutenant_gubernatorial_election,_2026">Click here</a>
+        <a href="https://ballotpedia.org/Wisconsin_State_Senate_elections,_2026">State Senate</a>
+      </div>
+      <h2>What's on your ballot?</h2>
+    </div>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    races = server._parse_state_elections_page(soup, 2026)
+    titles = [r["title"] for r in races]
+    assert titles == ["Governor", "State Senate"]
+    assert races[0]["url"] == (
+        "https://ballotpedia.org/Wisconsin_gubernatorial_and_lieutenant_gubernatorial_election,_2026"
+    )
+
+
 def test_classify_office_distinguishes_state_house_from_us_house():
     server = _load_server()
     assert server._classify_office("U.S. House") == "U.S. House"

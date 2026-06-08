@@ -817,10 +817,19 @@ def _is_office_link(text: str, href: str, year: int) -> bool:
     label = text.strip().lower()
     if len(label) < 3 or label in _GENERIC_LINK_TEXT:
         return False
-    # Match against the path only — ignore #anchors and ?query so a stray year or
-    # token there can't smuggle a non-race link through.
-    path = href.split("#")[0].split("?")[0]
-    if not href.startswith("/") or ":" in path:
+    # Accept internal Ballotpedia links whether relative ("/Foo") or absolute
+    # ("https://ballotpedia.org/Foo") — a raw httpx fetch returns relative hrefs,
+    # but a browser-rendered fetch (e.g. via Firecrawl) returns absolute ones.
+    if href.startswith(BASE_URL):
+        path = href[len(BASE_URL):]
+    elif href.startswith("/"):
+        path = href
+    else:
+        return False
+    # Match against the path only — ignore #anchors/?query, and reject MediaWiki
+    # namespaces (/Category:, /File:) without tripping on the URL scheme's colon.
+    path = path.split("#")[0].split("?")[0]
+    if ":" in path:
         return False
     path_lower = path.lower()
     is_election_page = "election" in path_lower or "gubernatorial" in path_lower
