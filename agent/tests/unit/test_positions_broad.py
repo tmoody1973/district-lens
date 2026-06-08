@@ -127,7 +127,7 @@ async def test_broad_tier_returns_structured_positions() -> None:
         ]
 
     doc = await research_candidate_positions(
-        CANDIDATE, tier="broad", search_fn=fake_search, broad_structure_fn=fake_structure
+        CANDIDATE, tier="broad", broad_search_fn=fake_search, broad_structure_fn=fake_structure
     )
     assert doc["research_tier"] == "broad"
     assert doc["status"] == STATUS_FOUND
@@ -145,7 +145,7 @@ async def test_broad_tier_no_info_answer_is_an_honest_empty() -> None:
         raise AssertionError("structure must not run on a no-info answer")
 
     doc = await research_candidate_positions(
-        CANDIDATE, tier="broad", search_fn=fake_search, broad_structure_fn=fake_structure
+        CANDIDATE, tier="broad", broad_search_fn=fake_search, broad_structure_fn=fake_structure
     )
     assert doc["status"] == STATUS_EMPTY
     assert doc["positions"] == []
@@ -170,7 +170,7 @@ async def test_broad_tier_keeps_a_rich_answer_that_only_notes_some_gaps() -> Non
                  "evidenceType": "reported", "sources": sources}]
 
     doc = await research_candidate_positions(
-        CANDIDATE, tier="broad", search_fn=fake_search, broad_structure_fn=fake_structure
+        CANDIDATE, tier="broad", broad_search_fn=fake_search, broad_structure_fn=fake_structure
     )
     assert doc["status"] == STATUS_FOUND
     assert doc["positions"][0]["issue"] == "health care"
@@ -193,7 +193,7 @@ async def test_broad_tier_drops_a_no_info_fallback_card() -> None:
                  "evidenceType": "reported", "sources": sources}]
 
     doc = await research_candidate_positions(
-        CANDIDATE, tier="broad", search_fn=fake_search, broad_structure_fn=fake_structure
+        CANDIDATE, tier="broad", broad_search_fn=fake_search, broad_structure_fn=fake_structure
     )
     assert doc["status"] == STATUS_EMPTY
     assert doc["positions"] == []
@@ -209,7 +209,7 @@ async def test_broad_tier_never_raises_on_search_failure() -> None:
         return []
 
     doc = await research_candidate_positions(
-        CANDIDATE, tier="broad", search_fn=boom, broad_structure_fn=fake_structure
+        CANDIDATE, tier="broad", broad_search_fn=boom, broad_structure_fn=fake_structure
     )
     assert doc["status"] == STATUS_EMPTY
     assert doc["positions"] == []

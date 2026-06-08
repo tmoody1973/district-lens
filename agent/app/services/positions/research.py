@@ -34,6 +34,7 @@ from urllib.parse import urlparse
 from app.refresh.nominee_resolver import STATE_NAMES
 from app.services.evidence.schema import SourceDocumentRef
 from app.services.evidence.store import fetch_and_store_source
+from app.services.positions.gemini_ground import gemini_grounded_search
 from app.services.positions.schema import (
     AGGREGATOR_DENY,
     QUESTIONNAIRE_DOMAINS,
@@ -194,18 +195,20 @@ def _is_total_non_answer(answer: str) -> bool:
 async def _broad_research(
     candidate: dict[str, Any],
     name: str,
-    search_fn: SearchFn,
+    broad_search_fn: SearchFn,
     structure_fn: BroadStructureFn,
 ) -> list[dict]:
-    """One disambiguated Perplexity call → Gemini-structured per-issue positions.
+    """One grounded ``gemini-3.5-flash`` call → Gemini-structured per-issue positions.
 
-    A TOTAL non-answer is gated to an honest empty before structuring; after
-    structuring, any single card that is itself a no-info narration (e.g. the
-    fallback "key positions" card) is dropped. NEVER raises.
+    ``broad_search_fn`` retrieves the answer plus already-archived, citable sources
+    (Gemini grounding by default); ``structure_fn`` (gemini-3.1-pro-preview) maps each
+    issue to those sources by index. A TOTAL non-answer is gated to an honest empty
+    before structuring; after structuring, any single card that is itself a no-info
+    narration (e.g. the fallback "key positions" card) is dropped. NEVER raises.
     """
     prompt = _broad_prompt(candidate)
     try:
-        answer, sources = await search_fn(prompt)
+        answer, sources = await broad_search_fn(prompt)
     except Exception as exc:  # missing key / transport error → honest empty
         logger.warning("research: broad search failed for %s: %s", name, exc)
         return []
@@ -467,6 +470,7 @@ async def research_candidate_positions(
     *,
     tier: str = "deep",
     search_fn: SearchFn = _perplexity_search,
+    broad_search_fn: SearchFn = gemini_grounded_search,
     scrape_fn: ScrapeFn = fetch_and_store_source,
     structure_fn: StructureFn = _default_structure_fn,
     broad_structure_fn: BroadStructureFn = structure_positions,
@@ -480,7 +484,7 @@ async def research_candidate_positions(
     name = _natural_name(candidate)
 
     if tier == "broad":
-        positions = await _broad_research(candidate, name, search_fn, broad_structure_fn)
+        positions = await _broad_research(candidate, name, broad_search_fn, broad_structure_fn)
         return _build_doc(
             candidate, disambiguation=disambiguation, tier="broad", positions=positions
         )
