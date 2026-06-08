@@ -31,6 +31,7 @@ from app.tools.brief_pipeline import (
     _latest_user_text,
     is_brief_trigger,
 )
+from app.tools.ballotpedia_mcp_toolset import create_ballotpedia_mcp_toolset
 from app.tools.district_lookup import lookup_district
 from app.tools.finish_brief import finish_brief
 from app.tools.mongodb_mcp_toolset import create_mongodb_mcp_toolset
@@ -89,6 +90,13 @@ def _build_tools() -> list:
     except Exception as exc:
         # Non-fatal: agent works without MCP, but judging may note its absence
         logger.warning("MongoDB MCP toolset not available: %s", exc)
+    try:
+        ballotpedia_toolset = create_ballotpedia_mcp_toolset()
+        tools.append(ballotpedia_toolset)
+        logger.info("Ballotpedia MCP toolset registered (discovery-only)")
+    except Exception as exc:
+        # Non-fatal: chat works without Ballotpedia discovery tools
+        logger.warning("Ballotpedia MCP toolset not available: %s", exc)
     return tools
 
 
