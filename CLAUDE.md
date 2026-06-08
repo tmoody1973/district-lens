@@ -61,9 +61,16 @@ Use TypeScript for frontend and backend unless the repository already has a diff
 | UI | Show citations, confidence labels, and source dates in the user interface. |
 | Logs | Log retrieval and extraction outcomes, including safe MCP trace events, but do not log secrets. |
 
-## Gemini model — MANDATORY
+## Gemini models — MANDATORY
 
-**Always use `gemini-3.1-pro-preview` with `location="global"`.** Never use `gemini-2.5-pro`, `gemini-2.5-flash`, or any other Gemini model string. This applies to every file in the project: `agent.py`, any tool that calls `genai.Client`, `route.ts`, and any test script. If you see a different model string in any file, fix it immediately.
+Two approved Gemini models, each with a specific role. Always `location="global"`. **Never** use `gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-1.x`, or any other Gemini string — if you see one, fix it.
+
+| Model | Use for | Why |
+|---|---|---|
+| `gemini-3.1-pro-preview` | **Default** — reasoning, extraction, structuring, answer generation, evals | Highest-quality reasoning; the project default everywhere unless a row below applies |
+| `gemini-3.5-flash` | **Grounded web retrieval only** — Google Search grounding (`tools=[Tool(google_search=GoogleSearch())]`) to find candidate positions / live facts | Cheaper + faster, and Google-Search grounding finds low-profile entities Perplexity's API misses. Grounding billed $14/1k queries (5,000/mo free) on Gemini 3 |
+
+Rationale (decided 2026-06-08, empirically verified): `gemini-3.5-flash` + Google Search grounding found WI-04 challengers (Donahue, Nath) that Perplexity sonar-pro could not, at ~$0.014/candidate vs $0.60 for Perplexity deep-research, with citable sources. See `docs/handoffs/2026-06-08-gemini-grounding-positions.md`. Do NOT use `gemini-3.5-flash` for non-grounded reasoning/structuring — that stays `gemini-3.1-pro-preview`.
 
 ## Claude Code operating instructions
 
