@@ -17,6 +17,12 @@ import pytest
 from app.tools import ballotpedia_mcp_toolset as bp
 
 
+@pytest.fixture(autouse=True)
+def _disable_page_cache(monkeypatch):
+    """Keep these fetch tests hermetic — no real Mongo cache even if URI is set."""
+    monkeypatch.delenv("MONGODB_URI", raising=False)
+
+
 def _load_server():
     spec = importlib.util.spec_from_file_location(
         "ballotpedia_server_fetch_test", bp._DEFAULT_SERVER_PATH

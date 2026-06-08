@@ -12,6 +12,7 @@ import os
 import re
 import json
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import quote, urlencode
 
@@ -54,9 +55,76 @@ RETRY_BACKOFF_SECONDS = 1.5
 _FIRECRAWL_SCRAPE_ENDPOINT = "https://api.firecrawl.dev/v2/scrape"
 FIRECRAWL_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 
+# ── Optional Mongo HTML cache ─────────────────────────────────────────────────
+# When MONGODB_URI is set (running inside the DistrictLens agent), cache fetched
+# HTML so repeat Ballotpedia lookups skip the Firecrawl stealth fallback (~5
+# credits + seconds each). Gated + lazy-imported so the standalone server (Claude
+# Desktop, no Mongo/pymongo) behaves exactly as before.
+_CACHE_DB_NAME = "districtlens"
+_CACHE_COLLECTION_NAME = "ballotpedia_page_cache"
+_CACHE_TTL_DAYS = int(os.environ.get("BALLOTPEDIA_CACHE_TTL_DAYS", "7"))
+_CACHE_DEFAULT = object()  # sentinel meaning "resolve the real cache collection"
+_page_cache_client: Any = None
 
-async def _fetch_via_firecrawl(url: str, *, post: Any = None) -> BeautifulSoup | None:
-    """Fetch a page through Firecrawl's stealth proxy, returning soup or None.
+
+def _page_cache_collection() -> Any:
+    """Return the Mongo cache collection, or None when caching is unavailable."""
+    global _page_cache_client
+    uri = os.environ.get("MONGODB_URI", "")
+    if not uri:
+        return None
+    try:
+        import pymongo
+    except ImportError:
+        return None
+    try:
+        if _page_cache_client is None:
+            _page_cache_client = pymongo.MongoClient(uri, serverSelectionTimeoutMS=3000)
+        return _page_cache_client[_CACHE_DB_NAME][_CACHE_COLLECTION_NAME]
+    except Exception as exc:
+        logger.warning("Ballotpedia page cache unavailable: %s", exc)
+        return None
+
+
+def _cache_is_fresh(fetched_at: datetime, now: datetime) -> bool:
+    if fetched_at.tzinfo is None:
+        fetched_at = fetched_at.replace(tzinfo=timezone.utc)
+    return (now - fetched_at) < timedelta(days=_CACHE_TTL_DAYS)
+
+
+async def _cache_get(url: str, *, collection: Any) -> str | None:
+    """Return fresh cached HTML for url, or None on miss/stale/error."""
+    if collection is None:
+        return None
+    try:
+        doc = await asyncio.to_thread(collection.find_one, {"url": url})
+    except Exception as exc:
+        logger.warning("Ballotpedia cache read failed for %s: %s", url, exc)
+        return None
+    if not doc or not doc.get("html") or not doc.get("fetched_at"):
+        return None
+    if not _cache_is_fresh(doc["fetched_at"], datetime.now(timezone.utc)):
+        return None
+    return doc["html"]
+
+
+async def _cache_put(url: str, html: str, *, collection: Any) -> None:
+    """Upsert fetched HTML into the cache; best-effort (never raises)."""
+    if collection is None or not html:
+        return
+    try:
+        await asyncio.to_thread(
+            collection.update_one,
+            {"url": url},
+            {"$set": {"url": url, "html": html, "fetched_at": datetime.now(timezone.utc)}},
+            upsert=True,
+        )
+    except Exception as exc:
+        logger.warning("Ballotpedia cache write failed for %s: %s", url, exc)
+
+
+async def _fetch_via_firecrawl(url: str, *, post: Any = None) -> str | None:
+    """Fetch a page through Firecrawl's stealth proxy, returning rawHtml or None.
 
     Used as a fallback when a direct request is bot-challenged. Firecrawl runs a
     real browser through residential proxies, which clears Ballotpedia's Cloudflare
@@ -98,25 +166,22 @@ async def _fetch_via_firecrawl(url: str, *, post: Any = None) -> BeautifulSoup |
     if not raw_html:
         return None
     logger.info("Firecrawl stealth fallback succeeded for %s", url)
-    return BeautifulSoup(raw_html, "html.parser")
+    return raw_html
 
 
-async def fetch_page(
+async def _fetch_html(
     url: str,
-    params: dict | None = None,
+    params: dict | None,
     *,
-    transport: httpx.AsyncBaseTransport | None = None,
-    firecrawl_post: Any = None,
-) -> BeautifulSoup:
-    """Fetch a Ballotpedia page and return a BeautifulSoup object.
+    transport: httpx.AsyncBaseTransport | None,
+    firecrawl_post: Any,
+) -> str:
+    """Return page HTML via a direct request, falling back to Firecrawl stealth.
 
-    Ballotpedia fronts pages with Cloudflare, which can answer datacenter IPs
-    (e.g. Cloud Run) with an HTTP 202 bot-challenge instead of the real page.
-    raise_for_status() does NOT treat 202 as an error, so we'd silently parse the
-    challenge page. Strategy: try a direct request (retrying non-200) — free when
-    not challenged — then fall back to Firecrawl's stealth proxy, which clears the
-    challenge. Only if both fail do we raise, so callers never parse a challenge
-    page silently.
+    Ballotpedia fronts pages with Cloudflare, which answers datacenter IPs (Cloud
+    Run) with an HTTP 202 bot-challenge. raise_for_status() ignores 202, so we'd
+    silently parse the challenge page. Retry non-200, then fall back to Firecrawl
+    (real browser + residential IPs). Raise only if both paths fail.
     """
     async with httpx.AsyncClient(
         headers=HEADERS, timeout=TIMEOUT, follow_redirects=True, transport=transport
@@ -125,16 +190,16 @@ async def fetch_page(
         for attempt in range(FETCH_RETRIES):
             response = await client.get(url, params=params)
             if response.status_code == 200:
-                return BeautifulSoup(response.text, "html.parser")
+                return response.text
             if attempt < FETCH_RETRIES - 1:
                 await asyncio.sleep(RETRY_BACKOFF_SECONDS * (attempt + 1))
 
     # Direct fetch stayed non-200 (e.g. the 202 challenge). Pay for Firecrawl
     # stealth only now, on the full URL including any query params.
     firecrawl_url = f"{url}?{urlencode(params)}" if params else url
-    soup = await _fetch_via_firecrawl(firecrawl_url, post=firecrawl_post)
-    if soup is not None:
-        return soup
+    raw_html = await _fetch_via_firecrawl(firecrawl_url, post=firecrawl_post)
+    if raw_html is not None:
+        return raw_html
 
     # Both paths failed — raise so the caller returns an honest error.
     response.raise_for_status()
@@ -144,6 +209,38 @@ async def fetch_page(
         request=response.request,
         response=response,
     )
+
+
+async def fetch_page(
+    url: str,
+    params: dict | None = None,
+    *,
+    transport: httpx.AsyncBaseTransport | None = None,
+    firecrawl_post: Any = None,
+    cache_collection: Any = _CACHE_DEFAULT,
+) -> BeautifulSoup:
+    """Fetch a Ballotpedia page (cached) and return a BeautifulSoup object.
+
+    Reads an optional Mongo HTML cache first — so repeat lookups skip the Firecrawl
+    fallback entirely — then fetches direct → Firecrawl on a miss and writes the
+    result back. Pass cache_collection=None to bypass the cache.
+    """
+    cache_url = f"{url}?{urlencode(params)}" if params else url
+    collection = (
+        _page_cache_collection()
+        if cache_collection is _CACHE_DEFAULT
+        else cache_collection
+    )
+
+    cached = await _cache_get(cache_url, collection=collection)
+    if cached is not None:
+        return BeautifulSoup(cached, "html.parser")
+
+    html = await _fetch_html(
+        url, params, transport=transport, firecrawl_post=firecrawl_post
+    )
+    await _cache_put(cache_url, html, collection=collection)
+    return BeautifulSoup(html, "html.parser")
 
 
 def clean_text(text: str) -> str:
