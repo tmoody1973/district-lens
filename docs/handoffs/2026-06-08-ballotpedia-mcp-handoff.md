@@ -1,8 +1,8 @@
 # Handoff — Ballotpedia MCP integration (discovery-only, inline chat)
 
-**Date:** 2026-06-08
-**Status:** ✅ Implemented + verified locally · ⛔ NOT committed · ⛔ NOT deployed
-**Pick up by:** committing, then deploying. Optional follow-ups below.
+**Date:** 2026-06-08 (updated same day)
+**Status:** ✅ Implemented + verified · ✅ committed (`b525091`) + pushed to `origin/main` · ✅ shipped to prod in revision `districtlens-agent-00031-z4l`
+**Pick up by:** live in-container smoke test of the Ballotpedia tools (see "What's LEFT"). Code work is done.
 
 ---
 
@@ -32,7 +32,7 @@ Full context already captured in memory — read it first:
 
 ---
 
-## Files changed (all uncommitted; `git -C agent diff` for specifics)
+## Files changed (committed in `b525091`; `git show b525091` for specifics)
 
 | File | What |
 |---|---|
@@ -67,14 +67,22 @@ The original standalone server: `cd ~/Downloads/ballotpedia-mcp && uv run pytest
 
 ## What's LEFT for the next session
 
-1. **Commit.** Suggested: `feat(agent): add discovery-only Ballotpedia MCP to inline chat`.
-   Branch first if not already (work is on `main`).
-2. **Deploy** (manual, per `districtlens_deploy_mechanism` memory):
-   `terraform apply -var-file=vars/local.tfvars`. Vendored server + dep ride along
-   in the image (under `agent/app/`).
-3. **Optional — schedule the server's integration tests as a canary.** Scraper is
+DONE: committed (`b525091`), pushed, and **deployed** — it shipped to prod in
+revision `districtlens-agent-00031-z4l` (built from `agent/` source via
+`gcloud run deploy districtlens-agent --source agent --region us-central1 --project civicsync-440613`;
+NOTE: the agent *code* deploys via `gcloud run deploy --source`, NOT terraform —
+terraform only manages config/secrets and the service sits on a placeholder image).
+
+Remaining:
+1. **Live in-container smoke test (the real open item).** The toolset registers
+   non-fatally — if the vendored server fails to spawn in the container, it just
+   logs a warning and the tools are silently absent. Confirm in the deployed
+   journalist chat: *"What ballot measures are on the 2026 California ballot?"* →
+   expect Ballotpedia discovery results (not a refusal). If absent, check the
+   Cloud Run logs for "Ballotpedia MCP toolset not available".
+2. **Optional — schedule the server's integration tests as a canary.** Scraper is
    HTML-fragile; `~/Downloads/ballotpedia-mcp/tests` has live-network tests.
-4. **Optional cleanup:** an earlier `uv sync` pruned ad-hoc `ruff`/`ty`/`tabulate`
+3. **Optional cleanup:** an earlier `uv sync` pruned ad-hoc `ruff`/`ty`/`tabulate`
    from the agent venv (not in declared deps). Re-add if your lint flow needs them.
 
 ---
