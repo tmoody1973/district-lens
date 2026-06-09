@@ -94,7 +94,7 @@ export function deriveLabel(raceKey: string): string {
 
 // Citations the saved brief must preserve: every position's stored sources plus
 // the incumbent voting-record source, de-duplicated by URL.
-function collectSourceRefs(state: DistrictLensState): SourceRef[] {
+export function collectSourceRefs(state: DistrictLensState): SourceRef[] {
   const byUrl = new Map<string, SourceRef>();
   for (const position of state.positions) {
     for (const s of position.sources ?? []) {
