@@ -75,14 +75,17 @@ export function WorkspaceShell({
           </>
         ) : (
           <>
-            <div style={{ width: `${liveChatPct ?? layout.chatPct}%` }} className="min-w-0 shrink-0">
+            <div
+              style={{ width: `${liveChatPct ?? layout.chatPct}%` }}
+              className="hidden min-w-0 shrink-0 lg:block"
+            >
               {chat}
             </div>
             <div
               role="separator"
               aria-orientation="vertical"
               onMouseDown={startDrag}
-              className="flex w-1.5 shrink-0 cursor-col-resize items-center justify-center bg-zinc-800 transition-colors hover:bg-zinc-700"
+              className="hidden w-1.5 shrink-0 cursor-col-resize items-center justify-center bg-zinc-800 transition-colors hover:bg-zinc-700 lg:flex"
             >
               <div className="h-8 w-0.5 rounded-full bg-zinc-600" />
             </div>

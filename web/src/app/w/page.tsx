@@ -78,7 +78,7 @@ function WorkspaceInner() {
     </div>
   ) : (
     <div className="h-full bg-white">
-      <CanvasEmptyState onSubmit={(addr) => addr && submitAddress(addr)} />
+      <CanvasEmptyState onSubmit={submitAddress} />
     </div>
   );
 
