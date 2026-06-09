@@ -1,14 +1,16 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CopilotChat } from "@copilotkit/react-ui";
 import { AgentToolTrace } from "@/components/canvas/AgentToolTrace";
 import { CanvasEmptyState } from "@/components/canvas/CanvasEmptyState";
 import { RaceTable } from "@/components/canvas/RaceTable";
 import { USMap } from "@/components/map/USMap";
 import { ArtifactPanel } from "@/components/workspace/ArtifactPanel";
+import { ArtifactProvider, useArtifacts } from "@/components/workspace/ArtifactProvider";
 import { ChatPane } from "@/components/workspace/ChatPane";
+import { LibrarySections } from "@/components/workspace/LibrarySections";
 import { LibrarySidebar } from "@/components/workspace/LibrarySidebar";
 import { WorkspaceShell } from "@/components/workspace/WorkspaceShell";
 import {
@@ -16,15 +18,26 @@ import {
   useWorkspaceLayout,
 } from "@/components/workspace/WorkspaceLayoutContext";
 import { CHAT_LABELS, SYSTEM_PROMPT } from "@/lib/workspace/chat-config";
+import { useAutoSnapshot } from "@/lib/workspace/useAutoSnapshot";
 import { useWorkspaceAgent } from "@/lib/workspace/useWorkspaceAgent";
 import { deriveLabel } from "@/lib/saved-briefs/schema";
 import type { Persona } from "@/lib/workspace/layout";
 
 function WorkspaceInner() {
   const params = useSearchParams();
+  const router = useRouter();
   const { setPersona } = useWorkspaceLayout();
   const { agentState, displayed, submitAddress, exploreState, openRace, setMode } =
     useWorkspaceAgent();
+  const {
+    library,
+    active,
+    activeVersionIndex,
+    openArtifact,
+    closeArtifact,
+    selectVersion,
+    recordSnapshot,
+  } = useArtifacts();
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const kickedOff = useRef(false);
 
@@ -45,6 +58,28 @@ function WorkspaceInner() {
     }
   }, [params, submitAddress, exploreState, setMode, setPersona]);
 
+  // Auto-snapshot completed drafts into the library, then mark "Saved ✓".
+  // (A later task REPLACES this callback with a version that adds the
+  // signed-in Mongo mirror write — do not end up with two useAutoSnapshot calls.)
+  const [justSaved, setJustSaved] = useState(false);
+  useAutoSnapshot(agentState, (state) => {
+    const record = recordSnapshot(state);
+    if (record) {
+      setJustSaved(true);
+      setTimeout(() => setJustSaved(false), 4000);
+    }
+  });
+
+  // Deep link: /w?a=<artifactId>. Unknown id → "not in your library" (spec §Error handling).
+  const requestedArtifactId = params.get("a");
+  useEffect(() => {
+    if (requestedArtifactId) openArtifact(requestedArtifactId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedArtifactId]);
+  const deadLink = Boolean(
+    requestedArtifactId && !library.some((r) => r.artifactId === requestedArtifactId),
+  );
+
   const handlePersonaChange = (persona: Persona) => setMode(persona);
 
   const isJournalist = agentState.mode === "journalist";
@@ -55,8 +90,32 @@ function WorkspaceInner() {
     : false;
   const briefState = showBrief && displayed ? displayed.state : null;
   const isDrafting = agentState.stage !== "idle" && agentState.stage !== "complete";
-  const panelState = briefState ?? (isDrafting ? agentState : null);
-  const title = panelState?.currentRaceKey ? deriveLabel(panelState.currentRaceKey) : null;
+
+  // Display priority — a reopened artifact wins over the live brief.
+  const reopenedState = active ? active.versions[activeVersionIndex]?.snapshot ?? null : null;
+  const panelState = reopenedState ?? briefState ?? (isDrafting ? agentState : null);
+  const title = active
+    ? active.name
+    : panelState?.currentRaceKey
+      ? deriveLabel(panelState.currentRaceKey)
+      : null;
+
+  // Dead-link empty state, taking precedence over the persona empty states.
+  const deadLinkState = deadLink ? (
+    <div className="flex h-full flex-col items-center justify-center gap-3 bg-zinc-900 p-8 text-center">
+      <p className="text-sm text-zinc-300">That artifact isn't in this browser's library.</p>
+      <p className="text-xs text-zinc-500">
+        Artifacts live on the device where they were built. Rebuild the brief to recreate it here.
+      </p>
+      <button
+        type="button"
+        onClick={() => router.replace("/w")}
+        className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-500"
+      >
+        Start fresh
+      </button>
+    </div>
+  ) : null;
 
   const emptyState = isJournalist ? (
     <div className="flex h-full flex-col overflow-y-auto bg-white">
@@ -87,14 +146,52 @@ function WorkspaceInner() {
       {/* Renders agent tool calls (incl. MongoDB MCP) inline in the chat */}
       <AgentToolTrace />
       <WorkspaceShell
-        library={<LibrarySidebar onPersonaChange={handlePersonaChange} />}
+        library={
+          <LibrarySidebar onPersonaChange={handlePersonaChange}>
+            <LibrarySections />
+          </LibrarySidebar>
+        }
         chat={<ChatPane statusMessage={agentState.status_message} />}
         artifact={
           <ArtifactPanel
             state={panelState}
             title={title}
-            isDrafting={isDrafting}
-            emptyState={emptyState}
+            isDrafting={isDrafting && !reopenedState}
+            emptyState={deadLinkState ?? emptyState}
+            headerActions={
+              <>
+                {justSaved && (
+                  <span className="rounded bg-emerald-900/40 px-1.5 py-0.5 text-[10px] text-emerald-400">
+                    Saved ✓
+                  </span>
+                )}
+                {active && active.versions.length > 1 && (
+                  <select
+                    aria-label="Version history"
+                    value={activeVersionIndex}
+                    onChange={(e) => selectVersion(Number(e.target.value))}
+                    className="rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-[10px] text-zinc-300"
+                  >
+                    {active.versions.map((v, i) => (
+                      <option key={v.versionId} value={i}>
+                        {new Date(v.savedAt).toLocaleDateString()}{" "}
+                        {i === active.versions.length - 1 ? "(latest)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {active && (
+                  <button
+                    type="button"
+                    onClick={closeArtifact}
+                    aria-label="Close artifact"
+                    className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-white"
+                  >
+                    ✕
+                  </button>
+                )}
+              </>
+            }
           />
         }
       />
@@ -141,7 +238,9 @@ function WorkspacePage() {
   const initialPersona: Persona = params.get("state") ? "journalist" : "voter";
   return (
     <WorkspaceLayoutProvider initialPersona={initialPersona}>
-      <WorkspaceInner />
+      <ArtifactProvider>
+        <WorkspaceInner />
+      </ArtifactProvider>
     </WorkspaceLayoutProvider>
   );
 }

@@ -21,6 +21,7 @@ function Section({
       <button
         type="button"
         onClick={() => setExpanded((e) => !e)}
+        aria-expanded={expanded}
         className="flex w-full items-center justify-between text-xs font-semibold uppercase text-zinc-500"
       >
         {title}
