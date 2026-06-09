@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { clampChatPct } from "@/lib/workspace/layout";
 import { useWorkspaceLayout } from "./WorkspaceLayoutContext";
 
 /**
@@ -20,6 +21,9 @@ export function WorkspaceShell({
   const { layout, setChatPct } = useWorkspaceLayout();
   const splitRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
+  // Live width during a drag; committed to context (and localStorage) once on mouseup.
+  const [liveChatPct, setLiveChatPct] = useState<number | null>(null);
+  const liveChatPctRef = useRef<number | null>(null);
 
   const startDrag = useCallback(() => {
     isDragging.current = true;
@@ -33,19 +37,30 @@ export function WorkspaceShell({
       const rect = splitRef.current.getBoundingClientRect();
       if (rect.width === 0) return;
       const pct = ((event.clientX - rect.left) / rect.width) * 100;
-      setChatPct(pct); // context clamps to [CHAT_PCT_MIN, CHAT_PCT_MAX]
+      const clamped = clampChatPct(pct);
+      liveChatPctRef.current = clamped;
+      setLiveChatPct(clamped); // visual feedback only — no persistence per move
     }
     function onMouseUp() {
       if (!isDragging.current) return;
       isDragging.current = false;
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
+      if (liveChatPctRef.current !== null) {
+        setChatPct(liveChatPctRef.current); // single persisted commit
+        liveChatPctRef.current = null;
+        setLiveChatPct(null);
+      }
     }
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
     return () => {
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
+      if (isDragging.current) {
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
     };
   }, [setChatPct]);
 
@@ -60,7 +75,7 @@ export function WorkspaceShell({
           </>
         ) : (
           <>
-            <div style={{ width: `${layout.chatPct}%` }} className="min-w-0 shrink-0">
+            <div style={{ width: `${liveChatPct ?? layout.chatPct}%` }} className="min-w-0 shrink-0">
               {chat}
             </div>
             <div
