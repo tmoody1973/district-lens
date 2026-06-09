@@ -63,19 +63,19 @@ function WorkspaceInner() {
   // signed-in Mongo mirror write — do not end up with two useAutoSnapshot calls.)
   const [justSaved, setJustSaved] = useState(false);
   useAutoSnapshot(agentState, (state) => {
-    const record = recordSnapshot(state);
-    if (record) {
-      setJustSaved(true);
-      setTimeout(() => setJustSaved(false), 4000);
-    }
+    if (recordSnapshot(state)) setJustSaved(true);
   });
+  useEffect(() => {
+    if (!justSaved) return;
+    const id = setTimeout(() => setJustSaved(false), 4000);
+    return () => clearTimeout(id);
+  }, [justSaved]);
 
   // Deep link: /w?a=<artifactId>. Unknown id → "not in your library" (spec §Error handling).
   const requestedArtifactId = params.get("a");
   useEffect(() => {
     if (requestedArtifactId) openArtifact(requestedArtifactId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestedArtifactId]);
+  }, [requestedArtifactId, openArtifact]);
   const deadLink = Boolean(
     requestedArtifactId && !library.some((r) => r.artifactId === requestedArtifactId),
   );

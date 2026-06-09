@@ -15,6 +15,12 @@ export function useAutoSnapshot(
   const prevStageRef = useRef<string>(state.stage);
   // Re-arm per raceKey so a fresh build of the same race can snapshot a new version.
   const firedForRef = useRef<string | null>(null);
+  // Latest callback without re-running the snapshot effect every render —
+  // call sites pass inline callbacks, which would otherwise churn the deps.
+  const onSnapshotRef = useRef(onSnapshot);
+  useEffect(() => {
+    onSnapshotRef.current = onSnapshot;
+  });
 
   useEffect(() => {
     const prev = prevStageRef.current;
@@ -23,6 +29,6 @@ export function useAutoSnapshot(
     const key = `${state.currentRaceKey}:${state.briefStartedAt ?? ""}`;
     if (firedForRef.current === key) return;
     firedForRef.current = key;
-    onSnapshot(state);
-  }, [state, onSnapshot]);
+    onSnapshotRef.current(state);
+  }, [state]);
 }

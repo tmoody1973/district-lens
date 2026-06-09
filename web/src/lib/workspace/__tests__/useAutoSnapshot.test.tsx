@@ -29,3 +29,16 @@ test("never fires for a completed state with no race key (failed build)", () => 
   rerender(<Harness state={{ ...DEFAULT_STATE, stage: "complete" }} onSnapshot={onSnapshot} />);
   expect(onSnapshot).not.toHaveBeenCalled();
 });
+
+test("re-arms for a fresh build of the same race (new briefStartedAt)", () => {
+  const onSnapshot = vi.fn();
+  const { rerender } = render(
+    <Harness state={{ ...drafting, briefStartedAt: 1 }} onSnapshot={onSnapshot} />,
+  );
+  rerender(<Harness state={{ ...complete, briefStartedAt: 1 }} onSnapshot={onSnapshot} />);
+  expect(onSnapshot).toHaveBeenCalledTimes(1);
+  // User rebuilds the SAME race: stage drops back to drafting, new briefStartedAt.
+  rerender(<Harness state={{ ...drafting, briefStartedAt: 2 }} onSnapshot={onSnapshot} />);
+  rerender(<Harness state={{ ...complete, briefStartedAt: 2 }} onSnapshot={onSnapshot} />);
+  expect(onSnapshot).toHaveBeenCalledTimes(2);
+});
