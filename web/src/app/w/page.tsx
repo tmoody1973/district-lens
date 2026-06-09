@@ -1,11 +1,13 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CopilotChat } from "@copilotkit/react-ui";
+import { Show, useUser } from "@clerk/nextjs";
 import { AgentToolTrace } from "@/components/canvas/AgentToolTrace";
 import { CanvasEmptyState } from "@/components/canvas/CanvasEmptyState";
 import { RaceTable } from "@/components/canvas/RaceTable";
+import { ThreadsPanel } from "@/components/canvas/ThreadsPanel";
 import { USMap } from "@/components/map/USMap";
 import { ArtifactPanel } from "@/components/workspace/ArtifactPanel";
 import { ArtifactProvider, useArtifacts } from "@/components/workspace/ArtifactProvider";
@@ -20,15 +22,26 @@ import {
 import { CHAT_LABELS, SYSTEM_PROMPT } from "@/lib/workspace/chat-config";
 import { useAutoSnapshot } from "@/lib/workspace/useAutoSnapshot";
 import { useWorkspaceAgent } from "@/lib/workspace/useWorkspaceAgent";
+import { useThreads } from "@/lib/workspace/useThreads";
 import { deriveLabel } from "@/lib/saved-briefs/schema";
+import type { SavedBallotItem } from "@/lib/saved-briefs/schema";
 import type { Persona } from "@/lib/workspace/layout";
+import type { DistrictLensState } from "@/types/agent-state";
 
 function WorkspaceInner() {
   const params = useSearchParams();
   const router = useRouter();
   const { setPersona } = useWorkspaceLayout();
-  const { agentState, displayed, submitAddress, exploreState, openRace, setMode } =
-    useWorkspaceAgent();
+  const { isSignedIn } = useUser();
+  const {
+    agentState,
+    displayed,
+    submitAddress,
+    exploreState,
+    openRace,
+    setMode,
+    clearBrief,
+  } = useWorkspaceAgent();
   const {
     library,
     active,
@@ -58,12 +71,60 @@ function WorkspaceInner() {
     }
   }, [params, submitAddress, exploreState, setMode, setPersona]);
 
+  const isJournalist = agentState.mode === "journalist";
+  const showBrief = displayed
+    ? isJournalist
+      ? displayed.mode === "journalist"
+      : displayed.mode === "voter"
+    : false;
+  const briefState = showBrief && displayed ? displayed.state : null;
+  const isDrafting = agentState.stage !== "idle" && agentState.stage !== "complete";
+
+  // Reopened-saved-brief display slot (mirrors old `openedBrief`).
+  const [reopenedSaved, setReopenedSaved] = useState<DistrictLensState | null>(null);
+
+  // My Ballot (signed-in voters) — refresh after auto-capture or save.
+  const [savedItems, setSavedItems] = useState<SavedBallotItem[]>([]);
+  const loadBallot = useCallback(async () => {
+    try {
+      const res = await fetch("/api/saved");
+      if (!res.ok) { setSavedItems([]); return; }
+      const data = await res.json();
+      setSavedItems(data.items ?? []);
+    } catch {
+      setSavedItems([]);
+    }
+  }, []);
+  useEffect(() => { loadBallot(); }, [loadBallot]);
+
+  const threadsApi = useThreads({
+    agentState,
+    onRestoreBrief: (state) => setReopenedSaved(state),
+    onClearBrief: () => {
+      setReopenedSaved(null);
+      clearBrief(); // resets snapshot + coagent state, keeps persona
+    },
+    onBallotChanged: loadBallot,
+  });
+
   // Auto-snapshot completed drafts into the library, then mark "Saved ✓".
-  // (A later task REPLACES this callback with a version that adds the
-  // signed-in Mongo mirror write — do not end up with two useAutoSnapshot calls.)
+  // Signed-in users also mirror the snapshot to Mongo so My Ballot stays the
+  // cross-device source of truth (spec §Data flow: "library write — localStorage
+  // anon, Mongo signed in"). Skip when a journalist thread is open: useThreads'
+  // auto-capture already posts that brief with its threadId.
   const [justSaved, setJustSaved] = useState(false);
   useAutoSnapshot(agentState, (state) => {
-    if (recordSnapshot(state)) setJustSaved(true);
+    const record = recordSnapshot(state);
+    if (record) setJustSaved(true);
+    if (isSignedIn && !(isJournalist && threadsApi.activeThread)) {
+      fetch("/api/saved/brief", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ state }),
+      })
+        .then((res) => { if (res.ok) loadBallot(); })
+        .catch(() => {});
+    }
   });
   useEffect(() => {
     if (!justSaved) return;
@@ -82,18 +143,10 @@ function WorkspaceInner() {
 
   const handlePersonaChange = (persona: Persona) => setMode(persona);
 
-  const isJournalist = agentState.mode === "journalist";
-  const showBrief = displayed
-    ? isJournalist
-      ? displayed.mode === "journalist"
-      : displayed.mode === "voter"
-    : false;
-  const briefState = showBrief && displayed ? displayed.state : null;
-  const isDrafting = agentState.stage !== "idle" && agentState.stage !== "complete";
-
-  // Display priority — a reopened artifact wins over the live brief.
+  // Display priority — a reopened saved brief (Mongo) wins over a local artifact,
+  // which wins over the live brief.
   const reopenedState = active ? active.versions[activeVersionIndex]?.snapshot ?? null : null;
-  const panelState = reopenedState ?? briefState ?? (isDrafting ? agentState : null);
+  const panelState = reopenedSaved ?? reopenedState ?? briefState ?? (isDrafting ? agentState : null);
   const title = active
     ? active.name
     : panelState?.currentRaceKey
@@ -148,6 +201,49 @@ function WorkspaceInner() {
       <WorkspaceShell
         library={
           <LibrarySidebar onPersonaChange={handlePersonaChange}>
+            {isJournalist && (
+              <Show when="signed-in">
+                <ThreadsPanel
+                  threads={threadsApi.threads}
+                  active={threadsApi.activeThread}
+                  onNew={threadsApi.createThread}
+                  onOpen={threadsApi.openThread}
+                  onClose={threadsApi.closeThread}
+                  onRename={threadsApi.renameThread}
+                  onSaveNotes={threadsApi.saveThreadNotes}
+                  onDelete={threadsApi.deleteThread}
+                  onReopenBrief={threadsApi.openSavedBrief}
+                />
+              </Show>
+            )}
+            {!isJournalist && savedItems.length > 0 && (
+              <Show when="signed-in">
+                <div className="px-3 py-2">
+                  <p className="text-xs font-semibold uppercase text-zinc-500">My Ballot</p>
+                  <ul className="mt-1 space-y-0.5">
+                    {savedItems.map((item) => (
+                      <li key={item.raceKey}>
+                        <button
+                          type="button"
+                          onClick={() => item.briefId && threadsApi.openSavedBrief(item.briefId)}
+                          disabled={!item.briefId}
+                          className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-200"
+                        >
+                          <span className="block truncate text-xs font-semibold">{item.label}</span>
+                          <span className="block text-[10px] text-zinc-600">
+                            saved {new Date(item.savedAt).toLocaleDateString()}
+                          </span>
+                          {item.changes.length > 0 &&
+                            item.changes.map((c) => (
+                              <span key={c} className="block text-[10px] font-medium text-amber-500">● {c}</span>
+                            ))}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </Show>
+            )}
             <LibrarySections />
           </LibrarySidebar>
         }
@@ -156,7 +252,7 @@ function WorkspaceInner() {
           <ArtifactPanel
             state={panelState}
             title={title}
-            isDrafting={isDrafting && !reopenedState}
+            isDrafting={isDrafting && !reopenedState && !reopenedSaved}
             emptyState={deadLinkState ?? emptyState}
             headerActions={
               <>

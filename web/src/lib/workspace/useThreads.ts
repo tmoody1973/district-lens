@@ -164,6 +164,8 @@ export function useThreads({
     await loadThreads();
   }, [loadThreads]);
 
+  const closeThread = useCallback(() => setActiveThread(null), []);
+
   // While a thread is open, capture the chat conversation onto it as a read-only
   // transcript (debounced). Stored so reopening the thread shows what was asked.
   const activeThreadId = activeThread?.thread.thread_id ?? null;
@@ -227,7 +229,7 @@ export function useThreads({
     activeThread,
     loadThreads,
     openThread,
-    closeThread: () => setActiveThread(null),
+    closeThread,
     createThread,
     renameThread,
     saveThreadNotes,
