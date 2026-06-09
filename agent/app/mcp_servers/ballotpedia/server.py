@@ -451,6 +451,84 @@ async def get_ballot_by_zip(
     }
 
 
+def _page_exists(soup: BeautifulSoup) -> bool:
+    """False if this is a MediaWiki 'no such page' (redlink) page.
+
+    Ballotpedia echoes the requested title in <h1> even for non-existent pages, so
+    the title can't tell real from missing — but a missing page carries a
+    `noarticletext` block. (Verified live: fake names render that block, ~5KB;
+    real candidate pages don't, ~130KB.)
+    """
+    return soup.find(class_="noarticletext") is None
+
+
+def _normalize_party(party: str) -> str:
+    """Map a Ballotpedia party string to the DEM/REP/IND codes the cards color."""
+    lowered = party.lower()
+    if "democratic" in lowered:
+        return "DEM"
+    if "republican" in lowered:
+        return "REP"
+    if "independent" in lowered:
+        return "IND"
+    return party
+
+
+_PARTY_RE = re.compile(r"\((\w[\w\s]*Party)\)")
+_OFFICE_PATTERNS = [
+    ("U.S. Senate", ["u.s. senate", "united states senate"]),
+    ("U.S. House", ["u.s. house", "house of representatives", "member of congress"]),
+    ("Governor", ["governor"]),
+    ("State Senate", ["state senate"]),
+    ("State Assembly", ["state assembly", "state house"]),
+    ("Mayor", ["mayor"]),
+]
+
+
+def _office_from_text(text: str) -> str:
+    lowered = text.lower()
+    for label, patterns in _OFFICE_PATTERNS:
+        if any(pattern in lowered for pattern in patterns):
+            return label
+    return ""
+
+
+def _candidate_from_profile_page(
+    soup: BeautifulSoup, name: str, url: str, state: str
+) -> dict:
+    """Build a candidate record from a Ballotpedia person page's intro paragraphs."""
+    title_tag = soup.find("h1", {"id": "firstHeading"})
+    page_name = clean_text(title_tag.get_text()) if title_tag else name
+
+    party = ""
+    office = ""
+    snippet = ""
+    content = soup.find("div", {"id": "mw-content-text"})
+    if content:
+        for paragraph in content.find_all("p", limit=4):
+            text = clean_text(paragraph.get_text())
+            if len(text) <= 30:
+                continue
+            if not snippet:
+                snippet = text
+            if not party:
+                match = _PARTY_RE.search(text)
+                if match:
+                    party = _normalize_party(match.group(1))
+            if not office:
+                office = _office_from_text(text)
+
+    return {
+        "name": page_name,
+        "url": url,
+        "party": party,
+        "office": office,
+        "state": state,
+        "status": "found",
+        "snippet": snippet[:300],
+    }
+
+
 def _classify_office(title: str) -> str:
     title_lower = title.lower()
     federal = (
@@ -515,59 +593,22 @@ async def search_candidates(
     candidates: list[dict] = []
     sources: list[str] = []
 
-    # Strategy 1: Direct candidate name search via wiki search
+    # Strategy 1: Direct-name resolution.
+    # Ballotpedia runs a customized MediaWiki with NO scrapeable search (its
+    # /w/index.php?search, Special:Search, and api.php endpoints don't return
+    # usable results). So resolve the name straight to its page and verify the
+    # page exists — a redlink page means "no such candidate".
     if name:
-        search_url = f"{BASE_URL}/w/index.php"
-        params = {"search": name, "ns0": "1"}
+        candidate_url = f"{BASE_URL}/{quote(name.replace(' ', '_'))}"
         try:
-            soup = await fetch_page(search_url, params=params)
-            sources.append(f"{search_url}?{urlencode(params)}")
-
-            # Check if redirected directly to a person page
-            title_tag = soup.find("h1", {"id": "firstHeading"})
-            if title_tag:
-                page_title = clean_text(title_tag.get_text())
-                # Parse infobox for candidate details
-                infobox = soup.find("table", {"class": re.compile(r"infobox|wikitable", re.I)})
-                party = ""
-                if infobox:
-                    for row in infobox.find_all("tr"):
-                        label = clean_text(row.find("th").get_text()) if row.find("th") else ""
-                        value = clean_text(row.find("td").get_text()) if row.find("td") else ""
-                        if "party" in label.lower():
-                            party = value
-                candidates.append({
-                    "name": page_title,
-                    "url": f"{BASE_URL}/{quote(page_title.replace(' ', '_'))}",
-                    "party": party,
-                    "office": office,
-                    "state": state_full,
-                    "status": "found",
-                })
-
-            # Parse search results list
-            results_div = soup.find("ul", {"class": "mw-search-results"})
-            if results_div:
-                for li in results_div.find_all("li")[:10]:
-                    link = li.find("a")
-                    if link:
-                        result_title = clean_text(link.get_text())
-                        result_url = BASE_URL + link["href"]
-                        snippet_div = li.find("div", {"class": "searchresult"})
-                        snippet = clean_text(snippet_div.get_text()) if snippet_div else ""
-                        # Filter to people pages (heuristic: no colons in title)
-                        if ":" not in result_title:
-                            candidates.append({
-                                "name": result_title,
-                                "url": result_url,
-                                "snippet": snippet[:300],
-                                "state": state_full,
-                                "office": office,
-                                "party": "",
-                                "status": "search_result",
-                            })
+            soup = await fetch_page(candidate_url)
+            sources.append(candidate_url)
+            if _page_exists(soup):
+                candidates.append(
+                    _candidate_from_profile_page(soup, name, candidate_url, state_full)
+                )
         except Exception as e:
-            logger.error("Name search failed: %s", e)
+            logger.warning("Candidate name lookup failed for %s: %s", name, e)
 
     # Strategy 2: State election page candidate tables
     if state_full and (office or not name):
