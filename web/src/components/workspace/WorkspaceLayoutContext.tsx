@@ -50,6 +50,7 @@ export function WorkspaceLayoutProvider({
     }
     setLayout(parseLayout(stored, initialPersona));
     setHydrated(true);
+    // intentional: mount-only; initialPersona changes after mount are not supported
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
