@@ -9,6 +9,7 @@ export interface ArtifactStore {
   get(artifactId: string): ArtifactRecord | null;
   /** Returns false when a real storage write failed (quota); true otherwise. */
   upsert(record: ArtifactRecord): boolean;
+  /** Returns false when the id is unknown. A quota-failed persist still returns true — the in-memory rename succeeded; durability is reported by upsert's path. */
   rename(artifactId: string, name: string): boolean;
   remove(artifactId: string): void;
   findByRaceKey(raceKey: string, type: ArtifactType): ArtifactRecord | null;
@@ -29,6 +30,11 @@ function readAll(storage: Storage | null): ArtifactRecord[] {
 export function createLocalArtifactStore(storage: Storage | null): ArtifactStore {
   // In-memory mirror is the source of truth for reads; storage is the durable
   // copy. Quota failures keep the session copy alive (spec §Error handling).
+  //
+  // Single-tab assumption: each tab holds its own in-memory mirror and
+  // last-write-wins on persist. Cross-tab sync (storage event listener)
+  // is deliberately deferred — artifacts are re-derivable by rebuilding
+  // a brief, so divergence loses no user-authored data.
   let records: ArtifactRecord[] = readAll(storage);
 
   /** True when the library is durably persisted (or persistence is N/A). */
