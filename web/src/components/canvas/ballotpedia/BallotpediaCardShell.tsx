@@ -85,15 +85,7 @@ export function BallotpediaEmpty({ title, governanceStrength }: BallotpediaEmpty
 }
 
 /** DEM/REP/IND → a colored dot, matching FinanceToolCard's party language. */
-const PARTY_DOT: Record<string, string> = {
-  DEM: "bg-party-dem",
-  REP: "bg-party-rep",
-  IND: "bg-zinc-500",
-};
-
-export function partyDot(party: string | undefined): string {
-  return PARTY_DOT[(party ?? "").toUpperCase()] ?? "bg-zinc-500";
-}
+export { partyDot } from "@/lib/party-style";
 
 export function truncate(text: string | undefined, max: number): string {
   if (!text) return "";

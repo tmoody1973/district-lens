@@ -33,7 +33,7 @@ export function CandidateCard({ candidate, finance }: Props) {
     candidate.photoUrl || placeholderAvatarUrl(candidate.name, candidate.party)
   );
   const partyKey = candidate.party.toUpperCase();
-  const borderClass = PARTY_BORDER[partyKey] ?? "border-l-slate-400";
+  const borderClass = PARTY_BORDER[partyKey] ?? PARTY_BORDER.IND;
   const badgeClass = PARTY_BADGE[partyKey] ?? PARTY_BADGE.IND;
   const statusLabel = STATUS_LABELS[candidate.status] ?? candidate.status;
 

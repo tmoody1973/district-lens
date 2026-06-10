@@ -86,7 +86,7 @@ function ThreadDetail({
                       className={[
                         "shrink-0 rounded-[2px] px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide",
                         mode === "journalist"
-                          ? "bg-zinc-100 text-zinc-900"
+                          ? "bg-ink text-surface"
                           : "bg-surface-hover text-ink-muted",
                       ].join(" ")}
                     >
@@ -114,7 +114,7 @@ function ThreadDetail({
                 <span
                   className={[
                     "inline-block max-w-[90%] rounded-[2px] px-1.5 py-1 text-[10px]",
-                    m.role === "user" ? "bg-zinc-100 text-zinc-900" : "bg-surface-hover text-ink-muted",
+                    m.role === "user" ? "bg-ink text-surface" : "bg-surface-hover text-ink-muted",
                   ].join(" ")}
                 >
                   {m.content}

@@ -1,12 +1,7 @@
 "use client";
 import { deriveProjectedWinners, type RaceStatus } from "@/lib/brief-layout";
 import type { CandidateCard } from "@/types/agent-state";
-
-const PARTY_DOT: Record<string, string> = {
-  DEM: "bg-party-dem",
-  REP: "bg-party-rep",
-  IND: "bg-zinc-500",
-};
+import { partyDot } from "@/lib/party-style";
 
 const TONE: Record<string, { box: string; label: string }> = {
   green: { box: "border-green-700/40 bg-green-900/30", label: "text-evidence-direct" },
@@ -29,7 +24,7 @@ function WinnerList({ winners }: { winners: Record<string, string> }) {
     <ul className="mt-1.5 space-y-1">
       {entries.map(([party, name]) => (
         <li key={party} className="flex items-center gap-2 text-sm text-ink">
-          <span className={`h-2 w-2 shrink-0 rounded-full ${PARTY_DOT[party.toUpperCase()] ?? "bg-zinc-500"}`} />
+          <span className={`h-2 w-2 shrink-0 rounded-full ${partyDot(party)}`} />
           <span className="font-medium">{name}</span>
           <span className="text-xs text-ink-muted">({party.toUpperCase()})</span>
         </li>

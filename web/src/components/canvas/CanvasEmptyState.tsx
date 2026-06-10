@@ -56,7 +56,7 @@ export function CanvasEmptyState({ onSubmit }: Props) {
         <button
           type="submit"
           disabled={!address.trim()}
-          className="rounded-[2px] border-2 border-zinc-100 bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-900 disabled:opacity-40 hover:bg-white transition-colors whitespace-nowrap"
+          className="rounded-[2px] border-2 border-ink bg-ink px-4 py-2 text-sm font-semibold text-surface disabled:opacity-40 hover:opacity-90 transition-opacity whitespace-nowrap"
         >
           Find My Race →
         </button>

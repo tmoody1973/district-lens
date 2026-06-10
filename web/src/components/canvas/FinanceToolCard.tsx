@@ -1,5 +1,7 @@
 "use client";
 
+import { partyDot } from "@/lib/party-style";
+
 /**
  * FinanceToolCard — inline generative-UI card for the `get_race_finance_brief`
  * backend tool. Rendered in the CopilotKit chat via useRenderToolCall when the
@@ -26,16 +28,6 @@ export interface FinanceToolCandidate {
   pac_contributions_fmt?: string;
   coverage_end_date?: string | null;
   has_finance: boolean;
-}
-
-const PARTY_DOT: Record<string, string> = {
-  DEM: "bg-party-dem",
-  REP: "bg-party-rep",
-  IND: "bg-zinc-500",
-};
-
-function partyDot(party: string): string {
-  return PARTY_DOT[party?.toUpperCase()] ?? "bg-zinc-500";
 }
 
 interface FinanceToolCardProps {
@@ -112,7 +104,7 @@ export function FinanceToolCard({ raceKey, candidates, source, loading }: Financ
                 <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${partyDot(c.party)}`} />
                 <span className="truncate font-medium">{c.name}</span>
                 {isIncumbent && (
-                  <span className="shrink-0 rounded-[2px] bg-zinc-100 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-zinc-900">
+                  <span className="shrink-0 rounded-[2px] bg-ink px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-surface">
                     inc
                   </span>
                 )}
