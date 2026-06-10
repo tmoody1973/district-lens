@@ -15,8 +15,8 @@ export function FinanceChart({ finance }: Props) {
   const maxReceipts = Math.max(...finance.map((f) => f.receipts ?? 0), 1);
 
   return (
-    <div className="rounded-[2px] border-2 border-slate-900 bg-white p-4 space-y-4">
-      <p className="text-xs font-medium uppercase tracking-widest text-slate-500">
+    <div className="rounded-[2px] border-2 border-edge-strong bg-surface-raised p-4 space-y-4">
+      <p className="text-xs font-medium uppercase tracking-widest text-ink-muted">
         Campaign Finance · FEC
       </p>
       {finance.map((f) => {
@@ -30,28 +30,28 @@ export function FinanceChart({ finance }: Props) {
         return (
           <div key={f.candidateId} className="space-y-1">
             <div className="flex items-baseline justify-between">
-              <span className="font-medium text-sm text-slate-900 truncate">{f.name}</span>
-              <span className="font-mono text-sm font-bold text-slate-900 ml-2 shrink-0">
+              <span className="font-medium text-sm text-ink truncate">{f.name}</span>
+              <span className="font-mono text-sm font-bold text-ink ml-2 shrink-0">
                 {fmtMoney(total)}
               </span>
             </div>
-            <div className="h-4 w-full bg-slate-100 rounded-sm overflow-hidden border border-slate-200">
+            <div className="h-4 w-full bg-surface-hover rounded-sm overflow-hidden border border-edge">
               <div className="h-full flex">
                 <div
-                  className="bg-blue-600 transition-all duration-700"
+                  className="bg-blue-500 transition-all duration-700"
                   style={{ width: `${(indPct / 100) * barWidth}%` }}
                   title={`Individuals: ${fmtMoney(individual)}`}
                 />
                 <div
-                  className="bg-amber-500 transition-all duration-700"
+                  className="bg-amber-400 transition-all duration-700"
                   style={{ width: `${(pacPct / 100) * barWidth}%` }}
                   title={`PACs: ${fmtMoney(pac)}`}
                 />
               </div>
             </div>
-            <div className="flex gap-3 text-xs text-slate-500">
-              <span><span className="inline-block w-2 h-2 bg-blue-600 rounded-sm mr-1" />Ind {fmtMoney(individual)}</span>
-              <span><span className="inline-block w-2 h-2 bg-amber-500 rounded-sm mr-1" />PAC {fmtMoney(pac)}</span>
+            <div className="flex gap-3 text-xs text-ink-faint">
+              <span><span className="inline-block w-2 h-2 bg-blue-500 rounded-sm mr-1" />Ind {fmtMoney(individual)}</span>
+              <span><span className="inline-block w-2 h-2 bg-amber-400 rounded-sm mr-1" />PAC {fmtMoney(pac)}</span>
               {f.coverageEndDate && <span className="ml-auto">through {f.coverageEndDate}</span>}
             </div>
           </div>
@@ -66,7 +66,7 @@ export function FinanceChart({ finance }: Props) {
         if (second === 0 || top / second < 2) return null;
         const multiplier = Math.round(top / second);
         return (
-          <p className="text-xs text-slate-500 border-t border-slate-100 pt-3 mt-1">
+          <p className="text-xs text-ink-muted border-t border-edge pt-3 mt-1">
             ⚡ <strong>{sorted[0].name.split(" ").pop()}</strong> outraises{" "}
             <strong>{sorted[1].name.split(" ").pop()}</strong> {multiplier}×
           </p>

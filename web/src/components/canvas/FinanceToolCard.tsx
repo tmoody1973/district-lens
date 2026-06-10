@@ -29,13 +29,13 @@ export interface FinanceToolCandidate {
 }
 
 const PARTY_DOT: Record<string, string> = {
-  DEM: "bg-blue-600",
-  REP: "bg-red-700",
-  IND: "bg-slate-500",
+  DEM: "bg-party-dem",
+  REP: "bg-party-rep",
+  IND: "bg-zinc-500",
 };
 
 function partyDot(party: string): string {
-  return PARTY_DOT[party?.toUpperCase()] ?? "bg-slate-500";
+  return PARTY_DOT[party?.toUpperCase()] ?? "bg-zinc-500";
 }
 
 interface FinanceToolCardProps {
@@ -48,11 +48,11 @@ interface FinanceToolCardProps {
 export function FinanceToolCard({ raceKey, candidates, source, loading }: FinanceToolCardProps) {
   if (loading) {
     return (
-      <div className="my-2 rounded-[2px] border-2 border-slate-900 bg-white p-3">
-        <p className="text-xs font-medium uppercase tracking-widest text-slate-500">
+      <div className="my-2 rounded-[2px] border-2 border-edge-strong bg-surface-raised p-3">
+        <p className="text-xs font-medium uppercase tracking-widest text-ink-muted">
           Campaign Finance · FEC
         </p>
-        <p className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+        <p className="mt-2 flex items-center gap-2 text-xs text-ink-muted">
           <span className="animate-spin">⟳</span> Pulling FEC finance data…
         </p>
       </div>
@@ -76,23 +76,23 @@ export function FinanceToolCard({ raceKey, candidates, source, loading }: Financ
   const coverage = funded.find((c) => c.coverage_end_date)?.coverage_end_date;
 
   return (
-    <div className="my-2 space-y-3 rounded-[2px] border-2 border-slate-900 bg-white p-3">
+    <div className="my-2 space-y-3 rounded-[2px] border-2 border-edge-strong bg-surface-raised p-3">
       <div className="flex items-baseline justify-between">
-        <p className="text-xs font-medium uppercase tracking-widest text-slate-500">
+        <p className="text-xs font-medium uppercase tracking-widest text-ink-muted">
           Campaign Finance · FEC
         </p>
-        {raceKey && <span className="font-mono text-[10px] text-slate-400">{raceKey}</span>}
+        {raceKey && <span className="font-mono text-[10px] text-ink-faint">{raceKey}</span>}
       </div>
 
       {candidates.map((c) => {
         if (!c.has_finance) {
           return (
             <div key={c.candidate_id} className="flex items-center justify-between text-xs">
-              <span className="flex items-center gap-1.5 text-slate-900">
+              <span className="flex items-center gap-1.5 text-ink">
                 <span className={`inline-block h-2 w-2 rounded-full ${partyDot(c.party)}`} />
                 {c.name}
               </span>
-              <span className="italic text-slate-400">No FEC filing</span>
+              <span className="italic text-ink-faint">No FEC filing</span>
             </div>
           );
         }
@@ -108,40 +108,40 @@ export function FinanceToolCard({ raceKey, candidates, source, loading }: Financ
         return (
           <div key={c.candidate_id} className="space-y-1">
             <div className="flex items-baseline justify-between gap-2">
-              <span className="flex items-center gap-1.5 truncate text-sm text-slate-900">
+              <span className="flex items-center gap-1.5 truncate text-sm text-ink">
                 <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${partyDot(c.party)}`} />
                 <span className="truncate font-medium">{c.name}</span>
                 {isIncumbent && (
-                  <span className="shrink-0 rounded-[2px] bg-slate-900 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white">
+                  <span className="shrink-0 rounded-[2px] bg-zinc-100 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-zinc-900">
                     inc
                   </span>
                 )}
               </span>
-              <span className="shrink-0 font-mono text-sm font-bold text-slate-900">
+              <span className="shrink-0 font-mono text-sm font-bold text-ink">
                 {c.raised_fmt ?? "—"}
               </span>
             </div>
-            <div className="h-3 w-full overflow-hidden rounded-sm border border-slate-200 bg-slate-100">
+            <div className="h-3 w-full overflow-hidden rounded-sm border border-edge bg-surface-hover">
               <div className="flex h-full">
                 <div
-                  className="bg-blue-600 transition-all duration-700"
+                  className="bg-blue-500 transition-all duration-700"
                   style={{ width: `${(indPct / 100) * barWidth}%` }}
                   title={`Individuals: ${c.individual_contributions_fmt ?? "—"}`}
                 />
                 <div
-                  className="bg-amber-500 transition-all duration-700"
+                  className="bg-amber-400 transition-all duration-700"
                   style={{ width: `${(pacPct / 100) * barWidth}%` }}
                   title={`PACs: ${c.pac_contributions_fmt ?? "—"}`}
                 />
               </div>
             </div>
-            <div className="flex gap-3 text-[10px] text-slate-500">
+            <div className="flex gap-3 text-[10px] text-ink-faint">
               <span>
-                <span className="mr-1 inline-block h-2 w-2 rounded-sm bg-blue-600" />
+                <span className="mr-1 inline-block h-2 w-2 rounded-sm bg-blue-500" />
                 Ind {c.individual_contributions_fmt ?? "—"}
               </span>
               <span>
-                <span className="mr-1 inline-block h-2 w-2 rounded-sm bg-amber-500" />
+                <span className="mr-1 inline-block h-2 w-2 rounded-sm bg-amber-400" />
                 PAC {c.pac_contributions_fmt ?? "—"}
               </span>
               <span className="ml-auto">Cash {c.cash_on_hand_fmt ?? "—"}</span>
@@ -151,12 +151,12 @@ export function FinanceToolCard({ raceKey, candidates, source, loading }: Financ
       })}
 
       {gap && (
-        <p className="border-t border-slate-100 pt-2 text-xs text-slate-500">
+        <p className="border-t border-edge pt-2 text-xs text-ink-muted">
           ⚡ <strong>{gap.leader}</strong> outraises <strong>{gap.trailer}</strong> {gap.x}×
         </p>
       )}
 
-      <p className="text-[10px] italic text-slate-400">
+      <p className="text-[10px] italic text-ink-faint">
         {source ?? "Source: FEC"}
         {coverage ? ` · through ${coverage}` : ""} · Finance is context, not proof of positions.
       </p>
