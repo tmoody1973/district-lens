@@ -3,8 +3,8 @@ import {
   applyFocusIntent,
   derivePanelView,
   isDraftingStage,
-  shouldAutoFocus,
 } from "@/lib/workspace/derivePanelView";
+import { DEFAULT_STATE } from "@/types/agent-state";
 
 // ── view derivation ──────────────────────────────────────────────────────────
 
@@ -109,7 +109,7 @@ test("isDraftingStage: active stages only", () => {
 // ── focus cross-clear (C3) ───────────────────────────────────────────────────
 
 test("C3: focusing a saved brief clears any local artifact focus", () => {
-  const state = { currentRaceKey: "2026-WI-house-04" };
+  const state = { ...DEFAULT_STATE, currentRaceKey: "2026-H-WI-04" };
   const next = applyFocusIntent({ kind: "saved", state });
   expect(next).toEqual({ savedBrief: state, localArtifactId: null });
 });
@@ -124,22 +124,6 @@ test("clear intent empties both focus slots", () => {
   expect(next).toEqual({ savedBrief: null, localArtifactId: null });
 });
 
-// ── polite auto-focus (D2/C4) ────────────────────────────────────────────────
-
-test("auto-focus fires when a snapshot landed and the user stayed put", () => {
-  expect(
-    shouldAutoFocus({ snapshotRecorded: true, userNavigatedSinceRunStart: false }),
-  ).toBe(true);
-});
-
-test("auto-focus suppressed when the user navigated mid-run", () => {
-  expect(
-    shouldAutoFocus({ snapshotRecorded: true, userNavigatedSinceRunStart: true }),
-  ).toBe(false);
-});
-
-test("auto-focus suppressed when no snapshot was recorded (no raceKey)", () => {
-  expect(
-    shouldAutoFocus({ snapshotRecorded: false, userNavigatedSinceRunStart: false }),
-  ).toBe(false);
-});
+// Polite auto-focus (D2/C4) is pinned at the composition level:
+// panel-integration.test.tsx "manual navigation during draft" and
+// "completion auto-focuses…".

@@ -21,7 +21,7 @@ export const DEFAULT_LAYOUT: WorkspaceLayoutState = {
   chatPct: 32,
 };
 
-export function defaultLayout(): WorkspaceLayoutState {
+function defaultLayout(): WorkspaceLayoutState {
   return { ...DEFAULT_LAYOUT };
 }
 

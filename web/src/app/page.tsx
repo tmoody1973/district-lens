@@ -57,7 +57,6 @@ export default function LandingPage() {
             <USMap
               focusedState={null}
               onStateClick={(stateCode) => router.push(`/w?state=${stateCode}`)}
-              mode="journalist"
             />
           </div>
         </div>

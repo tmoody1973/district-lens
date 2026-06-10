@@ -1,6 +1,6 @@
 "use client";
 import { ComposableMap, Geographies, Geography } from "react-simple-maps";
-import type { AppMode, RaceRow } from "@/types/agent-state";
+import type { RaceRow } from "@/types/agent-state";
 
 const GEO_URL = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json";
 
@@ -61,17 +61,15 @@ function fundraisingAdvantageColor(stateCode: string, races: RaceRow[]): string 
 interface Props {
   focusedState: string | null;
   onStateClick: (stateCode: string) => void;
-  mode?: AppMode;
   heatmapData?: RaceRow[];
 }
 
 export function USMap({
   focusedState,
   onStateClick,
-  mode = "voter",
   heatmapData = [],
 }: Props) {
-  const isHeatmap = mode === "journalist" && heatmapData.length > 0;
+  const isHeatmap = heatmapData.length > 0;
 
   return (
     <div className="w-full border-2 border-edge-strong rounded-[2px] bg-surface-raised overflow-hidden">

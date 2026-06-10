@@ -32,8 +32,8 @@ export function ArtifactPanel({
   // The receipt strip annotates LIVE build steps — it renders only when the
   // displayed state is itself mid-draft, never over a focused snapshot whose
   // stage is already "complete" (the pill alone signals the background build).
-  const showReceipt = isDrafting && state != null && isDraftingStage(state.stage);
-  const steps = showReceipt && state ? annotateSteps(stepsFromStage(state.stage), state) : [];
+  const draftState = isDrafting && state && isDraftingStage(state.stage) ? state : null;
+  const steps = draftState ? annotateSteps(stepsFromStage(draftState.stage), draftState) : [];
   const hasBrief = Boolean(state?.currentRaceKey);
 
   return (
@@ -61,13 +61,13 @@ export function ArtifactPanel({
           )}
           <span className="ml-auto flex items-center gap-1">{headerActions}</span>
         </div>
-        {showReceipt && steps.length > 0 && state && (
+        {draftState && steps.length > 0 && (
           // Receipt strip across the artifact top while drafting (spec §Artifact state).
           <div className="mt-2 rounded-md bg-surface-raised px-3 py-2">
             <ReceiptProgress
               steps={steps}
-              briefStartedAt={state.briefStartedAt}
-              statusMessage={state.status_message}
+              briefStartedAt={draftState.briefStartedAt}
+              statusMessage={draftState.status_message}
               horizontal
             />
           </div>

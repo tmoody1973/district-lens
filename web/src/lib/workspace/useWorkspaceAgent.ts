@@ -58,6 +58,12 @@ export function useWorkspaceAgent(options?: UseWorkspaceAgentOptions) {
   const prevStageRef = useRef<string>("idle");
   const latestStateRef = useRef<DistrictLensState>(agentState);
   latestStateRef.current = agentState;
+  // Latest onRunStart without making it a dep of `run` — callers may pass
+  // plain inline closures.
+  const onRunStartRef = useRef(options?.onRunStart);
+  useEffect(() => {
+    onRunStartRef.current = options?.onRunStart;
+  });
 
   useCopilotReadable({
     description: "Currently selected race",
@@ -94,7 +100,7 @@ export function useWorkspaceAgent(options?: UseWorkspaceAgentOptions) {
           retryTimerRef.current = setTimeout(() => attempt(retriesLeft - 1), 250);
           return;
         }
-        options?.onRunStart?.();
+        onRunStartRef.current?.();
         liveAgent.addMessage({ id: crypto.randomUUID(), role: "user", content });
         copilotkit.runAgent({ agent: liveAgent }).catch(() => {
           /* surfaced through chat UI; workspace stays usable */
@@ -102,9 +108,6 @@ export function useWorkspaceAgent(options?: UseWorkspaceAgentOptions) {
       };
       attempt(40); // up to ~10s for the handshake to settle
     },
-    // options.onRunStart intentionally excluded — callers should pass a stable
-    // ref-backed callback to avoid re-creating run on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [agent, copilotkit],
   );
 
@@ -128,13 +131,12 @@ export function useWorkspaceAgent(options?: UseWorkspaceAgentOptions) {
 
   /** Wipes everything that feeds the artifact panel (thread-switch reset). */
   const clearBrief = useCallback(() => {
-    setAgentState((prev) => ({ ...DEFAULT_STATE, mode: prev?.mode ?? DEFAULT_STATE.mode }));
+    setAgentState(() => ({ ...DEFAULT_STATE }));
   }, [setAgentState]);
 
   return {
     agent,
     agentState,
-    setAgentState,
     isAgentReady,
     isRunning: agent.isRunning,
     submitAddress,

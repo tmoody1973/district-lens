@@ -9,9 +9,9 @@ import {
   type ReactNode,
 } from "react";
 import {
+  DEFAULT_LAYOUT,
   LAYOUT_STORAGE_KEY,
   clampChatPct,
-  defaultLayout,
   parseLayout,
   serializeLayout,
   type WorkspaceLayoutState,
@@ -22,7 +22,6 @@ interface WorkspaceLayoutContextValue {
   toggleLibrary: () => void;
   toggleChat: () => void;
   setChatPct: (pct: number) => void;
-  resetLayout: () => void;
 }
 
 const WorkspaceLayoutContext = createContext<WorkspaceLayoutContextValue | null>(null);
@@ -30,7 +29,7 @@ const WorkspaceLayoutContext = createContext<WorkspaceLayoutContextValue | null>
 export function WorkspaceLayoutProvider({ children }: { children: ReactNode }) {
   // Server render uses the default; the stored layout loads after mount so the
   // server and client first paint match (no hydration mismatch).
-  const [layout, setLayout] = useState<WorkspaceLayoutState>(defaultLayout);
+  const [layout, setLayout] = useState<WorkspaceLayoutState>({ ...DEFAULT_LAYOUT });
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -65,11 +64,10 @@ export function WorkspaceLayoutProvider({ children }: { children: ReactNode }) {
     (pct: number) => setLayout((l) => ({ ...l, chatPct: clampChatPct(pct) })),
     [],
   );
-  const resetLayout = useCallback(() => setLayout(defaultLayout()), []);
 
   return (
     <WorkspaceLayoutContext.Provider
-      value={{ layout, toggleLibrary, toggleChat, setChatPct, resetLayout }}
+      value={{ layout, toggleLibrary, toggleChat, setChatPct }}
     >
       {children}
     </WorkspaceLayoutContext.Provider>

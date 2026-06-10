@@ -45,17 +45,17 @@ export function derivePanelView(inputs: PanelViewInputs): PanelViewResult {
  * can never coexist. Callers enact the returned slots against their stores
  * (setReopenedSaved / openArtifact / closeArtifact).
  */
-export type FocusIntent<TBrief = Partial<DistrictLensState>> =
-  | { kind: "saved"; state: TBrief }
+export type FocusIntent =
+  | { kind: "saved"; state: DistrictLensState }
   | { kind: "local"; artifactId: string }
   | { kind: "clear" };
 
-export interface FocusSlots<TBrief = Partial<DistrictLensState>> {
-  savedBrief: TBrief | null;
+export interface FocusSlots {
+  savedBrief: DistrictLensState | null;
   localArtifactId: string | null;
 }
 
-export function applyFocusIntent<TBrief>(intent: FocusIntent<TBrief>): FocusSlots<TBrief> {
+export function applyFocusIntent(intent: FocusIntent): FocusSlots {
   switch (intent.kind) {
     case "saved":
       return { savedBrief: intent.state, localArtifactId: null };
@@ -64,16 +64,4 @@ export function applyFocusIntent<TBrief>(intent: FocusIntent<TBrief>): FocusSlot
     case "clear":
       return { savedBrief: null, localArtifactId: null };
   }
-}
-
-/**
- * Polite auto-focus (D2/C4): a completed build takes the panel only when a
- * snapshot actually landed AND the user hasn't manually focused anything
- * since the run started.
- */
-export function shouldAutoFocus(opts: {
-  snapshotRecorded: boolean;
-  userNavigatedSinceRunStart: boolean;
-}): boolean {
-  return opts.snapshotRecorded && !opts.userNavigatedSinceRunStart;
 }

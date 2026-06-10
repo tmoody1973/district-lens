@@ -32,22 +32,29 @@ export function AddressSuggestInput({
       setSuggestions([]);
       return;
     }
+    const controller = new AbortController();
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/district/suggest?q=${encodeURIComponent(address)}`);
+        const res = await fetch(`/api/district/suggest?q=${encodeURIComponent(address)}`, {
+          signal: controller.signal,
+        });
         const data = await res.json();
         setSuggestions(data.suggestions ?? []);
         setShowSuggestions(true);
       } catch {
-        setSuggestions([]);
+        if (!controller.signal.aborted) setSuggestions([]);
       }
     }, SUGGEST_DEBOUNCE_MS);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      controller.abort();
     };
   }, [address]);
 
+  // Mounted permanently in the workspace rail — only listen while the
+  // dropdown is actually open.
   useEffect(() => {
+    if (!showSuggestions) return;
     function handleClick(event: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
         setShowSuggestions(false);
@@ -55,7 +62,7 @@ export function AddressSuggestInput({
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
+  }, [showSuggestions]);
 
   function submit(addr: string) {
     if (!addr.trim()) return;

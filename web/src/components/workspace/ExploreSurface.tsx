@@ -30,15 +30,7 @@ export function ExploreSurface({
         <AddressSuggestInput onSubmit={onSubmitAddress} compact />
       </div>
       <div className="shrink-0 p-4">
-        {/* mode="journalist" keeps the race heatmap available to everyone now
-            that the persona toggle is gone — the coagent mode stays "voter"
-            on the wire and never reaches this prop. */}
-        <USMap
-          focusedState={mapFocus}
-          onStateClick={onStateClick}
-          mode="journalist"
-          heatmapData={stateRaces}
-        />
+        <USMap focusedState={mapFocus} onStateClick={onStateClick} heatmapData={stateRaces} />
       </div>
       {stateRaces.length > 0 ? (
         <RaceTable races={stateRaces} onRaceClick={onRaceClick} />

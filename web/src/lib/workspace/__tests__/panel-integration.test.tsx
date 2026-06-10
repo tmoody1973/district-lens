@@ -9,7 +9,6 @@ import { createLocalArtifactStore } from "@/lib/artifacts/local-store";
 import {
   applyFocusIntent,
   derivePanelView,
-  shouldAutoFocus,
   type FocusIntent,
   type PanelViewResult,
 } from "@/lib/workspace/derivePanelView";
@@ -28,7 +27,7 @@ interface HarnessApi {
   view: PanelViewResult;
   focusedArtifactId: string | null;
   reopenedSaved: DistrictLensState | null;
-  enact: (intent: FocusIntent<DistrictLensState>) => void;
+  enact: (intent: FocusIntent) => void;
   markNavigated: () => void;
 }
 
@@ -44,7 +43,7 @@ function Harness({
   const userNavigatedRef = useRef(false);
 
   const enact = useCallback(
-    (intent: FocusIntent<DistrictLensState>) => {
+    (intent: FocusIntent) => {
       const slots = applyFocusIntent(intent);
       setReopenedSaved(slots.savedBrief);
       if (slots.localArtifactId) openArtifact(slots.localArtifactId);
@@ -63,13 +62,7 @@ function Harness({
 
   useAutoSnapshot(state, (s) => {
     const record = recordSnapshot(s);
-    if (
-      record &&
-      shouldAutoFocus({
-        snapshotRecorded: true,
-        userNavigatedSinceRunStart: userNavigatedRef.current,
-      })
-    ) {
+    if (record && !userNavigatedRef.current) {
       enact({ kind: "local", artifactId: record.artifactId });
     }
   });

@@ -45,6 +45,7 @@ test("fetches debounced suggestions for 5+ characters and shows them", async () 
   });
   expect(fetchMock).toHaveBeenCalledWith(
     `/api/district/suggest?q=${encodeURIComponent("123 N Water")}`,
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
   );
   expect(screen.getByText("123 N Water St, Milwaukee, WI 53202")).toBeDefined();
 });

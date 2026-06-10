@@ -4,7 +4,6 @@ import {
   CHAT_PCT_MIN,
   DEFAULT_LAYOUT,
   clampChatPct,
-  defaultLayout,
   parseLayout,
   serializeLayout,
 } from "@/lib/workspace/layout";
@@ -17,10 +16,10 @@ test("default layout: library expanded, chat docked at 32%", () => {
   });
 });
 
-test("defaultLayout returns a fresh object each call (no shared mutation)", () => {
-  const a = defaultLayout();
+test("parseLayout returns a fresh object each call (no shared mutation)", () => {
+  const a = parseLayout(null);
   a.chatPct = 99;
-  expect(defaultLayout().chatPct).toBe(32);
+  expect(parseLayout(null).chatPct).toBe(32);
 });
 
 test("clampChatPct clamps below the minimum", () => {

@@ -57,10 +57,3 @@ test("corrupt stored layout resets to the default", () => {
   renderProvider();
   expect(api.layout).toEqual(DEFAULT_LAYOUT);
 });
-
-test("resetLayout returns to the default", () => {
-  renderProvider();
-  act(() => api.setChatPct(50));
-  act(() => api.resetLayout());
-  expect(api.layout).toEqual(DEFAULT_LAYOUT);
-});

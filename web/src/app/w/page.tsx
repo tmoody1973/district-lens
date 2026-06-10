@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CopilotChat } from "@copilotkit/react-ui";
 import { Show, useUser } from "@clerk/nextjs";
@@ -20,7 +20,6 @@ import { CHAT_LABELS, SYSTEM_PROMPT } from "@/lib/workspace/chat-config";
 import {
   applyFocusIntent,
   derivePanelView,
-  shouldAutoFocus,
   type FocusIntent,
 } from "@/lib/workspace/derivePanelView";
 import { useAutoSnapshot } from "@/lib/workspace/useAutoSnapshot";
@@ -38,23 +37,9 @@ function WorkspaceInner() {
   const router = useRouter();
   const { isSignedIn } = useUser();
 
-  // beginNewBriefRef holds the panel-clear callback. Declared before the
-  // agent hook so we can pass onRunStart; assigned after useArtifacts is
-  // available (ordering constraint: closeArtifact defined after agent hook).
-  const beginNewBriefRef = useRef<() => void>(() => {});
   // Polite auto-focus (D2/C4): set on any manual focus/navigation, re-armed
   // at every run start. While true, a completing build must not steal the panel.
   const userNavigatedRef = useRef(false);
-
-  const {
-    agent,
-    agentState,
-    isAgentReady,
-    submitAddress,
-    exploreState,
-    openRace,
-    clearBrief,
-  } = useWorkspaceAgent({ onRunStart: () => beginNewBriefRef.current() });
 
   const {
     library,
@@ -73,7 +58,7 @@ function WorkspaceInner() {
   // One focus concept (C3): every focus change goes through the pure intent
   // helper, so a focused saved brief and a focused local artifact can never coexist.
   const enactFocus = useCallback(
-    (intent: FocusIntent<DistrictLensState>) => {
+    (intent: FocusIntent) => {
       const slots = applyFocusIntent(intent);
       setReopenedSaved(slots.savedBrief);
       if (slots.localArtifactId) openArtifact(slots.localArtifactId);
@@ -82,17 +67,25 @@ function WorkspaceInner() {
     [openArtifact, closeArtifact],
   );
 
-  // Assign the callback now that closeArtifact is available.
-  beginNewBriefRef.current = () => {
-    setReopenedSaved(null);
-    closeArtifact();
+  const beginNewBrief = useCallback(() => {
+    enactFocus({ kind: "clear" });
     userNavigatedRef.current = false; // new run → polite auto-focus re-armed
-  };
+  }, [enactFocus]);
+
+  const {
+    agent,
+    agentState,
+    isAgentReady,
+    submitAddress,
+    exploreState,
+    openRace,
+    clearBrief,
+  } = useWorkspaceAgent({ onRunStart: beginNewBrief });
 
   // DRAFT source of truth (C2): the coagent stage transition covers typed-chat
   // builds that never call onRunStart; onRunStart stays as an immediate-clear
   // nicety for programmatic runs.
-  useBuildStart(agentState.stage, () => beginNewBriefRef.current());
+  useBuildStart(agentState.stage, beginNewBrief);
 
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const kickedOff = useRef(false);
@@ -124,15 +117,21 @@ function WorkspaceInner() {
 
   const { savedItems, loadBallot } = useMyBallot(isSignedIn, store);
 
+  const onRestoreBrief = useCallback(
+    (state: DistrictLensState) => enactFocus({ kind: "saved", state }),
+    [enactFocus],
+  );
+  const onClearBrief = useCallback(() => {
+    enactFocus({ kind: "clear" });
+    clearBrief(); // resets coagent state
+  }, [enactFocus, clearBrief]);
+
   const threadsApi = useThreads({
     agentState,
     agent,
     isSignedIn,
-    onRestoreBrief: (state) => enactFocus({ kind: "saved", state }),
-    onClearBrief: () => {
-      enactFocus({ kind: "clear" });
-      clearBrief(); // resets snapshot + coagent state
-    },
+    onRestoreBrief,
+    onClearBrief,
     onBallotChanged: loadBallot,
   });
 
@@ -145,13 +144,7 @@ function WorkspaceInner() {
   useAutoSnapshot(agentState, (state) => {
     const record = recordSnapshot(state);
     if (record) setJustSaved(true);
-    if (
-      record &&
-      shouldAutoFocus({
-        snapshotRecorded: true,
-        userNavigatedSinceRunStart: userNavigatedRef.current,
-      })
-    ) {
+    if (record && !userNavigatedRef.current) {
       enactFocus({ kind: "local", artifactId: record.artifactId });
     }
     // Known narrow race: if a thread opens in the same frame a build completes,
@@ -171,27 +164,33 @@ function WorkspaceInner() {
   // Deep link: /w?a=<artifactId>. Unknown id → "not in your library" (spec §Error handling).
   const requestedArtifactId = params.get("a");
   useEffect(() => {
-    if (requestedArtifactId) enactFocus({ kind: "local", artifactId: requestedArtifactId });
+    if (!requestedArtifactId) return;
+    // Deep-linking IS user navigation — a build completing afterwards must
+    // not steal the panel from the linked artifact.
+    userNavigatedRef.current = true;
+    enactFocus({ kind: "local", artifactId: requestedArtifactId });
   }, [requestedArtifactId, enactFocus]);
   const deadLink = Boolean(
     requestedArtifactId && !library.some((r) => r.artifactId === requestedArtifactId),
   );
 
   // Manual focus paths — mark navigation so a completing build stays polite.
+  const activeThread = threadsApi.activeThread;
+  const { openSavedBrief } = threadsApi;
   const openListItem = useCallback(
     (id: string) => {
       userNavigatedRef.current = true;
-      if (threadsApi.activeThread) threadsApi.openSavedBrief(id);
+      if (activeThread) openSavedBrief(id);
       else enactFocus({ kind: "local", artifactId: id });
     },
-    [threadsApi, enactFocus],
+    [activeThread, openSavedBrief, enactFocus],
   );
   const openBallotBrief = useCallback(
     (briefId: string) => {
       userNavigatedRef.current = true;
-      threadsApi.openSavedBrief(briefId);
+      openSavedBrief(briefId);
     },
-    [threadsApi],
+    [openSavedBrief],
   );
   const backToList = useCallback(() => {
     userNavigatedRef.current = true;
@@ -225,17 +224,21 @@ function WorkspaceInner() {
 
   // Rest state: the artifact LIST — active thread's briefs, else the local
   // library — with the explore surface always beneath (U1/U2).
-  const listItems = threadsApi.activeThread
-    ? threadsApi.activeThread.briefs.map((b) => ({
-        id: b.brief_id,
-        name: deriveLabel(b.race_key),
-        savedAt: b.created_at,
-      }))
-    : library.map((r) => ({
-        id: r.artifactId,
-        name: r.name,
-        savedAt: r.updatedAt,
-      }));
+  const listItems = useMemo(
+    () =>
+      activeThread
+        ? activeThread.briefs.map((b) => ({
+            id: b.brief_id,
+            name: deriveLabel(b.race_key),
+            savedAt: b.created_at,
+          }))
+        : library.map((r) => ({
+            id: r.artifactId,
+            name: r.name,
+            savedAt: r.updatedAt,
+          })),
+    [activeThread, library],
+  );
 
   const restState = deadLink ? (
     <DeadLinkState onReset={() => router.replace("/w")} />
