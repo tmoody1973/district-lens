@@ -80,7 +80,9 @@ export function DonorContributionsCard({
           {coverageNote ?? "No itemized individual contributions found."}
         </p>
       ) : (
-        donors.map((donor) => (
+        donors.map((donor) => {
+          const facts = meaningfulFacts(donor);
+          return (
           <div key={donor.name} className="space-y-1">
             <div className="flex items-baseline justify-between gap-2">
               <span className="truncate text-sm font-medium text-ink">{donor.name}</span>
@@ -95,15 +97,14 @@ export function DonorContributionsCard({
               />
             </div>
             <div className="flex flex-wrap gap-x-3 text-[10px] text-ink-faint">
-              {meaningfulFacts(donor).length > 0 && (
-                <span>{meaningfulFacts(donor).join(" · ")}</span>
-              )}
+              {facts.length > 0 && <span>{facts.join(" · ")}</span>}
               {donor.city_state && <span>{donor.city_state}</span>}
               {donor.transactions > 1 && <span>{donor.transactions} contributions</span>}
               {donor.latest_date && <span className="ml-auto">{donor.latest_date}</span>}
             </div>
           </div>
-        ))
+          );
+        })
       )}
 
       <div className="space-y-1 border-t border-edge pt-2">

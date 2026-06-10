@@ -7,6 +7,8 @@ import type { DistrictLensState, EvidenceCard } from "@/types/agent-state";
 const DISCLAIMER =
   "Evidence from public sources only. DistrictLens never recommends how to vote.";
 
+// Exact figures on purpose — the UI's fmtMoney abbreviates ($844K), but an
+// exported brief is source material and keeps full amounts.
 function money(value: number | null): string {
   return value == null ? "not reported" : `$${value.toLocaleString()}`;
 }
