@@ -2,34 +2,25 @@ import { test, expect } from "vitest";
 import {
   CHAT_PCT_MAX,
   CHAT_PCT_MIN,
+  DEFAULT_LAYOUT,
   clampChatPct,
+  defaultLayout,
   parseLayout,
-  presetFor,
   serializeLayout,
 } from "@/lib/workspace/layout";
 
-test("voter preset: library railed, chat docked at 28%", () => {
-  expect(presetFor("voter")).toEqual({
-    persona: "voter",
-    libraryCollapsed: true,
-    chatCollapsed: false,
-    chatPct: 28,
-  });
-});
-
-test("journalist preset: library open, chat at 40%", () => {
-  expect(presetFor("journalist")).toEqual({
-    persona: "journalist",
+test("default layout: library expanded, chat docked at 32%", () => {
+  expect(DEFAULT_LAYOUT).toEqual({
     libraryCollapsed: false,
     chatCollapsed: false,
-    chatPct: 40,
+    chatPct: 32,
   });
 });
 
-test("presetFor returns a fresh object each call (no shared mutation)", () => {
-  const a = presetFor("voter");
+test("defaultLayout returns a fresh object each call (no shared mutation)", () => {
+  const a = defaultLayout();
   a.chatPct = 99;
-  expect(presetFor("voter").chatPct).toBe(28);
+  expect(defaultLayout().chatPct).toBe(32);
 });
 
 test("clampChatPct clamps below the minimum", () => {
@@ -44,50 +35,54 @@ test("clampChatPct passes through in-range values", () => {
   expect(clampChatPct(33)).toBe(33);
 });
 
-test("parseLayout(null) falls back to the persona preset", () => {
-  expect(parseLayout(null, "journalist")).toEqual(presetFor("journalist"));
+test("parseLayout(null) falls back to the default layout", () => {
+  expect(parseLayout(null)).toEqual(DEFAULT_LAYOUT);
 });
 
-test("parseLayout on corrupt JSON falls back to the preset", () => {
-  expect(parseLayout("{not json", "voter")).toEqual(presetFor("voter"));
+test("parseLayout on corrupt JSON falls back to the default", () => {
+  expect(parseLayout("{not json")).toEqual(DEFAULT_LAYOUT);
 });
 
-test("parseLayout on wrong field types falls back to the preset", () => {
+test("parseLayout on wrong field types falls back to the default", () => {
   const raw = JSON.stringify({
-    persona: "voter",
     libraryCollapsed: "yes",
     chatCollapsed: false,
     chatPct: 30,
   });
-  expect(parseLayout(raw, "voter")).toEqual(presetFor("voter"));
+  expect(parseLayout(raw)).toEqual(DEFAULT_LAYOUT);
 });
 
-test("parseLayout on unknown persona falls back to the preset", () => {
+test("R2: a persona-era stored blob still parses, persona ignored", () => {
+  // Layouts persisted before the unified workspace carry a persona field —
+  // the parser must tolerate (and drop) it rather than resetting the user's
+  // pane sizes.
   const raw = JSON.stringify({
-    persona: "admin",
-    libraryCollapsed: false,
+    persona: "journalist",
+    libraryCollapsed: true,
     chatCollapsed: false,
-    chatPct: 30,
+    chatPct: 40,
   });
-  expect(parseLayout(raw, "voter")).toEqual(presetFor("voter"));
+  expect(parseLayout(raw)).toEqual({
+    libraryCollapsed: true,
+    chatCollapsed: false,
+    chatPct: 40,
+  });
 });
 
 test("parseLayout clamps a stored out-of-range chatPct", () => {
   const raw = JSON.stringify({
-    persona: "voter",
     libraryCollapsed: true,
     chatCollapsed: false,
     chatPct: 90,
   });
-  expect(parseLayout(raw, "voter").chatPct).toBe(CHAT_PCT_MAX);
+  expect(parseLayout(raw).chatPct).toBe(CHAT_PCT_MAX);
 });
 
 test("serialize → parse round-trips a valid layout", () => {
   const layout = {
-    persona: "journalist" as const,
     libraryCollapsed: true,
     chatCollapsed: true,
     chatPct: 35,
   };
-  expect(parseLayout(serializeLayout(layout), "voter")).toEqual(layout);
+  expect(parseLayout(serializeLayout(layout))).toEqual(layout);
 });

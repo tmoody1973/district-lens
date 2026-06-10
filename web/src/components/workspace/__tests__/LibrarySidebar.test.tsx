@@ -2,25 +2,30 @@ import { test, expect, beforeEach } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { WorkspaceLayoutProvider } from "../WorkspaceLayoutContext";
 import { LibrarySidebar } from "../LibrarySidebar";
+import { LAYOUT_STORAGE_KEY } from "@/lib/workspace/layout";
 
 beforeEach(() => window.localStorage.clear());
 
-test("journalist preset renders the expanded sidebar with brand and persona switch", () => {
+test("renders the expanded sidebar with brand — no persona switch (U1)", () => {
   render(
-    <WorkspaceLayoutProvider initialPersona="journalist">
+    <WorkspaceLayoutProvider>
       <LibrarySidebar>
         <p>section content</p>
       </LibrarySidebar>
     </WorkspaceLayoutProvider>,
   );
   expect(screen.getByText("DistrictLens")).toBeInTheDocument();
-  expect(screen.getByRole("radiogroup", { name: "Persona" })).toBeInTheDocument();
+  expect(screen.queryByRole("radiogroup", { name: "Persona" })).not.toBeInTheDocument();
   expect(screen.getByText("section content")).toBeInTheDocument();
 });
 
-test("voter preset renders the collapsed icon rail", () => {
+test("stored collapsed layout renders the icon rail", () => {
+  window.localStorage.setItem(
+    LAYOUT_STORAGE_KEY,
+    JSON.stringify({ libraryCollapsed: true, chatCollapsed: false, chatPct: 32 }),
+  );
   render(
-    <WorkspaceLayoutProvider initialPersona="voter">
+    <WorkspaceLayoutProvider>
       <LibrarySidebar>
         <p>section content</p>
       </LibrarySidebar>
@@ -32,7 +37,7 @@ test("voter preset renders the collapsed icon rail", () => {
 
 test("collapse and expand round-trip", () => {
   render(
-    <WorkspaceLayoutProvider initialPersona="journalist">
+    <WorkspaceLayoutProvider>
       <LibrarySidebar />
     </WorkspaceLayoutProvider>,
   );

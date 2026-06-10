@@ -2,16 +2,8 @@
 
 import type { ReactNode } from "react";
 import { useWorkspaceLayout } from "./WorkspaceLayoutContext";
-import { PersonaSwitch } from "./PersonaSwitch";
-import type { Persona } from "@/lib/workspace/layout";
 
-export function LibrarySidebar({
-  children,
-  onPersonaChange,
-}: {
-  children?: ReactNode;
-  onPersonaChange?: (persona: Persona) => void;
-}) {
+export function LibrarySidebar({ children }: { children?: ReactNode }) {
   const { layout, toggleLibrary } = useWorkspaceLayout();
 
   if (layout.libraryCollapsed) {
@@ -51,9 +43,6 @@ export function LibrarySidebar({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
           </svg>
         </button>
-      </div>
-      <div className="border-b border-zinc-800 px-3 py-2">
-        <PersonaSwitch onPersonaChange={onPersonaChange} />
       </div>
       <div className="flex-1 overflow-y-auto overflow-x-hidden">{children}</div>
     </aside>

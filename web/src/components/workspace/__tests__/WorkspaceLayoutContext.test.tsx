@@ -1,81 +1,66 @@
-import { test, expect } from "vitest";
-import { act, render, screen } from "@testing-library/react";
+import { test, expect, beforeEach } from "vitest";
+import { act, render } from "@testing-library/react";
 import {
   WorkspaceLayoutProvider,
   useWorkspaceLayout,
 } from "../WorkspaceLayoutContext";
-import { CHAT_PCT_MAX, LAYOUT_STORAGE_KEY } from "@/lib/workspace/layout";
+import { CHAT_PCT_MAX, DEFAULT_LAYOUT, LAYOUT_STORAGE_KEY } from "@/lib/workspace/layout";
+
+beforeEach(() => window.localStorage.clear());
 
 let api: ReturnType<typeof useWorkspaceLayout>;
 
 function Probe() {
   api = useWorkspaceLayout();
-  return <span data-testid="persona">{api.layout.persona}</span>;
+  return null;
 }
 
-test("starts from the initialPersona preset", () => {
-  render(
-    <WorkspaceLayoutProvider initialPersona="journalist">
+function renderProvider() {
+  return render(
+    <WorkspaceLayoutProvider>
       <Probe />
     </WorkspaceLayoutProvider>,
   );
-  expect(screen.getByTestId("persona").textContent).toBe("journalist");
-  expect(api.layout.chatPct).toBe(40);
-});
+}
 
-test("setPersona applies the full preset", () => {
-  render(
-    <WorkspaceLayoutProvider initialPersona="journalist">
-      <Probe />
-    </WorkspaceLayoutProvider>,
-  );
-  act(() => api.setPersona("voter"));
-  expect(api.layout).toMatchObject({ persona: "voter", libraryCollapsed: true, chatPct: 28 });
+test("starts from the default layout", () => {
+  renderProvider();
+  expect(api.layout).toEqual(DEFAULT_LAYOUT);
 });
 
 test("toggleLibrary flips only libraryCollapsed", () => {
-  render(
-    <WorkspaceLayoutProvider initialPersona="journalist">
-      <Probe />
-    </WorkspaceLayoutProvider>,
-  );
+  renderProvider();
   act(() => api.toggleLibrary());
   expect(api.layout.libraryCollapsed).toBe(true);
-  expect(api.layout.chatPct).toBe(40);
+  expect(api.layout.chatPct).toBe(DEFAULT_LAYOUT.chatPct);
 });
 
 test("setChatPct clamps and persists to localStorage", () => {
-  render(
-    <WorkspaceLayoutProvider initialPersona="voter">
-      <Probe />
-    </WorkspaceLayoutProvider>,
-  );
+  renderProvider();
   act(() => api.setChatPct(99));
   expect(api.layout.chatPct).toBe(CHAT_PCT_MAX);
   const stored = JSON.parse(window.localStorage.getItem(LAYOUT_STORAGE_KEY)!);
   expect(stored.chatPct).toBe(CHAT_PCT_MAX);
 });
 
-test("restores a previously stored layout on mount", () => {
+test("restores a previously stored layout on mount (persona-era blob tolerated)", () => {
   window.localStorage.setItem(
     LAYOUT_STORAGE_KEY,
     JSON.stringify({ persona: "journalist", libraryCollapsed: true, chatCollapsed: true, chatPct: 33 }),
   );
-  render(
-    <WorkspaceLayoutProvider initialPersona="voter">
-      <Probe />
-    </WorkspaceLayoutProvider>,
-  );
-  expect(api.layout).toEqual({ persona: "journalist", libraryCollapsed: true, chatCollapsed: true, chatPct: 33 });
+  renderProvider();
+  expect(api.layout).toEqual({ libraryCollapsed: true, chatCollapsed: true, chatPct: 33 });
 });
 
-test("corrupt stored layout resets to the initialPersona preset", () => {
+test("corrupt stored layout resets to the default", () => {
   window.localStorage.setItem(LAYOUT_STORAGE_KEY, "{nope");
-  render(
-    <WorkspaceLayoutProvider initialPersona="voter">
-      <Probe />
-    </WorkspaceLayoutProvider>,
-  );
-  expect(api.layout.persona).toBe("voter");
-  expect(api.layout.chatPct).toBe(28);
+  renderProvider();
+  expect(api.layout).toEqual(DEFAULT_LAYOUT);
+});
+
+test("resetLayout returns to the default", () => {
+  renderProvider();
+  act(() => api.setChatPct(50));
+  act(() => api.resetLayout());
+  expect(api.layout).toEqual(DEFAULT_LAYOUT);
 });

@@ -11,34 +11,26 @@ import {
 import {
   LAYOUT_STORAGE_KEY,
   clampChatPct,
+  defaultLayout,
   parseLayout,
-  presetFor,
   serializeLayout,
-  type Persona,
   type WorkspaceLayoutState,
 } from "@/lib/workspace/layout";
 
 interface WorkspaceLayoutContextValue {
   layout: WorkspaceLayoutState;
-  setPersona: (persona: Persona) => void;
   toggleLibrary: () => void;
   toggleChat: () => void;
   setChatPct: (pct: number) => void;
-  resetToPreset: () => void;
+  resetLayout: () => void;
 }
 
 const WorkspaceLayoutContext = createContext<WorkspaceLayoutContextValue | null>(null);
 
-export function WorkspaceLayoutProvider({
-  children,
-  initialPersona = "voter",
-}: {
-  children: ReactNode;
-  initialPersona?: Persona;
-}) {
-  // Server render uses the preset; the stored layout loads after mount so the
+export function WorkspaceLayoutProvider({ children }: { children: ReactNode }) {
+  // Server render uses the default; the stored layout loads after mount so the
   // server and client first paint match (no hydration mismatch).
-  const [layout, setLayout] = useState<WorkspaceLayoutState>(() => presetFor(initialPersona));
+  const [layout, setLayout] = useState<WorkspaceLayoutState>(defaultLayout);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -48,10 +40,8 @@ export function WorkspaceLayoutProvider({
     } catch {
       // localStorage unavailable — session-only layout (spec §Error handling)
     }
-    setLayout(parseLayout(stored, initialPersona));
+    setLayout(parseLayout(stored));
     setHydrated(true);
-    // intentional: mount-only; initialPersona changes after mount are not supported
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -63,7 +53,6 @@ export function WorkspaceLayoutProvider({
     }
   }, [layout, hydrated]);
 
-  const setPersona = useCallback((persona: Persona) => setLayout(presetFor(persona)), []);
   const toggleLibrary = useCallback(
     () => setLayout((l) => ({ ...l, libraryCollapsed: !l.libraryCollapsed })),
     [],
@@ -76,11 +65,11 @@ export function WorkspaceLayoutProvider({
     (pct: number) => setLayout((l) => ({ ...l, chatPct: clampChatPct(pct) })),
     [],
   );
-  const resetToPreset = useCallback(() => setLayout((l) => presetFor(l.persona)), []);
+  const resetLayout = useCallback(() => setLayout(defaultLayout()), []);
 
   return (
     <WorkspaceLayoutContext.Provider
-      value={{ layout, setPersona, toggleLibrary, toggleChat, setChatPct, resetToPreset }}
+      value={{ layout, toggleLibrary, toggleChat, setChatPct, resetLayout }}
     >
       {children}
     </WorkspaceLayoutContext.Provider>

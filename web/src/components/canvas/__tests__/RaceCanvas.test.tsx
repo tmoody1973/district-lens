@@ -35,7 +35,7 @@ test("shows a per-candidate honest empty state when a candidate has no positions
   expect(screen.getByText(/No public positions found in indexed sources yet/i)).toBeInTheDocument();
 });
 
-test("journalist mode renders campaign finance before issue positions", () => {
+test("U1: evidence-first ordering — issue positions before campaign finance, even for journalist-era state", () => {
   vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
   render(<RaceCanvas state={state({
     mode: "journalist",
@@ -44,6 +44,6 @@ test("journalist mode renders campaign finance before issue positions", () => {
   })} />);
   const money = screen.getByText("Campaign finance · FEC");
   const positions = screen.getByText("Issue positions · Perplexity");
-  // positions must appear AFTER money in document order
-  expect(money.compareDocumentPosition(positions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  // money must appear AFTER positions in document order (one evidence-first layout)
+  expect(positions.compareDocumentPosition(money) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });

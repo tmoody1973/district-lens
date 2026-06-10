@@ -49,7 +49,6 @@ export function RaceCanvas({ state }: Props) {
   const financeByCandidate = Object.fromEntries(state.finance.map((s) => [s.candidateId, s]));
   const stateCode = stateCodeFromRaceKey(state.currentRaceKey);
   const keyDates = deriveKeyDates(electionDates, new Date().toISOString().slice(0, 10));
-  const isVoter = state.mode === "voter";
 
   const renderSection = (plan: SectionPlan) => {
     switch (plan.id) {
@@ -127,7 +126,7 @@ export function RaceCanvas({ state }: Props) {
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-5">
       <DecisionHeader facts={layout.header} />
       <NomineeStatusBanner status={raceStatus} candidates={state.candidates} />
-      {isVoter && stateCode && <CanVoteStrip stateCode={stateCode} keyDates={keyDates} />}
+      {stateCode && <CanVoteStrip stateCode={stateCode} keyDates={keyDates} />}
       {layout.sections.map(renderSection)}
     </div>
   );

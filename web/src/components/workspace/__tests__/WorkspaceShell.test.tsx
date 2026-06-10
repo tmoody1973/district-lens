@@ -6,9 +6,9 @@ import { LAYOUT_STORAGE_KEY } from "@/lib/workspace/layout";
 
 beforeEach(() => window.localStorage.clear());
 
-function renderShell(initialPersona: "voter" | "journalist" = "journalist") {
+function renderShell() {
   return render(
-    <WorkspaceLayoutProvider initialPersona={initialPersona}>
+    <WorkspaceLayoutProvider>
       <WorkspaceShell
         library={<aside>LIB</aside>}
         chat={<div>CHAT</div>}

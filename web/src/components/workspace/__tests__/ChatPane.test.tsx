@@ -10,9 +10,9 @@ import { ChatPane } from "../ChatPane";
 
 beforeEach(() => window.localStorage.clear());
 
-function renderPane(initialPersona: "voter" | "journalist" = "voter", statusMessage: string | null = null) {
+function renderPane(statusMessage: string | null = null) {
   render(
-    <WorkspaceLayoutProvider initialPersona={initialPersona}>
+    <WorkspaceLayoutProvider>
       <ChatPane statusMessage={statusMessage} />
     </WorkspaceLayoutProvider>,
   );
@@ -24,7 +24,7 @@ test("expanded pane renders the CopilotKit chat", () => {
 });
 
 test("collapsing docks the chat to a strip that keeps the agent status visible", () => {
-  renderPane("voter", "Searching FEC filings…");
+  renderPane("Searching FEC filings…");
   fireEvent.click(screen.getByRole("button", { name: "Collapse chat" }));
   expect(screen.queryByTestId("copilot-chat")).not.toBeInTheDocument();
   expect(screen.getByText("Searching FEC filings…")).toBeInTheDocument();

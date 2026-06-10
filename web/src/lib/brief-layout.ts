@@ -1,4 +1,4 @@
-import type { AppMode, CandidateCard, DistrictLensState, FinanceSummary } from "@/types/agent-state";
+import type { CandidateCard, DistrictLensState, FinanceSummary } from "@/types/agent-state";
 import { parseRaceKey } from "./race-key";
 import { stateName } from "./states";
 import { fmtMoney } from "./format";
@@ -109,39 +109,23 @@ function moneySummary(finance: FinanceSummary[]): string {
   return `${fmtMoney(total)} raised · top ${lastName(top.name)} ${fmtMoney(top.receipts)}`;
 }
 
-// Ordered section plans keyed by mode × seat type. Sections absent from state
-// are filtered out in buildSections.
-const SECTION_PLANS: Record<AppMode, Record<SeatType, SectionPlan[]>> = {
-  voter: {
-    incumbent: [
-      { id: "candidates", defaultOpen: true },
-      { id: "record", defaultOpen: true },
-      { id: "positions", defaultOpen: true },
-      { id: "money", defaultOpen: false },
-      { id: "news", defaultOpen: false },
-    ],
-    open: [
-      { id: "candidates", defaultOpen: true },
-      { id: "positions", defaultOpen: true },
-      { id: "money", defaultOpen: false },
-      { id: "news", defaultOpen: false },
-    ],
-  },
-  journalist: {
-    incumbent: [
-      { id: "candidates", defaultOpen: true },
-      { id: "money", defaultOpen: true },
-      { id: "record", defaultOpen: true },
-      { id: "positions", defaultOpen: false },
-      { id: "news", defaultOpen: false },
-    ],
-    open: [
-      { id: "candidates", defaultOpen: true },
-      { id: "money", defaultOpen: true },
-      { id: "positions", defaultOpen: true },
-      { id: "news", defaultOpen: false },
-    ],
-  },
+// One evidence-first ordering keyed by seat type (U1 — the journalist
+// money-first variant was deliberately dropped with the persona tabs).
+// Sections absent from state are filtered out in buildSections.
+const SECTION_PLANS: Record<SeatType, SectionPlan[]> = {
+  incumbent: [
+    { id: "candidates", defaultOpen: true },
+    { id: "record", defaultOpen: true },
+    { id: "positions", defaultOpen: true },
+    { id: "money", defaultOpen: false },
+    { id: "news", defaultOpen: false },
+  ],
+  open: [
+    { id: "candidates", defaultOpen: true },
+    { id: "positions", defaultOpen: true },
+    { id: "money", defaultOpen: false },
+    { id: "news", defaultOpen: false },
+  ],
 };
 
 function isIncluded(id: SectionId, seatType: SeatType, state: DistrictLensState): boolean {
@@ -155,13 +139,13 @@ function isIncluded(id: SectionId, seatType: SeatType, state: DistrictLensState)
   }
 }
 
-export function buildSections(mode: AppMode, seatType: SeatType, state: DistrictLensState): SectionPlan[] {
-  return SECTION_PLANS[mode][seatType].filter((p) => isIncluded(p.id, seatType, state));
+export function buildSections(seatType: SeatType, state: DistrictLensState): SectionPlan[] {
+  return SECTION_PLANS[seatType].filter((p) => isIncluded(p.id, seatType, state));
 }
 
 export function buildBriefLayout(state: DistrictLensState, raceStatus: RaceStatus | null): BriefLayout {
   const header = buildHeaderFacts(state, raceStatus);
-  const sections = buildSections(state.mode, header.seatType, state);
+  const sections = buildSections(header.seatType, state);
   return { header, sections };
 }
 

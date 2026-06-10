@@ -4,8 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useCoAgent, useCopilotReadable } from "@copilotkit/react-core";
 import { useAgent, useCopilotKit } from "@copilotkit/react-core/v2";
 import { CopilotKitCoreRuntimeConnectionStatus } from "@copilotkit/core";
-import { pickDisplayedBrief, type DisplayedBrief } from "@/lib/brief-display";
-import { DEFAULT_STATE, type AppMode, type DistrictLensState } from "@/types/agent-state";
+import { DEFAULT_STATE, type DistrictLensState } from "@/types/agent-state";
 
 export interface UseWorkspaceAgentOptions {
   /** Called synchronously after accepting a run (after the isRunning guard). */
@@ -45,7 +44,7 @@ export function useWorkspaceAgent(options?: UseWorkspaceAgentOptions) {
     if (computeAgentReady()) setIsAgentReady(true);
 
     const subscription = copilotkit.subscribe({
-      onRuntimeConnectionStatusChanged: ({ status }) => {
+      onRuntimeConnectionStatusChanged: () => {
         setIsAgentReady(computeAgentReady());
       },
       onAgentsChanged: () => {
@@ -56,19 +55,13 @@ export function useWorkspaceAgent(options?: UseWorkspaceAgentOptions) {
     return () => subscription.unsubscribe();
   }, [copilotkit, computeAgentReady]);
 
-  // Which mode loaded the current brief (each persona keeps its own view).
-  const [lastBriefMode, setLastBriefMode] = useState<AppMode | null>(null);
-  // Last live brief, captured continuously — survives coagent state clearing.
-  const [briefSnapshot, setBriefSnapshot] = useState<DisplayedBrief | null>(null);
   const prevStageRef = useRef<string>("idle");
-  // Snapshots are captured at stage transitions (incl. complete, which carries
-  // the full final state) instead of every streaming tick.
   const latestStateRef = useRef<DistrictLensState>(agentState);
   latestStateRef.current = agentState;
 
   useCopilotReadable({
-    description: "Current app mode and selected race",
-    value: `Mode: ${agentState.mode}. Current race: ${agentState.currentRaceKey ?? "none"}.`,
+    description: "Currently selected race",
+    value: `Current race: ${agentState.currentRaceKey ?? "none"}.`,
   });
 
   useEffect(() => {
@@ -77,13 +70,6 @@ export function useWorkspaceAgent(options?: UseWorkspaceAgentOptions) {
     }
     prevStageRef.current = agentState.stage;
   }, [agentState.stage, setAgentState]);
-
-  useEffect(() => {
-    if (latestStateRef.current.currentRaceKey && lastBriefMode) {
-      setBriefSnapshot({ mode: lastBriefMode, state: latestStateRef.current });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentState.currentRaceKey, agentState.stage, lastBriefMode]);
 
   // Pending-run queue: at mount, useCoAgent's connectAgent handshake is itself
   // an agent run, so agent.isRunning is briefly true. A kickoff arriving in
@@ -125,7 +111,6 @@ export function useWorkspaceAgent(options?: UseWorkspaceAgentOptions) {
   const submitAddress = useCallback(
     (address: string) => {
       if (!address.trim()) return;
-      setLastBriefMode("voter");
       run(`Build a complete voter brief for: ${address}`);
     },
     [run],
@@ -137,38 +122,24 @@ export function useWorkspaceAgent(options?: UseWorkspaceAgentOptions) {
   );
 
   const openRace = useCallback(
-    (raceKey: string) => {
-      setLastBriefMode("journalist");
-      run(`Build a complete voter brief for race: ${raceKey}`);
-    },
+    (raceKey: string) => run(`Build a complete voter brief for race: ${raceKey}`),
     [run],
   );
 
-  const setMode = useCallback(
-    (mode: AppMode) => setAgentState((prev) => ({ ...DEFAULT_STATE, ...prev, mode })),
-    [setAgentState],
-  );
-
-  /** Wipes everything that feeds the artifact panel (thread-switch reset), keeping the persona. */
+  /** Wipes everything that feeds the artifact panel (thread-switch reset). */
   const clearBrief = useCallback(() => {
-    setBriefSnapshot(null);
-    setLastBriefMode(null);
     setAgentState((prev) => ({ ...DEFAULT_STATE, mode: prev?.mode ?? DEFAULT_STATE.mode }));
   }, [setAgentState]);
-
-  const displayed = pickDisplayedBrief(agentState, briefSnapshot, lastBriefMode);
 
   return {
     agent,
     agentState,
     setAgentState,
-    displayed,
     isAgentReady,
     isRunning: agent.isRunning,
     submitAddress,
     exploreState,
     openRace,
-    setMode,
     clearBrief,
   };
 }
