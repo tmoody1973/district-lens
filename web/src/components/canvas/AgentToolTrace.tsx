@@ -5,6 +5,7 @@ import { useDefaultTool, useRenderToolCall } from "@copilotkit/react-core";
 import { summarizeArgs, toolMeta } from "@/lib/tool-trace";
 import { unwrapMcpResult } from "@/lib/mcp-result";
 import { TraceCard } from "../TraceCard";
+import { DonorContributionsCard, type DonorRow } from "./DonorContributionsCard";
 import { FinanceToolCard, type FinanceToolCandidate } from "./FinanceToolCard";
 import { BallotpediaSkeleton } from "./ballotpedia/BallotpediaCardShell";
 import { BallotMeasuresCard } from "./ballotpedia/BallotMeasuresCard";
@@ -93,6 +94,46 @@ export function AgentToolTrace() {
           raceKey={data.race_key ?? raceKey}
           candidates={data.candidates ?? []}
           source={root.source}
+        />
+      );
+    },
+  });
+
+  // Rich card for the live FEC individual-donors tool (demo moment).
+  useRenderToolCall({
+    name: "get_individual_donors",
+    parameters: [
+      { name: "candidate_name", type: "string", required: true },
+      { name: "race_key", type: "string", required: true },
+    ],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    render: (props: any) => {
+      if (props.status !== "complete") {
+        return <DonorContributionsCard loading donors={[]} />;
+      }
+      let parsed: unknown = props.result;
+      if (typeof parsed === "string") {
+        try {
+          parsed = JSON.parse(parsed);
+        } catch {
+          parsed = {};
+        }
+      }
+      const data =
+        ((parsed ?? {}) as {
+          data?: {
+            candidate?: string;
+            donors?: DonorRow[];
+            coverage_note?: string;
+            retrieved_at?: string;
+          };
+        }).data ?? {};
+      return (
+        <DonorContributionsCard
+          candidate={data.candidate}
+          donors={data.donors ?? []}
+          coverageNote={data.coverage_note}
+          retrievedAt={data.retrieved_at}
         />
       );
     },
