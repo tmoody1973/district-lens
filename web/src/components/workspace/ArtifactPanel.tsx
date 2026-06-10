@@ -38,8 +38,7 @@ export function ArtifactPanel({ state, title, isDrafting, emptyState, headerActi
         </div>
         {isDrafting && steps.length > 0 && state && (
           // Receipt strip across the artifact top while drafting (spec §Artifact state).
-          // ReceiptProgress is still light-styled — white plate is the Phase-1 waypoint.
-          <div className="mt-2 rounded-md bg-white px-3 py-2">
+          <div className="mt-2 rounded-md bg-surface-raised px-3 py-2">
             <ReceiptProgress
               steps={steps}
               briefStartedAt={state.briefStartedAt}
@@ -51,8 +50,7 @@ export function ArtifactPanel({ state, title, isDrafting, emptyState, headerActi
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {hasBrief && state ? (
-          // "Paper on dark desk": RaceCanvas stays light until the dark token pass.
-          <div className="min-h-full bg-white">
+          <div className="min-h-full">
             <RaceCanvas state={state} />
           </div>
         ) : (

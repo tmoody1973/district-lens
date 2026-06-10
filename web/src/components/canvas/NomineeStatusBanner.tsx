@@ -3,16 +3,16 @@ import { deriveProjectedWinners, type RaceStatus } from "@/lib/brief-layout";
 import type { CandidateCard } from "@/types/agent-state";
 
 const PARTY_DOT: Record<string, string> = {
-  DEM: "bg-blue-600",
-  REP: "bg-red-600",
-  IND: "bg-slate-400",
+  DEM: "bg-party-dem",
+  REP: "bg-party-rep",
+  IND: "bg-zinc-500",
 };
 
 const TONE: Record<string, { box: string; label: string }> = {
-  green: { box: "border-green-300 bg-green-50", label: "text-green-800" },
-  amber: { box: "border-amber-300 bg-amber-50", label: "text-amber-800" },
-  indigo: { box: "border-indigo-300 bg-indigo-50", label: "text-indigo-800" },
-  slate: { box: "border-slate-200 bg-slate-50", label: "text-slate-600" },
+  green: { box: "border-green-700/40 bg-green-900/30", label: "text-evidence-direct" },
+  amber: { box: "border-amber-700/40 bg-amber-900/30", label: "text-evidence-reported" },
+  indigo: { box: "border-indigo-700/40 bg-indigo-900/30", label: "text-evidence-voting" },
+  slate: { box: "border-edge bg-surface-raised", label: "text-ink-muted" },
 };
 
 function fmtDate(iso: string | null): string | null {
@@ -28,10 +28,10 @@ function WinnerList({ winners }: { winners: Record<string, string> }) {
   return (
     <ul className="mt-1.5 space-y-1">
       {entries.map(([party, name]) => (
-        <li key={party} className="flex items-center gap-2 text-sm text-slate-900">
-          <span className={`h-2 w-2 shrink-0 rounded-full ${PARTY_DOT[party.toUpperCase()] ?? "bg-slate-400"}`} />
+        <li key={party} className="flex items-center gap-2 text-sm text-ink">
+          <span className={`h-2 w-2 shrink-0 rounded-full ${PARTY_DOT[party.toUpperCase()] ?? "bg-zinc-500"}`} />
           <span className="font-medium">{name}</span>
-          <span className="text-xs text-slate-500">({party.toUpperCase()})</span>
+          <span className="text-xs text-ink-muted">({party.toUpperCase()})</span>
         </li>
       ))}
     </ul>
@@ -48,7 +48,7 @@ function SourceLine({
   citation: { url: string; publisher: string } | null;
 }) {
   return (
-    <p className="mt-1.5 text-xs text-slate-500">
+    <p className="mt-1.5 text-xs text-ink-muted">
       via {source}
       {date && ` · ${date}`}
       {citation?.url && (
@@ -58,7 +58,7 @@ function SourceLine({
             href={citation.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-700 hover:underline"
+            className="text-evidence-questionnaire hover:underline"
           >
             source
           </a>
@@ -114,7 +114,7 @@ export function NomineeStatusBanner({
   if (data.status === "runoff_pending") {
     return (
       <Banner tone="amber" label="Runoff pending">
-        <p className="mt-1 text-sm text-amber-800">No nominee yet — this race advances to a runoff.</p>
+        <p className="mt-1 text-sm text-evidence-reported">No nominee yet — this race advances to a runoff.</p>
       </Banner>
     );
   }
@@ -140,7 +140,7 @@ export function NomineeStatusBanner({
   if (data.status === "provisional") {
     return (
       <Banner tone="slate" label="Not yet called">
-        <p className="mt-1 text-sm text-slate-500">Official primary results aren’t available yet.</p>
+        <p className="mt-1 text-sm text-ink-muted">Official primary results aren’t available yet.</p>
       </Banner>
     );
   }
@@ -148,7 +148,7 @@ export function NomineeStatusBanner({
   if (data.status === "contested") {
     return (
       <Banner tone="amber" label="Contested">
-        <p className="mt-1 text-sm text-amber-800">Sources disagree on the outcome — flagged for review.</p>
+        <p className="mt-1 text-sm text-evidence-reported">Sources disagree on the outcome — flagged for review.</p>
       </Banner>
     );
   }

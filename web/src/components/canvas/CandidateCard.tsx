@@ -6,15 +6,15 @@ import { fmtMoney } from "@/lib/format";
 export { fmtMoney };
 
 const PARTY_BORDER: Record<string, string> = {
-  DEM: "border-l-blue-600",
-  REP: "border-l-red-600",
-  IND: "border-l-slate-400",
+  DEM: "border-l-party-dem",
+  REP: "border-l-party-rep",
+  IND: "border-l-zinc-500",
 };
 
 const PARTY_BADGE: Record<string, string> = {
-  DEM: "bg-blue-100 text-blue-800 border-blue-300",
-  REP: "bg-red-100 text-red-800 border-red-300",
-  IND: "bg-slate-100 text-slate-800 border-slate-300",
+  DEM: "bg-blue-900/30 text-blue-400 border-blue-700/40",
+  REP: "bg-red-900/30 text-red-400 border-red-700/40",
+  IND: "bg-zinc-800 text-zinc-300 border-zinc-600",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -44,28 +44,28 @@ export function CandidateCard({ candidate, finance }: Props) {
     : null;
 
   return (
-    <div className={`flex items-center gap-4 rounded-[2px] border-2 border-slate-200 border-l-4 ${borderClass} bg-white p-4`}>
+    <div className={`flex items-center gap-4 rounded-[2px] border-2 border-edge border-l-4 ${borderClass} bg-surface-raised p-4`}>
       <img
         src={imgSrc}
         alt={candidate.name}
         width={48}
         height={48}
-        className="rounded-full border-2 border-slate-200 object-cover shrink-0"
+        className="rounded-full border-2 border-edge object-cover shrink-0"
         onError={() => setImgSrc(placeholderAvatarUrl(candidate.name, candidate.party))}
       />
       <div className="flex-1 min-w-0">
-        <p className="font-semibold text-slate-900 truncate">{candidate.name}</p>
+        <p className="font-semibold text-ink truncate">{candidate.name}</p>
         <div className="mt-1 flex items-center gap-2 flex-wrap">
           <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
             {candidate.party}
           </span>
-          <span className="text-xs text-slate-500">{statusLabel}</span>
+          <span className="text-xs text-ink-muted">{statusLabel}</span>
           {candidate.voteSharePct != null && (
             <span
               className={`rounded-full border px-2 py-0.5 text-xs font-medium ${
                 candidate.isPrimaryWinner
-                  ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                  : "bg-slate-100 text-slate-600 border-slate-200"
+                  ? "bg-green-900/30 text-green-400 border-green-700/40"
+                  : "bg-zinc-800 text-zinc-300 border-zinc-600"
               }`}
               title="Primary result · NBC Decision Desk"
             >
@@ -77,9 +77,9 @@ export function CandidateCard({ candidate, finance }: Props) {
       </div>
       {total !== null && (
         <div className="text-right shrink-0">
-          <p className="text-sm font-bold text-slate-900">{fmtMoney(total)}</p>
+          <p className="text-sm font-bold text-ink">{fmtMoney(total)}</p>
           {pacPct !== null && (
-            <p className="text-xs text-slate-500">{pacPct}% PAC</p>
+            <p className="text-xs text-ink-muted">{pacPct}% PAC</p>
           )}
         </div>
       )}

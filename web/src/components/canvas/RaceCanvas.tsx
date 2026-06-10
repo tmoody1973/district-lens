@@ -39,7 +39,7 @@ export function RaceCanvas({ state }: Props) {
 
   if (state.stage === "idle" || !state.currentRaceKey) {
     return (
-      <div className="flex flex-1 items-center justify-center p-8 text-sm text-slate-400">
+      <div className="flex flex-1 items-center justify-center p-8 text-sm text-ink-faint">
         Enter an address or click a state on the map to get started.
       </div>
     );
@@ -56,7 +56,7 @@ export function RaceCanvas({ state }: Props) {
       case "candidates":
         return (
           <div key="candidates" className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-widest text-slate-500">Candidates · FEC 2026</p>
+            <p className="text-xs font-medium uppercase tracking-widest text-ink-muted">Candidates · FEC 2026</p>
             <CandidateField candidates={state.candidates} financeByCandidate={financeByCandidate} phase={layout.header.phase} />
           </div>
         );
@@ -96,7 +96,7 @@ export function RaceCanvas({ state }: Props) {
             {noFootprint.length > 0 ? (
               <PositionsEmptyState candidates={noFootprint} hasOthers={state.positions.length > 0} />
             ) : state.positions.length === 0 ? (
-              <p className="text-sm text-slate-500">No position evidence found in indexed sources.</p>
+              <p className="text-sm text-ink-muted">No position evidence found in indexed sources.</p>
             ) : null}
           </CollapsibleSection>
         );

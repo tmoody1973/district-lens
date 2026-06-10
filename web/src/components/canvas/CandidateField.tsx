@@ -41,7 +41,7 @@ export function CandidateField({ candidates, financeByCandidate, phase }: Props)
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       {groupByParty(candidates).map(([party, group]) => (
         <div key={party} className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-widest text-slate-500">{partyHeading(party)}</p>
+          <p className="text-xs font-medium uppercase tracking-widest text-ink-muted">{partyHeading(party)}</p>
           {group.map((c) => (
             <CandidateCard key={c.candidateId} candidate={c} finance={financeByCandidate[c.candidateId] ?? null} />
           ))}
