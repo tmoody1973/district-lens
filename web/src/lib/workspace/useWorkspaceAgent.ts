@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useCoAgent, useCopilotReadable } from "@copilotkit/react-core";
 import { useAgent, useCopilotKit } from "@copilotkit/react-core/v2";
+import { CopilotKitCoreRuntimeConnectionStatus } from "@copilotkit/core";
 import { pickDisplayedBrief, type DisplayedBrief } from "@/lib/brief-display";
 import { DEFAULT_STATE, type AppMode, type DistrictLensState } from "@/types/agent-state";
 
@@ -22,6 +23,38 @@ export function useWorkspaceAgent(options?: UseWorkspaceAgentOptions) {
     name: "districtlens_root",
     initialState: DEFAULT_STATE,
   });
+
+  // Track when the agent can actually accept a programmatic run. Connection
+  // status alone is NOT enough: the core flips to Connected before the /info
+  // agents land in the registry, and until then useAgent() hands out a
+  // provisional agent whose messages are DISCARDED on the swap to the real
+  // instance (the backend then errors with "requires either a new_message or
+  // an invocation_id"). Ready = runtime connected AND districtlens_root is
+  // registered as a real agent.
+  const computeAgentReady = useCallback(
+    () =>
+      copilotkit.runtimeConnectionStatus === CopilotKitCoreRuntimeConnectionStatus.Connected &&
+      copilotkit.getAgent("districtlens_root") !== undefined,
+    [copilotkit],
+  );
+  const [isAgentReady, setIsAgentReady] = useState(computeAgentReady);
+
+  useEffect(() => {
+    // Sync once on mount in case readiness resolved between the useState seed
+    // and the first render commit (React double-invoke in StrictMode, etc.).
+    if (computeAgentReady()) setIsAgentReady(true);
+
+    const subscription = copilotkit.subscribe({
+      onRuntimeConnectionStatusChanged: ({ status }) => {
+        setIsAgentReady(computeAgentReady());
+      },
+      onAgentsChanged: () => {
+        setIsAgentReady(computeAgentReady());
+      },
+    });
+
+    return () => subscription.unsubscribe();
+  }, [copilotkit, computeAgentReady]);
 
   // Which mode loaded the current brief (each persona keeps its own view).
   const [lastBriefMode, setLastBriefMode] = useState<AppMode | null>(null);
@@ -52,14 +85,36 @@ export function useWorkspaceAgent(options?: UseWorkspaceAgentOptions) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentState.currentRaceKey, agentState.stage, lastBriefMode]);
 
+  // Pending-run queue: at mount, useCoAgent's connectAgent handshake is itself
+  // an agent run, so agent.isRunning is briefly true. A kickoff arriving in
+  // that window must wait for the handshake to settle, not be dropped.
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+  }, []);
+
   const run = useCallback(
     (content: string) => {
-      if (agent.isRunning) return;
-      options?.onRunStart?.();
-      agent.addMessage({ id: crypto.randomUUID(), role: "user", content });
-      copilotkit.runAgent({ agent }).catch(() => {
-        /* surfaced through chat UI; workspace stays usable */
-      });
+      const attempt = (retriesLeft: number) => {
+        // Resolve the registered agent at run time: the `agent` from useAgent()
+        // may still be the pre-connect provisional instance, whose messages are
+        // discarded on the swap to the real one (backend then errors with
+        // "requires either a new_message or an invocation_id").
+        const liveAgent = copilotkit.getAgent("districtlens_root") ?? agent;
+        if (liveAgent.isRunning) {
+          // A real brief build in progress → drop (legacy behavior). Only the
+          // mount-time connect handshake (stage still idle) is worth waiting out.
+          if (latestStateRef.current.stage !== "idle" || retriesLeft <= 0) return;
+          retryTimerRef.current = setTimeout(() => attempt(retriesLeft - 1), 250);
+          return;
+        }
+        options?.onRunStart?.();
+        liveAgent.addMessage({ id: crypto.randomUUID(), role: "user", content });
+        copilotkit.runAgent({ agent: liveAgent }).catch(() => {
+          /* surfaced through chat UI; workspace stays usable */
+        });
+      };
+      attempt(40); // up to ~10s for the handshake to settle
     },
     // options.onRunStart intentionally excluded — callers should pass a stable
     // ref-backed callback to avoid re-creating run on every render.
@@ -107,6 +162,7 @@ export function useWorkspaceAgent(options?: UseWorkspaceAgentOptions) {
     agentState,
     setAgentState,
     displayed,
+    isAgentReady,
     isRunning: agent.isRunning,
     submitAddress,
     exploreState,

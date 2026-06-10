@@ -46,6 +46,7 @@ function WorkspaceInner() {
   const {
     agentState,
     displayed,
+    isAgentReady,
     submitAddress,
     exploreState,
     openRace,
@@ -83,8 +84,17 @@ function WorkspaceInner() {
   const isDrafting = agentState.stage !== "idle" && agentState.stage !== "complete";
 
   // Landing handoff: /w?addr=… starts a voter brief; /w?state=XX opens the
-  // journalist state view. Runs once.
+  // journalist state view. Waits for the CopilotKit runtime to signal Connected
+  // before submitting — the runtime must be established or the agent run is
+  // silently dropped with "Running an agent requires either a new_message or an
+  // invocation_id" at the backend. kickedOff prevents double-fire on re-renders
+  // once isAgentReady flips.
   useEffect(() => {
+    if (!isAgentReady) return;
+    // useCoAgent's state hydrates (and its connect cycle settles) slightly
+    // after agent registration; running before that point gets the kickoff
+    // message wiped by the connect sync. stage is undefined until hydration.
+    if (agentState.stage == null) return;
     if (kickedOff.current) return;
     const addr = params.get("addr");
     const stateCode = params.get("state");
@@ -97,7 +107,7 @@ function WorkspaceInner() {
       setMode("journalist");
       exploreState(stateCode);
     }
-  }, [params, submitAddress, exploreState, setMode, setPersona]);
+  }, [isAgentReady, agentState.stage, params, submitAddress, exploreState, setMode, setPersona]);
 
   const { savedItems, loadBallot } = useMyBallot(isSignedIn, store);
 
