@@ -18,7 +18,7 @@ interface ArtifactPanelProps {
 }
 
 export function ArtifactPanel({ state, title, isDrafting, emptyState, headerActions }: ArtifactPanelProps) {
-  const steps = state ? annotateSteps(stepsFromStage(state.stage), state) : [];
+  const steps = isDrafting && state ? annotateSteps(stepsFromStage(state.stage), state) : [];
   const hasBrief = Boolean(state?.currentRaceKey);
 
   return (

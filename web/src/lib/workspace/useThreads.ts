@@ -119,10 +119,12 @@ export function useThreads({
       });
       if (!res.ok) return;
       const data = await res.json();
-      await loadThreads();
       // Open via the GET path so the active thread has the same clean shape as
       // every other opened thread (projected, defaults applied).
-      if (data.thread?.thread_id) await openThread(data.thread.thread_id);
+      await Promise.all([
+        loadThreads(),
+        ...(data.thread?.thread_id ? [openThread(data.thread.thread_id)] : []),
+      ]);
     } catch {
       /* ignore */
     }
@@ -164,21 +166,25 @@ export function useThreads({
   const closeThread = useCallback(() => setActiveThread(null), []);
 
   // While a thread is open, capture the chat conversation onto it as a read-only
-  // transcript (debounced). Stored so reopening the thread shows what was asked.
+  // transcript (debounced). The flatMap + JSON.stringify run inside the 1200ms
+  // timer so they don't run on every streaming tick — only when the stream
+  // settles. Sig-dedupe against lastSavedTranscriptRef prevents redundant PATCHes.
   const activeThreadId = activeThread?.thread.thread_id ?? null;
+  const visibleMessagesRef = useRef(visibleMessages);
+  visibleMessagesRef.current = visibleMessages;
   useEffect(() => {
     if (!activeThreadId) return;
-    const transcript = (visibleMessages ?? []).flatMap((m) => {
-      const role = (m as { role?: unknown }).role;
-      const content = (m as { content?: unknown }).content;
-      return typeof content === "string" && (role === "user" || role === "assistant")
-        ? [{ role, content }]
-        : [];
-    });
-    if (transcript.length === 0) return;
-    const sig = activeThreadId + JSON.stringify(transcript);
-    if (sig === lastSavedTranscriptRef.current) return;
     const timer = setTimeout(() => {
+      const transcript = (visibleMessagesRef.current ?? []).flatMap((m) => {
+        const role = (m as { role?: unknown }).role;
+        const content = (m as { content?: unknown }).content;
+        return typeof content === "string" && (role === "user" || role === "assistant")
+          ? [{ role, content }]
+          : [];
+      });
+      if (transcript.length === 0) return;
+      const sig = activeThreadId + JSON.stringify(transcript);
+      if (sig === lastSavedTranscriptRef.current) return;
       lastSavedTranscriptRef.current = sig;
       fetch(`/api/threads/${activeThreadId}`, {
         method: "PATCH",

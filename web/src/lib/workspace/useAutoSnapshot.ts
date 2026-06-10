@@ -21,14 +21,20 @@ export function useAutoSnapshot(
   useEffect(() => {
     onSnapshotRef.current = onSnapshot;
   });
+  // Full state is available via ref so we can narrow effect deps to the fields
+  // that actually gate the snapshot decision.
+  const stateRef = useRef<DistrictLensState>(state);
+  stateRef.current = state;
 
   useEffect(() => {
+    const current = stateRef.current;
     const prev = prevStageRef.current;
-    prevStageRef.current = state.stage;
-    if (!shouldSnapshot(prev, state.stage, state.currentRaceKey)) return;
-    const key = `${state.currentRaceKey}:${state.briefStartedAt ?? ""}`;
+    prevStageRef.current = current.stage;
+    if (!shouldSnapshot(prev, current.stage, current.currentRaceKey)) return;
+    const key = `${current.currentRaceKey}:${current.briefStartedAt ?? ""}`;
     if (firedForRef.current === key) return;
     firedForRef.current = key;
-    onSnapshotRef.current(state);
-  }, [state]);
+    onSnapshotRef.current(current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.stage, state.currentRaceKey, state.briefStartedAt]);
 }

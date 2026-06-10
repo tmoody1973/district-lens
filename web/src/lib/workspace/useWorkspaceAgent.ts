@@ -28,6 +28,10 @@ export function useWorkspaceAgent(options?: UseWorkspaceAgentOptions) {
   // Last live brief, captured continuously — survives coagent state clearing.
   const [briefSnapshot, setBriefSnapshot] = useState<DisplayedBrief | null>(null);
   const prevStageRef = useRef<string>("idle");
+  // Snapshots are captured at stage transitions (incl. complete, which carries
+  // the full final state) instead of every streaming tick.
+  const latestStateRef = useRef<DistrictLensState>(agentState);
+  latestStateRef.current = agentState;
 
   useCopilotReadable({
     description: "Current app mode and selected race",
@@ -42,10 +46,11 @@ export function useWorkspaceAgent(options?: UseWorkspaceAgentOptions) {
   }, [agentState.stage, setAgentState]);
 
   useEffect(() => {
-    if (agentState.currentRaceKey && lastBriefMode) {
-      setBriefSnapshot({ mode: lastBriefMode, state: agentState });
+    if (latestStateRef.current.currentRaceKey && lastBriefMode) {
+      setBriefSnapshot({ mode: lastBriefMode, state: latestStateRef.current });
     }
-  }, [agentState, lastBriefMode]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentState.currentRaceKey, agentState.stage, lastBriefMode]);
 
   const run = useCallback(
     (content: string) => {
