@@ -24,7 +24,7 @@ import { useAutoSnapshot } from "@/lib/workspace/useAutoSnapshot";
 import { useWorkspaceAgent } from "@/lib/workspace/useWorkspaceAgent";
 import { useThreads } from "@/lib/workspace/useThreads";
 import { deriveLabel } from "@/lib/saved-briefs/schema";
-import { pushLocalArtifacts } from "@/lib/artifacts/sync";
+import { pushLocalArtifacts, saveBriefSnapshot } from "@/lib/artifacts/sync";
 import type { SavedBallotItem } from "@/lib/saved-briefs/schema";
 import type { Persona } from "@/lib/workspace/layout";
 import type { DistrictLensState } from "@/types/agent-state";
@@ -147,13 +147,7 @@ function WorkspaceInner() {
     // appends a new snapshot doc each time (append-only by design) but upserts
     // the one-per-race saved_districts bookmark, so My Ballot never duplicates.
     if (isSignedIn && !(isJournalist && threadsApi.activeThread)) {
-      fetch("/api/saved/brief", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ state }),
-      })
-        .then((res) => { if (res.ok) loadBallot(); })
-        .catch(() => {});
+      saveBriefSnapshot(state).then((ok) => { if (ok) loadBallot(); });
     }
   });
   useEffect(() => {

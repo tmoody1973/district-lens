@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useCopilotChat, useCopilotMessagesContext } from "@copilotkit/react-core";
+import { saveBriefSnapshot } from "@/lib/artifacts/sync";
 import type { AgentThreadDoc, ThreadSummary } from "@/lib/threads/schema";
 import type { SavedBriefDoc } from "@/lib/saved-briefs/schema";
 import type { DistrictLensState } from "@/types/agent-state";
@@ -83,13 +84,9 @@ export function useThreads({
     if (autoSavedRef.current === dedupKey) return;
     autoSavedRef.current = dedupKey;
     const state = agentState;
-    fetch("/api/saved/brief", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ state, threadId }),
-    })
-      .then(async (res) => {
-        if (!res.ok) return;
+    saveBriefSnapshot(state, threadId, fetch)
+      .then(async (ok) => {
+        if (!ok) return;
         onBallotChanged?.();
         loadThreads();
         // Refresh the active thread's briefs list without disturbing the live chat.

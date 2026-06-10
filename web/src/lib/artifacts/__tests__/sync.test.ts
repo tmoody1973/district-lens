@@ -1,5 +1,5 @@
 import { test, expect, vi } from "vitest";
-import { pushLocalArtifacts } from "@/lib/artifacts/sync";
+import { pushLocalArtifacts, saveBriefSnapshot } from "@/lib/artifacts/sync";
 import { createLocalArtifactStore } from "@/lib/artifacts/local-store";
 import { DEFAULT_STATE } from "@/types/agent-state";
 import type { ArtifactRecord } from "@/lib/artifacts/types";
@@ -53,4 +53,27 @@ test("a failed POST counts as failed and stays unsynced for retry", async () => 
   const result = await pushLocalArtifacts(store, fetchFn as unknown as typeof fetch);
   expect(result).toEqual({ pushed: 0, failed: 1 });
   expect(store.get("art-1")?.syncedAt).toBeUndefined();
+});
+
+// --- saveBriefSnapshot ---
+
+test("saveBriefSnapshot returns true on 200 and includes threadId in body when given", async () => {
+  const state = { ...DEFAULT_STATE, stage: "complete" as const, currentRaceKey: "2026-H-WI-04" };
+  let capturedBody: unknown;
+  const fetchFn = vi.fn(async (_url: string, init?: RequestInit) => {
+    capturedBody = JSON.parse(init?.body as string);
+    return new Response(null, { status: 200 });
+  });
+  const ok = await saveBriefSnapshot(state, "thread-42", fetchFn as unknown as typeof fetch);
+  expect(ok).toBe(true);
+  expect(capturedBody).toMatchObject({ state, threadId: "thread-42" });
+});
+
+test("saveBriefSnapshot returns false on 500 and on thrown network errors", async () => {
+  const state = { ...DEFAULT_STATE, stage: "complete" as const, currentRaceKey: "2026-H-WI-04" };
+  const fetch500 = vi.fn(async () => new Response(null, { status: 500 }));
+  expect(await saveBriefSnapshot(state, undefined, fetch500 as unknown as typeof fetch)).toBe(false);
+
+  const fetchThrows = vi.fn(async () => { throw new Error("network"); });
+  expect(await saveBriefSnapshot(state, undefined, fetchThrows as unknown as typeof fetch)).toBe(false);
 });

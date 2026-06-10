@@ -1,8 +1,30 @@
 import type { ArtifactStore } from "./local-store";
+import type { DistrictLensState } from "@/types/agent-state";
 
 export interface SyncResult {
   pushed: number;
   failed: number;
+}
+
+/**
+ * Single owner of the "persist a brief snapshot to Mongo" write (CLAUDE.md:
+ * integrations live behind service functions, not inline component fetches).
+ */
+export async function saveBriefSnapshot(
+  state: DistrictLensState,
+  threadId?: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<boolean> {
+  try {
+    const res = await fetchFn("/api/saved/brief", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(threadId ? { state, threadId } : { state }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -24,19 +46,11 @@ export async function pushLocalArtifacts(
   let failed = 0;
   for (const record of pending) {
     const latest = record.versions[record.versions.length - 1];
-    try {
-      const res = await fetchFn("/api/saved/brief", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ state: latest.snapshot }),
-      });
-      if (res.ok) {
-        store.upsert({ ...record, syncedAt: new Date().toISOString() });
-        pushed += 1;
-      } else {
-        failed += 1;
-      }
-    } catch {
+    const ok = await saveBriefSnapshot(latest.snapshot, undefined, fetchFn);
+    if (ok) {
+      store.upsert({ ...record, syncedAt: new Date().toISOString() });
+      pushed += 1;
+    } else {
       failed += 1;
     }
   }
