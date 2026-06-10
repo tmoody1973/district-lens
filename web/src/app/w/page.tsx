@@ -35,7 +35,7 @@ import type { DistrictLensState } from "@/types/agent-state";
 function WorkspaceInner() {
   const params = useSearchParams();
   const router = useRouter();
-  const { setPersona } = useWorkspaceLayout();
+  const { layout, setPersona } = useWorkspaceLayout();
   const { isSignedIn } = useUser();
 
   // beginNewBriefRef holds the panel-clear callback. Declared before the
@@ -44,6 +44,7 @@ function WorkspaceInner() {
   const beginNewBriefRef = useRef<() => void>(() => {});
 
   const {
+    agent,
     agentState,
     displayed,
     isAgentReady,
@@ -73,6 +74,17 @@ function WorkspaceInner() {
 
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const kickedOff = useRef(false);
+
+  // On reload the coagent mode resets to "voter" while the persisted layout
+  // persona may say "journalist" — the chip looks selected but the Threads
+  // section and map view vanish. Sync mode from the persona once the coagent
+  // state has hydrated.
+  const personaSyncedRef = useRef(false);
+  useEffect(() => {
+    if (personaSyncedRef.current || agentState.stage == null) return;
+    personaSyncedRef.current = true;
+    if (layout.persona !== agentState.mode) setMode(layout.persona);
+  }, [agentState.stage, agentState.mode, layout.persona, setMode]);
 
   const isJournalist = agentState.mode === "journalist";
   const showBrief = displayed
@@ -113,6 +125,8 @@ function WorkspaceInner() {
 
   const threadsApi = useThreads({
     agentState,
+    agent,
+    isSignedIn,
     onRestoreBrief: (state) => setReopenedSaved(state),
     onClearBrief: () => {
       setReopenedSaved(null);

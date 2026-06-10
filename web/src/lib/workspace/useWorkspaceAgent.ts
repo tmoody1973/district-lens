@@ -159,6 +159,7 @@ export function useWorkspaceAgent(options?: UseWorkspaceAgentOptions) {
   const displayed = pickDisplayedBrief(agentState, briefSnapshot, lastBriefMode);
 
   return {
+    agent,
     agentState,
     setAgentState,
     displayed,

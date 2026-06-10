@@ -20,7 +20,16 @@ export function useMyBallot(isSignedIn: boolean | undefined, store: ArtifactStor
     }
   }, []);
 
-  useEffect(() => { loadBallot(); }, [loadBallot]);
+  // Clerk hydrates the session AFTER mount on a hard reload — an immediate
+  // fetch 401s and (previously) never retried, leaving My Ballot empty until
+  // the next navigation. Gate on the signed-in flag and refire when it flips.
+  useEffect(() => {
+    if (!isSignedIn) {
+      setSavedItems([]);
+      return;
+    }
+    loadBallot();
+  }, [isSignedIn, loadBallot]);
 
   // One-shot push of locally saved artifacts when a signed-in session starts —
   // Mongo becomes the source of truth, localStorage stays the offline cache.

@@ -2,7 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useCopilotChat, useCopilotMessagesContext } from "@copilotkit/react-core";
+import type { AbstractAgent, Message } from "@ag-ui/client";
 import { saveBriefSnapshot } from "@/lib/artifacts/sync";
 import type { AgentThreadDoc, ThreadSummary } from "@/lib/threads/schema";
 import type { SavedBriefDoc } from "@/lib/saved-briefs/schema";
@@ -10,6 +10,11 @@ import type { DistrictLensState } from "@/types/agent-state";
 
 export interface UseThreadsArgs {
   agentState: DistrictLensState;
+  /** The live v2 agent — owns the chat messages (the v1 message context no
+   *  longer sees the v2 CopilotChat, so capture/restore go through this). */
+  agent: AbstractAgent;
+  /** Clerk signed-in flag; thread reads are gated and refired on it. */
+  isSignedIn: boolean | undefined;
   /** Restores a saved brief into the artifact panel (replaces setOpenedBrief). */
   onRestoreBrief: (state: DistrictLensState) => void;
   /** Clears all displayed-brief state on thread switch. */
@@ -20,6 +25,8 @@ export interface UseThreadsArgs {
 
 export function useThreads({
   agentState,
+  agent,
+  isSignedIn,
   onRestoreBrief,
   onClearBrief,
   onBallotChanged,
@@ -29,8 +36,6 @@ export function useThreads({
     thread: AgentThreadDoc;
     briefs: SavedBriefDoc[];
   } | null>(null);
-  const { visibleMessages } = useCopilotChat();
-  const { setMessages } = useCopilotMessagesContext();
   const lastSavedTranscriptRef = useRef<string>("");
   // Tracks the raceKey:threadId pair already auto-saved this run so we don't
   // double-capture the same brief if stage stays "complete" across renders.
@@ -49,7 +54,17 @@ export function useThreads({
     }
   }, []);
 
-  useEffect(() => { loadThreads(); }, [loadThreads]);
+  // Clerk hydrates after mount on a hard reload — fetching immediately 401s
+  // and previously never retried, leaving the thread list empty. Gate on the
+  // signed-in flag and refire when it flips true.
+  useEffect(() => {
+    if (!isSignedIn) {
+      setThreads([]);
+      setActiveThread(null);
+      return;
+    }
+    loadThreads();
+  }, [isSignedIn, loadThreads]);
 
   const openThread = useCallback(async (threadId: string) => {
     openThreadIdRef.current = threadId;
@@ -66,12 +81,24 @@ export function useThreads({
       // CopilotKit's thread flips it into explicit-threadId mode, which makes
       // it reconnect the agent and reset coagent state (mode → voter) on every
       // thread open. ADK is stateless and we own message history here, so the
-      // runtime threadId is not load-bearing.
-      setMessages(data.thread?.messages ?? []);
+      // runtime threadId is not load-bearing. Restore goes through the v2
+      // agent (thread docs store {role, content}; AG-UI messages need ids).
+      const restored: Message[] = (data.thread?.messages ?? []).map(
+        (m: { role: string; content: string }) => ({
+          id: crypto.randomUUID(),
+          role: m.role as Message["role"],
+          content: m.content,
+        }),
+      );
+      agent.setMessages(restored);
+      // Seed the transcript signature so the capture effect doesn't
+      // immediately re-PATCH the content we just restored.
+      lastSavedTranscriptRef.current =
+        threadId + JSON.stringify(restored.map((m) => ({ role: m.role, content: m.content })));
     } catch {
       /* ignore */
     }
-  }, [setMessages]);
+  }, [agent]);
 
   // Auto-capture: when a brief completes and a thread is open, silently file
   // it as an artifact. Dedup via autoSavedRef prevents re-saving the same
@@ -109,7 +136,13 @@ export function useThreads({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentState.stage, agentState.currentRaceKey, activeThread?.thread.thread_id, onBallotChanged, loadThreads]);
 
+  // Guards the +New button against multi-fire (double/triple clicks created
+  // duplicate threads in prod — the POST gives no immediate visual feedback).
+  const creatingRef = useRef(false);
+
   const createThread = useCallback(async () => {
+    if (creatingRef.current) return;
+    creatingRef.current = true;
     try {
       const seed = agentState.currentRaceKey ? { raceKey: agentState.currentRaceKey } : {};
       const res = await fetch("/api/threads", {
@@ -127,6 +160,8 @@ export function useThreads({
       ]);
     } catch {
       /* ignore */
+    } finally {
+      creatingRef.current = false;
     }
   }, [agentState.currentRaceKey, loadThreads, openThread]);
 
@@ -166,42 +201,50 @@ export function useThreads({
   const closeThread = useCallback(() => setActiveThread(null), []);
 
   // While a thread is open, capture the chat conversation onto it as a read-only
-  // transcript (debounced). The flatMap + JSON.stringify run inside the 1200ms
-  // timer so they don't run on every streaming tick — only when the stream
-  // settles. Sig-dedupe against lastSavedTranscriptRef prevents redundant PATCHes.
+  // transcript. Source of truth is the v2 agent's own message list via its
+  // onMessagesChanged subscription (the v1 useCopilotChat().visibleMessages is
+  // permanently empty alongside the v2 CopilotChat — verified live). Each
+  // change resets a 1200ms debounce, so the flatMap + JSON.stringify run only
+  // when the stream settles; sig-dedupe prevents redundant PATCHes.
   const activeThreadId = activeThread?.thread.thread_id ?? null;
-  const visibleMessagesRef = useRef(visibleMessages);
-  visibleMessagesRef.current = visibleMessages;
   useEffect(() => {
     if (!activeThreadId) return;
-    const timer = setTimeout(() => {
-      const transcript = (visibleMessagesRef.current ?? []).flatMap((m) => {
-        const role = (m as { role?: unknown }).role;
-        const content = (m as { content?: unknown }).content;
-        return typeof content === "string" && (role === "user" || role === "assistant")
-          ? [{ role, content }]
-          : [];
-      });
-      if (transcript.length === 0) return;
-      const sig = activeThreadId + JSON.stringify(transcript);
-      if (sig === lastSavedTranscriptRef.current) return;
-      lastSavedTranscriptRef.current = sig;
-      fetch(`/api/threads/${activeThreadId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: transcript }),
-      })
-        .then(() =>
-          setActiveThread((prev) =>
-            prev && prev.thread.thread_id === activeThreadId
-              ? { ...prev, thread: { ...prev.thread, messages: transcript } }
-              : prev,
-          ),
-        )
-        .catch(() => {});
-    }, 1200);
-    return () => clearTimeout(timer);
-  }, [visibleMessages, activeThreadId]);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleCapture = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        const transcript = (agent.messages ?? []).flatMap((m) => {
+          const role = (m as { role?: unknown }).role;
+          const content = (m as { content?: unknown }).content;
+          return typeof content === "string" && content && (role === "user" || role === "assistant")
+            ? [{ role, content }]
+            : [];
+        });
+        if (transcript.length === 0) return;
+        const sig = activeThreadId + JSON.stringify(transcript);
+        if (sig === lastSavedTranscriptRef.current) return;
+        lastSavedTranscriptRef.current = sig;
+        fetch(`/api/threads/${activeThreadId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: transcript }),
+        })
+          .then(() =>
+            setActiveThread((prev) =>
+              prev && prev.thread.thread_id === activeThreadId
+                ? { ...prev, thread: { ...prev.thread, messages: transcript } }
+                : prev,
+            ),
+          )
+          .catch(() => {});
+      }, 1200);
+    };
+    const subscription = agent.subscribe({ onMessagesChanged: scheduleCapture });
+    return () => {
+      subscription.unsubscribe();
+      if (timer) clearTimeout(timer);
+    };
+  }, [agent, activeThreadId]);
 
   // Reopen a saved snapshot into the artifact panel.
   const openSavedBrief = useCallback(async (briefId: string) => {
@@ -218,7 +261,7 @@ export function useThreads({
   // On thread switch: wipe ALL state that feeds the artifact panel and chat,
   // then restore the new thread's brief if it has one.
   useEffect(() => {
-    setMessages([]);
+    agent.setMessages([]);
     onClearBrief();
     autoSavedRef.current = null; // reset dedup so new thread can auto-capture
     if (activeThread && activeThread.briefs.length > 0) {
