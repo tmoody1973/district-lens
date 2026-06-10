@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CopilotChat } from "@copilotkit/react-ui";
 import { Show, useUser } from "@clerk/nextjs";
@@ -12,8 +12,10 @@ import { USMap } from "@/components/map/USMap";
 import { ArtifactPanel } from "@/components/workspace/ArtifactPanel";
 import { ArtifactProvider, useArtifacts } from "@/components/workspace/ArtifactProvider";
 import { ChatPane } from "@/components/workspace/ChatPane";
+import { DeadLinkState } from "@/components/workspace/DeadLinkState";
 import { LibrarySections } from "@/components/workspace/LibrarySections";
 import { LibrarySidebar } from "@/components/workspace/LibrarySidebar";
+import { MyBallotSection } from "@/components/workspace/MyBallotSection";
 import { WorkspaceShell } from "@/components/workspace/WorkspaceShell";
 import {
   WorkspaceLayoutProvider,
@@ -21,11 +23,11 @@ import {
 } from "@/components/workspace/WorkspaceLayoutContext";
 import { CHAT_LABELS, SYSTEM_PROMPT } from "@/lib/workspace/chat-config";
 import { useAutoSnapshot } from "@/lib/workspace/useAutoSnapshot";
+import { useMyBallot } from "@/lib/workspace/useMyBallot";
 import { useWorkspaceAgent } from "@/lib/workspace/useWorkspaceAgent";
 import { useThreads } from "@/lib/workspace/useThreads";
 import { deriveLabel } from "@/lib/saved-briefs/schema";
-import { pushLocalArtifacts, saveBriefSnapshot } from "@/lib/artifacts/sync";
-import type { SavedBallotItem } from "@/lib/saved-briefs/schema";
+import { saveBriefSnapshot } from "@/lib/artifacts/sync";
 import type { Persona } from "@/lib/workspace/layout";
 import type { DistrictLensState } from "@/types/agent-state";
 
@@ -69,7 +71,6 @@ function WorkspaceInner() {
 
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const kickedOff = useRef(false);
-  const syncedRef = useRef(false);
 
   const isJournalist = agentState.mode === "journalist";
   const showBrief = displayed
@@ -97,31 +98,7 @@ function WorkspaceInner() {
     }
   }, [params, submitAddress, exploreState, setMode, setPersona]);
 
-  // My Ballot (signed-in voters) — refresh after auto-capture or save.
-  const [savedItems, setSavedItems] = useState<SavedBallotItem[]>([]);
-  const loadBallot = useCallback(async () => {
-    try {
-      const res = await fetch("/api/saved");
-      if (!res.ok) { setSavedItems([]); return; }
-      const data = await res.json();
-      setSavedItems(data.items ?? []);
-    } catch {
-      setSavedItems([]);
-    }
-  }, []);
-  useEffect(() => { loadBallot(); }, [loadBallot]);
-
-  // One-shot push of locally saved artifacts when a signed-in session starts —
-  // Mongo becomes the source of truth, localStorage stays the offline cache.
-  useEffect(() => {
-    if (!isSignedIn || syncedRef.current) return;
-    syncedRef.current = true;
-    pushLocalArtifacts(store)
-      .then((result) => {
-        if (result.pushed > 0) loadBallot();
-      })
-      .catch(() => {});
-  }, [isSignedIn, store, loadBallot]);
+  const { savedItems, loadBallot } = useMyBallot(isSignedIn, store);
 
   const threadsApi = useThreads({
     agentState,
@@ -175,21 +152,8 @@ function WorkspaceInner() {
       ? deriveLabel(panelState.currentRaceKey)
       : null;
 
-  // Dead-link empty state, taking precedence over the persona empty states.
   const deadLinkState = deadLink ? (
-    <div className="flex h-full flex-col items-center justify-center gap-3 bg-zinc-900 p-8 text-center">
-      <p className="text-sm text-zinc-300">That artifact isn't in this browser's library.</p>
-      <p className="text-xs text-zinc-500">
-        Artifacts live on the device where they were built. Rebuild the brief to recreate it here.
-      </p>
-      <button
-        type="button"
-        onClick={() => router.replace("/w")}
-        className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-500"
-      >
-        Start fresh
-      </button>
-    </div>
+    <DeadLinkState onReset={() => router.replace("/w")} />
   ) : null;
 
   const emptyState = isJournalist ? (
@@ -240,30 +204,10 @@ function WorkspaceInner() {
             )}
             {!isJournalist && savedItems.length > 0 && (
               <Show when="signed-in">
-                <div className="px-3 py-2">
-                  <p className="text-xs font-semibold uppercase text-zinc-500">My Ballot</p>
-                  <ul className="mt-1 space-y-0.5">
-                    {savedItems.map((item) => (
-                      <li key={item.raceKey}>
-                        <button
-                          type="button"
-                          onClick={() => item.briefId && threadsApi.openSavedBrief(item.briefId)}
-                          disabled={!item.briefId}
-                          className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-200"
-                        >
-                          <span className="block truncate text-xs font-semibold">{item.label}</span>
-                          <span className="block text-[10px] text-zinc-600">
-                            saved {new Date(item.savedAt).toLocaleDateString()}
-                          </span>
-                          {item.changes.length > 0 &&
-                            item.changes.map((c) => (
-                              <span key={c} className="block text-[10px] font-medium text-amber-500">● {c}</span>
-                            ))}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <MyBallotSection
+                  items={savedItems}
+                  onOpen={threadsApi.openSavedBrief}
+                />
               </Show>
             )}
             <LibrarySections />
