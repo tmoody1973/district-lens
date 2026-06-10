@@ -293,9 +293,12 @@ async def test_positions_cache_miss_lazy_fills_and_writes_through(monkeypatch):
     deltas = await _collect_deltas(pipeline, ctx)
 
     positions = next(d for d in deltas if d.get("stage") == "complete")["positions"]
-    assert positions[0]["issue"] == "economy"  # from the shallow research doc
-    # shallow tier on miss, and the result was written through to the cache
-    assert handles.research_calls[0][1] == "shallow"
+    assert positions[0]["issue"] == "economy"  # from the lazy research doc
+    # BROAD tier on miss — the grounded engine that actually finds low-profile
+    # candidates (the WY-brief gap: shallow Perplexity fan-out found nothing the
+    # playground's grounded search found easily). Written through to the cache
+    # so a cold race self-warms on first view.
+    assert handles.research_calls[0][1] == "broad"
     assert len(handles.upserts) == 1
 
 

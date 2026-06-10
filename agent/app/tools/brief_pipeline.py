@@ -49,7 +49,9 @@ _ARCHIVE_TIMEOUT_SECONDS = 10.0
 # Cache-miss lazy fill: a shallow per-issue research pass, awaited only briefly so
 # a long-tail candidate never stalls the brief — if it overruns we return what we
 # have and fill on the next view (the scheduled deep job covers the priority set).
-_LAZY_POSITIONS_TIMEOUT = 12.0
+# 30s fits the broad tier (one grounded search + structuring); the positions
+# stage already shows a live "Searching candidate positions…" receipt.
+_LAZY_POSITIONS_TIMEOUT = 30.0
 
 
 def extract_brief_address(message_text: str) -> str | None:
@@ -294,11 +296,17 @@ class VoterBriefPipeline(BaseAgent):
         return await self._lazy_fill(card, race_key)
 
     async def _lazy_fill(self, card: dict, race_key: str) -> dict | None:
-        """Shallow on-demand research + write-through, bounded by a short timeout."""
+        """Broad-tier on-demand research + write-through, bounded by a timeout.
+
+        Broad = ONE grounded gemini-3.5-flash call + structuring — the engine
+        that finds low-profile candidates (the shallow Perplexity fan-out left
+        whole states honest-empty, e.g. WY 2026-06-10). First view of a cold
+        race self-warms the cache; every later view is a fast hit.
+        """
         candidate = self._research_candidate(card, race_key)
         try:
             doc = await asyncio.wait_for(
-                research_candidate_positions(candidate, tier="shallow"),
+                research_candidate_positions(candidate, tier="broad"),
                 timeout=_LAZY_POSITIONS_TIMEOUT,
             )
         except Exception as exc:  # timeout or any failure → fill on next view
