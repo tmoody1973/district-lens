@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CopilotChat } from "@copilotkit/react-ui";
 import { Show, useUser } from "@clerk/nextjs";
 import { AgentToolTrace } from "@/components/canvas/AgentToolTrace";
+import { ArtifactChip } from "@/components/workspace/ArtifactChip";
 import { ArtifactPanel } from "@/components/workspace/ArtifactPanel";
 import { ArtifactListPanel } from "@/components/workspace/ArtifactListPanel";
 import { ExploreSurface } from "@/components/workspace/ExploreSurface";
@@ -54,6 +55,12 @@ function WorkspaceInner() {
 
   // Reopened-saved-brief focus slot (Mongo snapshots restored via threads/ballot).
   const [reopenedSaved, setReopenedSaved] = useState<DistrictLensState | null>(null);
+  // The conversation's artifact — pinned as a chip in the chat column once a
+  // build completes (Claude-style); cleared when a new run/chat starts.
+  const [conversationBrief, setConversationBrief] = useState<{
+    artifactId: string;
+    title: string;
+  } | null>(null);
 
   // One focus concept (C3): every focus change goes through the pure intent
   // helper, so a focused saved brief and a focused local artifact can never coexist.
@@ -69,6 +76,7 @@ function WorkspaceInner() {
 
   const beginNewBrief = useCallback(() => {
     enactFocus({ kind: "clear" });
+    setConversationBrief(null); // new run → the old chip no longer represents this conversation
     userNavigatedRef.current = false; // new run → polite auto-focus re-armed
   }, [enactFocus]);
 
@@ -123,6 +131,7 @@ function WorkspaceInner() {
   );
   const onClearBrief = useCallback(() => {
     enactFocus({ kind: "clear" });
+    setConversationBrief(null);
     clearBrief(); // resets coagent state
   }, [enactFocus, clearBrief]);
 
@@ -143,7 +152,10 @@ function WorkspaceInner() {
   const [justSaved, setJustSaved] = useState(false);
   useAutoSnapshot(agentState, (state) => {
     const record = recordSnapshot(state);
-    if (record) setJustSaved(true);
+    if (record) {
+      setJustSaved(true);
+      setConversationBrief({ artifactId: record.artifactId, title: record.name });
+    }
     if (record && !userNavigatedRef.current) {
       enactFocus({ kind: "local", artifactId: record.artifactId });
     }
@@ -198,6 +210,20 @@ function WorkspaceInner() {
     // Drop the deep link so it doesn't immediately re-focus what we just closed.
     if (params.get("a")) router.replace("/w");
   }, [enactFocus, params, router]);
+
+  // "+ New chat" (Claude anatomy): signed-in starts a fresh thread (the
+  // thread-switch effect resets chat + panel); anonymous users get a local
+  // conversation reset — there is no thread machinery to lean on.
+  const handleNewChat = useCallback(() => {
+    if (isSignedIn) {
+      threadsApi.createThread();
+      return;
+    }
+    agent.setMessages([]);
+    enactFocus({ kind: "clear" });
+    setConversationBrief(null);
+    clearBrief();
+  }, [isSignedIn, threadsApi, agent, enactFocus, clearBrief]);
 
   // Panel state machine (U2): focused > draft > list. The live coagent brief
   // renders ONLY during DRAFT — at rest the panel is the artifact list, which
@@ -260,9 +286,18 @@ function WorkspaceInner() {
       <AgentToolTrace />
       <WorkspaceShell
         library={
-          <LibrarySidebar>
-            {/* One workspace (U1): My Ballot + Threads for the signed-in. */}
-            <Show when="signed-in">
+          <LibrarySidebar onNewChat={handleNewChat}>
+            {/* One workspace (U1): My Ballot + Threads for the signed-in;
+                anonymous users get the save-your-research nudge. */}
+            <Show
+              when="signed-in"
+              fallback={
+                <p className="px-3 py-2 text-xs leading-relaxed text-zinc-500">
+                  Sign in to save briefs to My Ballot and keep research threads
+                  across devices.
+                </p>
+              }
+            >
               {savedItems.length > 0 && (
                 <MyBallotSection items={savedItems} onOpen={openBallotBrief} />
               )}
@@ -283,6 +318,17 @@ function WorkspaceInner() {
           <ChatPane
             statusMessage={agentState.status_message}
             contextLabel={threadsApi.activeThread?.thread.title ?? null}
+            artifactChip={
+              conversationBrief ? (
+                <ArtifactChip
+                  title={conversationBrief.title}
+                  onOpen={() => {
+                    userNavigatedRef.current = true;
+                    enactFocus({ kind: "local", artifactId: conversationBrief.artifactId });
+                  }}
+                />
+              ) : null
+            }
           />
         }
         artifact={

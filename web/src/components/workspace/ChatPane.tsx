@@ -13,10 +13,13 @@ import { CHAT_LABELS, SYSTEM_PROMPT } from "@/lib/workspace/chat-config";
 export function ChatPane({
   statusMessage,
   contextLabel,
+  artifactChip,
 }: {
   statusMessage?: string | null;
   /** Active thread title — tells the user which conversation they're in. */
   contextLabel?: string | null;
+  /** The conversation's artifact, pinned under the header (Claude-style chip). */
+  artifactChip?: React.ReactNode;
 }) {
   const { layout, toggleChat } = useWorkspaceLayout();
 
@@ -64,6 +67,7 @@ export function ChatPane({
           </svg>
         </button>
       </div>
+      {artifactChip && <div className="shrink-0 px-3 pt-2">{artifactChip}</div>}
       <div className="dark min-h-0 flex-1">
         <CopilotChat instructions={SYSTEM_PROMPT} labels={CHAT_LABELS} className="h-full" />
       </div>

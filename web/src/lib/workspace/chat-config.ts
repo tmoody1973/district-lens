@@ -26,6 +26,6 @@ When the user asks to see all races in a state, or selects a state on the map (e
 export const CHAT_LABELS = {
   title: "DistrictLens",
   initial:
-    "Enter your address above to build your voter brief, or ask about any 2026 congressional race.",
+    "Ask about any 2026 congressional race — or build a voter brief from the address box in the panel.",
   placeholder: "Ask about candidates, issues, or fundraising…",
 };
