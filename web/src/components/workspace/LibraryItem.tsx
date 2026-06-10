@@ -1,5 +1,6 @@
 "use client";
 
+import { fmtDate } from "@/lib/format";
 import type { ArtifactRecord, ArtifactType } from "@/lib/artifacts/types";
 
 /** Evidence-adjacent type dots; amber is reserved for discovery (leads). */
@@ -34,7 +35,7 @@ export function LibraryItem({
         <span className="min-w-0 flex-1">
           <span className="block truncate">{artifact.name}</span>
           <span className="block text-[10px] text-zinc-600">
-            saved {new Date(artifact.updatedAt).toLocaleDateString()}
+            saved {fmtDate(artifact.updatedAt)}
           </span>
         </span>
         {artifact.versions.length > 1 && (

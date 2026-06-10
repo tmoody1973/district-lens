@@ -1,5 +1,6 @@
 import { computeFingerprint, type BriefFingerprint } from "@/lib/brief-fingerprint";
 import { collectSourceRefs, deriveLabel } from "@/lib/saved-briefs/schema";
+import { parseRaceKey } from "@/lib/race-key";
 import type { DistrictLensState } from "@/types/agent-state";
 import type { ArtifactRecord, ArtifactVersion } from "./types";
 
@@ -20,7 +21,8 @@ export function fingerprintsEqual(a: BriefFingerprint, b: BriefFingerprint): boo
 }
 
 export function deriveArtifactName(raceKey: string): string {
-  const year = raceKey.split("-")[0];
+  const parsed = parseRaceKey(raceKey);
+  const year = parsed?.year ?? raceKey.split("-")[0];
   return `${deriveLabel(raceKey)} · ${year}`;
 }
 

@@ -5,3 +5,7 @@ export function fmtMoney(val: number | null): string {
   if (abs >= 1_000) return `$${Math.round(val / 1_000)}K`;
   return `$${val}`;
 }
+
+export function fmtDate(iso: string): string {
+  return new Date(iso).toLocaleDateString();
+}

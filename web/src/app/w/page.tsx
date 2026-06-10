@@ -28,6 +28,7 @@ import { useWorkspaceAgent } from "@/lib/workspace/useWorkspaceAgent";
 import { useThreads } from "@/lib/workspace/useThreads";
 import { deriveLabel } from "@/lib/saved-briefs/schema";
 import { saveBriefSnapshot } from "@/lib/artifacts/sync";
+import { fmtDate } from "@/lib/format";
 import type { Persona } from "@/lib/workspace/layout";
 import type { DistrictLensState } from "@/types/agent-state";
 
@@ -236,7 +237,7 @@ function WorkspaceInner() {
                   >
                     {active.versions.map((v, i) => (
                       <option key={v.versionId} value={i}>
-                        {new Date(v.savedAt).toLocaleDateString()}{" "}
+                        {fmtDate(v.savedAt)}{" "}
                         {i === active.versions.length - 1 ? "(latest)" : ""}
                       </option>
                     ))}

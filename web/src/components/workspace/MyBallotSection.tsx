@@ -1,5 +1,6 @@
 "use client";
 
+import { fmtDate } from "@/lib/format";
 import type { SavedBallotItem } from "@/lib/saved-briefs/schema";
 
 interface MyBallotSectionProps {
@@ -22,7 +23,7 @@ export function MyBallotSection({ items, onOpen }: MyBallotSectionProps) {
             >
               <span className="block truncate text-xs font-semibold">{item.label}</span>
               <span className="block text-[10px] text-zinc-600">
-                saved {new Date(item.savedAt).toLocaleDateString()}
+                saved {fmtDate(item.savedAt)}
               </span>
               {item.changes.length > 0 &&
                 item.changes.map((c) => (
