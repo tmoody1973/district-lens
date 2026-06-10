@@ -15,9 +15,11 @@ interface ArtifactPanelProps {
   emptyState: ReactNode;
   /** Extra header actions (history ▾, share — arrive in later phases). */
   headerActions?: ReactNode;
+  /** Replaces the static title (e.g. the thread artifact switcher dropdown). */
+  titleSlot?: ReactNode;
 }
 
-export function ArtifactPanel({ state, title, isDrafting, emptyState, headerActions }: ArtifactPanelProps) {
+export function ArtifactPanel({ state, title, isDrafting, emptyState, headerActions, titleSlot }: ArtifactPanelProps) {
   const steps = isDrafting && state ? annotateSteps(stepsFromStage(state.stage), state) : [];
   const hasBrief = Boolean(state?.currentRaceKey);
 
@@ -26,9 +28,11 @@ export function ArtifactPanel({ state, title, isDrafting, emptyState, headerActi
       <header className="shrink-0 border-b border-zinc-800 px-4 py-2.5">
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" aria-hidden />
-          <span className="truncate text-sm font-medium text-zinc-200">
-            {title ?? "No artifact open"}
-          </span>
+          {titleSlot ?? (
+            <span className="truncate text-sm font-medium text-zinc-200">
+              {title ?? "No artifact open"}
+            </span>
+          )}
           {isDrafting && (
             <span className="shrink-0 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
               building…

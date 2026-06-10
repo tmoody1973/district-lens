@@ -10,7 +10,14 @@ import { CHAT_LABELS, SYSTEM_PROMPT } from "@/lib/workspace/chat-config";
  * surfaces the agent's live status — the build must never be hidden
  * (judging + trust requirement, spec §Agent visibility).
  */
-export function ChatPane({ statusMessage }: { statusMessage?: string | null }) {
+export function ChatPane({
+  statusMessage,
+  contextLabel,
+}: {
+  statusMessage?: string | null;
+  /** Active thread title — tells the user which conversation they're in. */
+  contextLabel?: string | null;
+}) {
   const { layout, toggleChat } = useWorkspaceLayout();
 
   if (layout.chatCollapsed) {
@@ -43,7 +50,9 @@ export function ChatPane({ statusMessage }: { statusMessage?: string | null }) {
   return (
     <div className="hidden h-full min-w-0 flex-col border-r border-zinc-800 bg-zinc-950 lg:flex">
       <div className="flex shrink-0 items-center justify-between border-b border-zinc-800 px-3 py-2">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Chat</span>
+        <span className="min-w-0 truncate text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+          Chat{contextLabel ? <span className="text-zinc-300"> · {contextLabel}</span> : null}
+        </span>
         <button
           type="button"
           onClick={toggleChat}

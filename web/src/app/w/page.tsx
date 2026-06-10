@@ -7,9 +7,10 @@ import { Show, useUser } from "@clerk/nextjs";
 import { AgentToolTrace } from "@/components/canvas/AgentToolTrace";
 import { CanvasEmptyState } from "@/components/canvas/CanvasEmptyState";
 import { RaceTable } from "@/components/canvas/RaceTable";
-import { ThreadsPanel } from "@/components/canvas/ThreadsPanel";
 import { USMap } from "@/components/map/USMap";
 import { ArtifactPanel } from "@/components/workspace/ArtifactPanel";
+import { ArtifactSwitcher } from "@/components/workspace/ArtifactSwitcher";
+import { ThreadSection } from "@/components/workspace/ThreadSection";
 import { ArtifactProvider, useArtifacts } from "@/components/workspace/ArtifactProvider";
 import { ChatPane } from "@/components/workspace/ChatPane";
 import { DeadLinkState } from "@/components/workspace/DeadLinkState";
@@ -177,6 +178,20 @@ function WorkspaceInner() {
       ? deriveLabel(panelState.currentRaceKey)
       : null;
 
+  // Deep-Cuts switcher source: the active thread's artifacts, else recent
+  // local-library artifacts (spec addendum A3).
+  const switcherItems = threadsApi.activeThread
+    ? threadsApi.activeThread.briefs.map((b) => ({
+        id: b.brief_id,
+        name: deriveLabel(b.race_key),
+        savedAt: b.created_at,
+      }))
+    : library.slice(0, 5).map((r) => ({
+        id: r.artifactId,
+        name: r.name,
+        savedAt: r.updatedAt,
+      }));
+
   const deadLinkState = deadLink ? (
     <DeadLinkState onReset={() => router.replace("/w")} />
   ) : null;
@@ -212,37 +227,49 @@ function WorkspaceInner() {
       <WorkspaceShell
         library={
           <LibrarySidebar onPersonaChange={setMode}>
-            {isJournalist && (
-              <Show when="signed-in">
-                <ThreadsPanel
-                  threads={threadsApi.threads}
-                  active={threadsApi.activeThread}
-                  onNew={threadsApi.createThread}
-                  onOpen={threadsApi.openThread}
-                  onClose={threadsApi.closeThread}
-                  onRename={threadsApi.renameThread}
-                  onSaveNotes={threadsApi.saveThreadNotes}
-                  onDelete={threadsApi.deleteThread}
-                  onReopenBrief={threadsApi.openSavedBrief}
-                />
-              </Show>
-            )}
-            {!isJournalist && savedItems.length > 0 && (
-              <Show when="signed-in">
-                <MyBallotSection
-                  items={savedItems}
-                  onOpen={threadsApi.openSavedBrief}
-                />
-              </Show>
-            )}
+            {/* Threads are session containers for BOTH personas (signed-in).
+                Persona decides section ORDER only: voter leads with My Ballot,
+                journalist leads with Threads (spec addendum A1/A6). */}
+            <Show when="signed-in">
+              {!isJournalist && savedItems.length > 0 && (
+                <MyBallotSection items={savedItems} onOpen={threadsApi.openSavedBrief} />
+              )}
+              <ThreadSection
+                threads={threadsApi.threads}
+                activeThreadId={threadsApi.activeThread?.thread.thread_id ?? null}
+                notes={threadsApi.activeThread?.thread.notes ?? ""}
+                onNew={threadsApi.createThread}
+                onOpen={threadsApi.openThread}
+                onRename={threadsApi.renameThread}
+                onDelete={threadsApi.deleteThread}
+                onSaveNotes={threadsApi.saveThreadNotes}
+              />
+              {isJournalist && savedItems.length > 0 && (
+                <MyBallotSection items={savedItems} onOpen={threadsApi.openSavedBrief} />
+              )}
+            </Show>
             <LibrarySections />
           </LibrarySidebar>
         }
-        chat={<ChatPane statusMessage={agentState.status_message} />}
+        chat={
+          <ChatPane
+            statusMessage={agentState.status_message}
+            contextLabel={threadsApi.activeThread?.thread.title ?? null}
+          />
+        }
         artifact={
           <ArtifactPanel
             state={panelState}
             title={title}
+            titleSlot={
+              <ArtifactSwitcher
+                title={title ?? "No artifact open"}
+                items={switcherItems}
+                onSelect={
+                  threadsApi.activeThread ? threadsApi.openSavedBrief : openArtifact
+                }
+              />
+            }
             isDrafting={isDrafting && !reopenedState && !reopenedSaved}
             emptyState={deadLinkState ?? emptyState}
             headerActions={
