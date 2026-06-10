@@ -6,11 +6,16 @@ import { useAgent, useCopilotKit } from "@copilotkit/react-core/v2";
 import { pickDisplayedBrief, type DisplayedBrief } from "@/lib/brief-display";
 import { DEFAULT_STATE, type AppMode, type DistrictLensState } from "@/types/agent-state";
 
+export interface UseWorkspaceAgentOptions {
+  /** Called synchronously after accepting a run (after the isRunning guard). */
+  onRunStart?: () => void;
+}
+
 /**
  * CopilotKit agent wiring for the workspace — extracted from the legacy
  * page.tsx so the shell components stay presentation-only.
  */
-export function useWorkspaceAgent() {
+export function useWorkspaceAgent(options?: UseWorkspaceAgentOptions) {
   const { agent } = useAgent({ agentId: "districtlens_root" });
   const { copilotkit } = useCopilotKit();
   const { state: agentState, setState: setAgentState } = useCoAgent<DistrictLensState>({
@@ -45,11 +50,15 @@ export function useWorkspaceAgent() {
   const run = useCallback(
     (content: string) => {
       if (agent.isRunning) return;
+      options?.onRunStart?.();
       agent.addMessage({ id: crypto.randomUUID(), role: "user", content });
       copilotkit.runAgent({ agent }).catch(() => {
         /* surfaced through chat UI; workspace stays usable */
       });
     },
+    // options.onRunStart intentionally excluded — callers should pass a stable
+    // ref-backed callback to avoid re-creating run on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [agent, copilotkit],
   );
 

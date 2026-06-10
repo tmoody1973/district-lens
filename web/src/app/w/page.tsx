@@ -34,6 +34,12 @@ function WorkspaceInner() {
   const router = useRouter();
   const { setPersona } = useWorkspaceLayout();
   const { isSignedIn } = useUser();
+
+  // beginNewBriefRef holds the panel-clear callback. Declared before the
+  // agent hook so we can pass onRunStart; assigned after useArtifacts is
+  // available (ordering constraint: closeArtifact defined after agent hook).
+  const beginNewBriefRef = useRef<() => void>(() => {});
+
   const {
     agentState,
     displayed,
@@ -42,7 +48,8 @@ function WorkspaceInner() {
     openRace,
     setMode,
     clearBrief,
-  } = useWorkspaceAgent();
+  } = useWorkspaceAgent({ onRunStart: () => beginNewBriefRef.current() });
+
   const {
     library,
     active,
@@ -53,6 +60,13 @@ function WorkspaceInner() {
     recordSnapshot,
     store,
   } = useArtifacts();
+
+  // Reopened-saved-brief display slot (mirrors old `openedBrief`).
+  const [reopenedSaved, setReopenedSaved] = useState<DistrictLensState | null>(null);
+
+  // Assign the callback now that closeArtifact is available.
+  beginNewBriefRef.current = () => { setReopenedSaved(null); closeArtifact(); };
+
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const kickedOff = useRef(false);
   const syncedRef = useRef(false);
@@ -66,20 +80,6 @@ function WorkspaceInner() {
   const briefState = showBrief && displayed ? displayed.state : null;
   const isDrafting = agentState.stage !== "idle" && agentState.stage !== "complete";
 
-  // Reopened-saved-brief display slot (mirrors old `openedBrief`).
-  const [reopenedSaved, setReopenedSaved] = useState<DistrictLensState | null>(null);
-
-  // Starting any new agent run must drop whatever reopened snapshot is covering
-  // the panel, or the stale brief hides the live draft.
-  const beginNewBrief = useCallback(() => {
-    setReopenedSaved(null);
-    closeArtifact();
-  }, [closeArtifact]);
-
-  const handleSubmitAddress = useCallback((addr: string) => { beginNewBrief(); submitAddress(addr); }, [beginNewBrief, submitAddress]);
-  const handleOpenRace = useCallback((raceKey: string) => { beginNewBrief(); openRace(raceKey); }, [beginNewBrief, openRace]);
-  const handleExploreState = useCallback((stateCode: string) => { beginNewBrief(); exploreState(stateCode); }, [beginNewBrief, exploreState]);
-
   // Landing handoff: /w?addr=… starts a voter brief; /w?state=XX opens the
   // journalist state view. Runs once.
   useEffect(() => {
@@ -88,14 +88,14 @@ function WorkspaceInner() {
     const stateCode = params.get("state");
     if (addr) {
       kickedOff.current = true;
-      handleSubmitAddress(addr);
+      submitAddress(addr);
     } else if (stateCode) {
       kickedOff.current = true;
       setPersona("journalist");
       setMode("journalist");
-      handleExploreState(stateCode);
+      exploreState(stateCode);
     }
-  }, [params, handleSubmitAddress, handleExploreState, setMode, setPersona]);
+  }, [params, submitAddress, exploreState, setMode, setPersona]);
 
   // My Ballot (signed-in voters) — refresh after auto-capture or save.
   const [savedItems, setSavedItems] = useState<SavedBallotItem[]>([]);
@@ -165,8 +165,6 @@ function WorkspaceInner() {
     requestedArtifactId && !library.some((r) => r.artifactId === requestedArtifactId),
   );
 
-  const handlePersonaChange = (persona: Persona) => setMode(persona);
-
   // Display priority — a reopened saved brief (Mongo) wins over a local artifact,
   // which wins over the live brief.
   const reopenedState = active ? active.versions[activeVersionIndex]?.snapshot ?? null : null;
@@ -199,13 +197,13 @@ function WorkspaceInner() {
       <div className="shrink-0 p-4">
         <USMap
           focusedState={agentState.mapFocus}
-          onStateClick={handleExploreState}
+          onStateClick={exploreState}
           mode={agentState.mode}
           heatmapData={agentState.stateRaces}
         />
       </div>
       {agentState.stateRaces.length > 0 ? (
-        <RaceTable races={agentState.stateRaces} onRaceClick={handleOpenRace} />
+        <RaceTable races={agentState.stateRaces} onRaceClick={openRace} />
       ) : (
         <p className="px-4 text-sm text-slate-400">
           Click a state on the map to explore its 2026 races.
@@ -214,7 +212,7 @@ function WorkspaceInner() {
     </div>
   ) : (
     <div className="h-full bg-white">
-      <CanvasEmptyState onSubmit={handleSubmitAddress} />
+      <CanvasEmptyState onSubmit={submitAddress} />
     </div>
   );
 
@@ -224,7 +222,7 @@ function WorkspaceInner() {
       <AgentToolTrace />
       <WorkspaceShell
         library={
-          <LibrarySidebar onPersonaChange={handlePersonaChange}>
+          <LibrarySidebar onPersonaChange={setMode}>
             {isJournalist && (
               <Show when="signed-in">
                 <ThreadsPanel
