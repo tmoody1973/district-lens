@@ -83,15 +83,18 @@ def _dedupe_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{**row, "total_fmt": _fmt_money(row["total"])} for row in rows]
 
 
-def _http_get(path: str, params: dict[str, Any],
-              transport: httpx.BaseTransport | None) -> list[dict[str, Any]]:
+def _make_client(transport: httpx.BaseTransport | None) -> httpx.Client:
+    """One client per pipeline run so the 2-3 FEC calls share a connection."""
+    return httpx.Client(base_url=_FEC_BASE, timeout=_TIMEOUT_S, transport=transport)
+
+
+def _http_get(client: httpx.Client, path: str,
+              params: dict[str, Any]) -> list[dict[str, Any]]:
     """GET an FEC endpoint; returns the results list, [] on any failure."""
     try:
-        with httpx.Client(base_url=_FEC_BASE, timeout=_TIMEOUT_S,
-                          transport=transport) as client:
-            response = client.get(path, params={**params, "api_key": _api_key()})
-            response.raise_for_status()
-            return response.json().get("results") or []
+        response = client.get(path, params={**params, "api_key": _api_key()})
+        response.raise_for_status()
+        return response.json().get("results") or []
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning("fec_donors: FEC call %s failed: %s", path, exc)
         return []
@@ -113,20 +116,24 @@ def _find_candidate_doc(db: Any, race_key: str, candidate_name: str) -> dict | N
     return None
 
 
-def _search_fec_candidate(candidate_name: str, race_key: str,
-                          transport: httpx.BaseTransport | None) -> dict | None:
+def _search_fec_candidate(client: httpx.Client, candidate_name: str,
+                          race_key: str) -> dict | None:
     """Fallback: resolve the FEC candidate id via /candidates/search/."""
     parts = race_key.split("-")  # 2026-H-WI-04
     office = parts[1] if len(parts) > 1 else "H"
     state = parts[2] if len(parts) > 2 else ""
-    results = _http_get("/candidates/search/", {
+    results = _http_get(client, "/candidates/search/", {
         "q": candidate_name, "office": office, "state": state,
         "cycle": _CYCLE, "per_page": 5,
-    }, transport)
+    })
     if not results:
         return None
     top = results[0]
     return {"candidate_id": top.get("candidate_id"), "name": top.get("name")}
+
+
+def _has_fec_id(doc: dict | None) -> bool:
+    return bool(doc and doc.get("candidate_id"))
 
 
 def _envelope(candidate: str, committee: str | None, donors: list[dict],
@@ -157,9 +164,7 @@ def _cache_get(db: Any, key: str) -> dict | None:
     except Exception as exc:
         logger.warning("fec_donors: cache read failed: %s", exc)
         return None
-    if not doc:
-        return None
-    retrieved = doc.get("retrieved_at")
+    retrieved = doc.get("retrieved_at") if doc else None
     if retrieved is None:
         return None
     if retrieved.tzinfo is None:
@@ -192,40 +197,42 @@ def _donors_impl(candidate_name: str, race_key: str, *,
             logger.error("fec_donors: no database: %s", exc)
             return _empty(candidate_name, None)
 
-    doc = _find_candidate_doc(db, race_key, candidate_name)
-    if doc is None or not doc.get("candidate_id"):
-        doc = _search_fec_candidate(candidate_name, race_key, transport)
-    if doc is None or not doc.get("candidate_id"):
-        return _empty(
-            candidate_name, None,
-            f"No FEC candidate record found for {candidate_name}. " + _COVERAGE_NOTE,
-        )
+    with _make_client(transport) as client:
+        doc = _find_candidate_doc(db, race_key, candidate_name)
+        if not _has_fec_id(doc):
+            doc = _search_fec_candidate(client, candidate_name, race_key)
+        if not _has_fec_id(doc):
+            return _empty(
+                candidate_name, None,
+                f"No FEC candidate record found for {candidate_name}. "
+                + _COVERAGE_NOTE,
+            )
 
-    fec_id = doc["candidate_id"]
-    resolved_name = doc.get("name") or candidate_name
-    cache_key = f"donors:{race_key}:{fec_id}"
+        fec_id = doc["candidate_id"]
+        resolved_name = doc.get("name") or candidate_name
+        cache_key = f"donors:{race_key}:{fec_id}"
 
-    cached_data = _cache_get(db, cache_key)
-    if cached_data is not None:
-        return {"status": "success", "data": {**cached_data, "cached": True},
-                "source": _SOURCE}
+        cached_data = _cache_get(db, cache_key)
+        if cached_data is not None:
+            return {"status": "success", "data": {**cached_data, "cached": True},
+                    "source": _SOURCE}
 
-    committees = _http_get(f"/candidate/{fec_id}/committees/",
-                           {"designation": "P", "per_page": 5}, transport)
-    if not committees:
-        return _empty(
-            resolved_name, None,
-            f"No principal campaign committee on file for {resolved_name}. "
-            + _COVERAGE_NOTE,
-        )
-    committee = committees[0]
-    receipts = _http_get("/schedules/schedule_a/", {
-        "committee_id": committee.get("committee_id"),
-        "two_year_transaction_period": _CYCLE,
-        "is_individual": "true",
-        "sort": "-contribution_receipt_amount",
-        "per_page": _PER_PAGE,
-    }, transport)
+        committees = _http_get(client, f"/candidate/{fec_id}/committees/",
+                               {"designation": "P", "per_page": 5})
+        if not committees:
+            return _empty(
+                resolved_name, None,
+                f"No principal campaign committee on file for {resolved_name}. "
+                + _COVERAGE_NOTE,
+            )
+        committee = committees[0]
+        receipts = _http_get(client, "/schedules/schedule_a/", {
+            "committee_id": committee.get("committee_id"),
+            "two_year_transaction_period": _CYCLE,
+            "is_individual": "true",
+            "sort": "-contribution_receipt_amount",
+            "per_page": _PER_PAGE,
+        })
     donors = _dedupe_receipts(receipts)
     result = _envelope(resolved_name, committee.get("name"), donors, False)
     _cache_put(db, cache_key, result["data"])

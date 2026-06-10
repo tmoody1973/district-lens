@@ -23,6 +23,17 @@ interface BallotpediaToolConfig {
   Card: ComponentType<{ data: ReturnType<typeof unwrapMcpResult> }>;
 }
 
+// ADK usually delivers tool results as parsed objects, but some transports
+// send a JSON string — normalize so field access works either way.
+function parseToolResult(result: unknown): unknown {
+  if (typeof result !== "string") return result;
+  try {
+    return JSON.parse(result);
+  } catch {
+    return {};
+  }
+}
+
 const BALLOTPEDIA_TOOLS: BallotpediaToolConfig[] = [
   {
     name: "ballotpedia_get_ballot_measures",
@@ -74,17 +85,7 @@ export function AgentToolTrace() {
       if (status !== "complete") {
         return <FinanceToolCard loading candidates={[]} raceKey={raceKey} />;
       }
-      // ADK usually delivers the result as a parsed object, but some transports
-      // send a JSON string — normalize so field access works either way.
-      let parsed: unknown = props.result;
-      if (typeof parsed === "string") {
-        try {
-          parsed = JSON.parse(parsed);
-        } catch {
-          parsed = {};
-        }
-      }
-      const root = (parsed ?? {}) as {
+      const root = (parseToolResult(props.result) ?? {}) as {
         data?: { race_key?: string; candidates?: FinanceToolCandidate[] };
         source?: string;
       };
@@ -111,16 +112,8 @@ export function AgentToolTrace() {
       if (props.status !== "complete") {
         return <DonorContributionsCard loading donors={[]} />;
       }
-      let parsed: unknown = props.result;
-      if (typeof parsed === "string") {
-        try {
-          parsed = JSON.parse(parsed);
-        } catch {
-          parsed = {};
-        }
-      }
       const data =
-        ((parsed ?? {}) as {
+        ((parseToolResult(props.result) ?? {}) as {
           data?: {
             candidate?: string;
             donors?: DonorRow[];
