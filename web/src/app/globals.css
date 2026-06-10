@@ -18,3 +18,36 @@ body {
   background: var(--civic-slate-50);
   color: var(--civic-slate-900);
 }
+
+/* -----------------------------------------------------------------------
+   Workspace dark tokens — artifact-workspace redesign (spec §Dark restyle).
+   Semantic names, zinc values. Evidence-color SEMANTICS are unchanged:
+   green = direct quote, blue = questionnaire, indigo = voting record,
+   amber = reported/discovery — values tuned for dark-background contrast.
+------------------------------------------------------------------------ */
+@theme {
+  /* surfaces */
+  --color-surface: #09090b;          /* zinc-950 — app shell */
+  --color-surface-raised: #18181b;   /* zinc-900 — panels, cards */
+  --color-surface-hover: #27272a;    /* zinc-800 — hover, active */
+
+  /* edges */
+  --color-edge: #27272a;             /* zinc-800 — default borders */
+  --color-edge-strong: #3f3f46;      /* zinc-700 — emphasized borders */
+
+  /* ink */
+  --color-ink: #fafafa;              /* zinc-50 — primary text */
+  --color-ink-muted: #a1a1aa;        /* zinc-400 — secondary text */
+  --color-ink-faint: #71717a;        /* zinc-500 — tertiary/labels */
+
+  /* evidence colors, dark-tuned (≥4.5:1 on surface-raised) */
+  --color-evidence-direct: #4ade80;        /* green-400 */
+  --color-evidence-questionnaire: #60a5fa; /* blue-400 */
+  --color-evidence-voting: #a5b4fc;        /* indigo-300 */
+  --color-evidence-reported: #fbbf24;      /* amber-400 */
+
+  /* party dots, dark-contrast checked */
+  --color-party-dem: #60a5fa;        /* blue-400 */
+  --color-party-rep: #f87171;        /* red-400 */
+  --color-party-ind: #c084fc;        /* purple-400 */
+}
