@@ -24,6 +24,7 @@ import {
 } from "@/components/workspace/WorkspaceLayoutContext";
 import { CHAT_LABELS, SYSTEM_PROMPT } from "@/lib/workspace/chat-config";
 import { useAutoSnapshot } from "@/lib/workspace/useAutoSnapshot";
+import { useBuildStart } from "@/lib/workspace/useBuildStart";
 import { useMyBallot } from "@/lib/workspace/useMyBallot";
 import { useWorkspaceAgent } from "@/lib/workspace/useWorkspaceAgent";
 import { useThreads } from "@/lib/workspace/useThreads";
@@ -72,6 +73,11 @@ function WorkspaceInner() {
 
   // Assign the callback now that closeArtifact is available.
   beginNewBriefRef.current = () => { setReopenedSaved(null); closeArtifact(); };
+
+  // DRAFT source of truth (C2): the coagent stage transition covers typed-chat
+  // builds that never call onRunStart; onRunStart stays as an immediate-clear
+  // nicety for programmatic runs.
+  useBuildStart(agentState.stage, () => beginNewBriefRef.current());
 
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const kickedOff = useRef(false);
