@@ -40,6 +40,19 @@ def _find_npx() -> str:
     return "npx"  # last resort — let it fail with a clear error
 
 
+def mcp_server_command() -> tuple[str, list[str]]:
+    """Resolve how to spawn mongodb-mcp-server: installed binary first.
+
+    The Dockerfile installs mongodb-mcp-server globally, so the binary spawns
+    with no npm-registry resolution. `npx -y` re-resolves "latest" from the
+    registry on cold starts, which blocked a brief ~3min in prod (2026-06-11).
+    """
+    binary = shutil.which("mongodb-mcp-server")
+    if binary:
+        return binary, ["--readOnly"]
+    return _find_npx(), ["-y", "mongodb-mcp-server", "--readOnly"]
+
+
 def create_mongodb_mcp_toolset() -> McpToolset:
     """Create a read-only MongoDB MCP toolset connected to the Atlas cluster.
 
@@ -55,14 +68,14 @@ def create_mongodb_mcp_toolset() -> McpToolset:
     if not mongo_uri:
         raise RuntimeError("MONGODB_URI not set — cannot start MongoDB MCP server")
 
-    npx = _find_npx()
-    logger.info("Starting MongoDB MCP server via %s", npx)
+    command, args = mcp_server_command()
+    logger.info("Starting MongoDB MCP server via %s", command)
 
     return McpToolset(
         connection_params=StdioConnectionParams(
             server_params=StdioServerParameters(
-                command=npx,
-                args=["-y", "mongodb-mcp-server", "--readOnly"],
+                command=command,
+                args=args,
                 env={
                     **os.environ,
                     # MongoDB MCP server reads MDB_MCP_CONNECTION_STRING

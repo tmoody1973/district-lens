@@ -162,7 +162,6 @@ def _push_district_state(tool_context: ToolContext, response_text: str) -> None:
     race_key = _extract_race_key_from_text(response_text)
     if race_key:
         state_code = _extract_state_from_race_key(race_key)
-        tool_context.state["stage"] = "district"
         tool_context.state["currentRaceKey"] = race_key
         if state_code:
             tool_context.state["mapFocus"] = state_code
@@ -173,7 +172,6 @@ def _push_district_state_from_result(tool_context: ToolContext, result: District
     primary = result.primary_district
     if primary and not result.is_zip_ambiguous:
         state_code = _extract_state_from_race_key(primary.race_key)
-        tool_context.state["stage"] = "district"
         tool_context.state["currentRaceKey"] = primary.race_key
         if state_code:
             tool_context.state["mapFocus"] = state_code

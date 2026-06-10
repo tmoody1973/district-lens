@@ -18,8 +18,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Pre-fetch mongodb-mcp-server so first-run doesn't need npm download in production
-RUN npx --yes mongodb-mcp-server --version || true
+# Install mongodb-mcp-server globally so runtime spawns the binary directly.
+# `npx -y` re-resolves "latest" from the npm registry on cold starts — that
+# blocked a brief ~3min in prod (2026-06-11) when the registry was slow.
+# A global install is resolved entirely at build time. Hard failure on purpose:
+# a broken install should fail the build, not degrade silently at runtime.
+RUN npm install -g mongodb-mcp-server
 
 # ---- Python / uv / ADK ----
 RUN pip install --no-cache-dir uv==0.8.13

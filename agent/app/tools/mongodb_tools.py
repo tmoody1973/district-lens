@@ -294,7 +294,6 @@ def get_race_candidates(race_key: str, tool_context: ToolContext) -> dict[str, A
 
     candidate_cards = [_to_candidate_card(c, race_key) for c in cands]
     tool_context.state["currentRaceKey"] = race_key
-    tool_context.state["stage"] = "candidates"
     tool_context.state["candidates"] = candidate_cards
 
     return {
@@ -396,7 +395,6 @@ def get_race_finance_brief(race_key: str, tool_context: ToolContext) -> dict[str
         _to_finance_summary(c, fins.get(c["candidate_id"])) for c in cands
     ]
     tool_context.state["currentRaceKey"] = race_key
-    tool_context.state["stage"] = "finance"
     tool_context.state["candidates"] = candidate_cards
     tool_context.state["finance"] = finance_summaries
 
@@ -587,7 +585,6 @@ def get_incumbent_legislation(race_key: str, tool_context: ToolContext, limit: i
     member = bills[0].get("member_name", "The incumbent")
     bill_records = [_to_bill_record(b, member) for b in bills]
     tool_context.state["legislation"] = bill_records
-    tool_context.state["stage"] = "legislation"
 
     return {
         "status": "success",
@@ -644,7 +641,6 @@ def get_voting_record(race_key: str, tool_context: ToolContext) -> dict[str, Any
         )
 
     tool_context.state["votingRecord"] = record
-    tool_context.state["stage"] = "legislation"
     warnings = [
         "Attendance and party-line percentages describe voting behavior, not policy positions.",
     ]
