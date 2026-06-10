@@ -230,3 +230,22 @@ def _donors_impl(candidate_name: str, race_key: str, *,
     result = _envelope(resolved_name, committee.get("name"), donors, False)
     _cache_put(db, cache_key, result["data"])
     return result
+
+
+def get_individual_donors(candidate_name: str, race_key: str) -> dict[str, Any]:
+    """Get a candidate's largest individual donors (itemized FEC contributions).
+
+    Use this tool whenever the user asks about a candidate's largest individual
+    donors, top contributors, biggest donations, or who funds a candidate.
+    Returns the largest itemized individual contributions (over $200) for the
+    2026 cycle from the live FEC API, deduplicated by donor.
+
+    GUARDRAIL: Donor data is context only. NEVER infer, imply, or state a
+    candidate's policy positions from contributions. Never characterize donors
+    as evidence of a stance.
+
+    Args:
+        candidate_name: Candidate's name, e.g. 'Gwen Moore'.
+        race_key: Race key from get_race_candidates, e.g. '2026-H-WI-04'.
+    """
+    return _donors_impl(candidate_name, race_key)

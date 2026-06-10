@@ -219,3 +219,16 @@ def test_result_written_to_cache():
     assert db.fec_donor_cache.saved
     assert db.fec_donor_cache.saved[0]["query"]["key"] == \
         "donors:2026-H-WI-04:H4WI04183"
+
+
+def test_tool_is_registered_on_chat_agent():
+    from app.agent import _build_tools
+    from app.tools.fec_donors import get_individual_donors
+    assert get_individual_donors in _build_tools()
+
+
+def test_tool_docstring_carries_guardrail_and_routing():
+    from app.tools.fec_donors import get_individual_donors
+    doc = get_individual_donors.__doc__ or ""
+    assert "largest individual donors" in doc.lower()
+    assert "never" in doc.lower() and "position" in doc.lower()

@@ -34,6 +34,7 @@ from app.tools.brief_pipeline import (
 from app.tools.ballotpedia_mcp_toolset import create_ballotpedia_mcp_toolset
 from app.tools.district_by_city import find_district_by_city
 from app.tools.district_lookup import lookup_district
+from app.tools.fec_donors import get_individual_donors
 from app.tools.finish_brief import finish_brief
 from app.tools.mongodb_mcp_toolset import create_mongodb_mcp_toolset
 from app.tools.mongodb_tools import (
@@ -83,6 +84,7 @@ def _build_tools() -> list:
         get_voting_record,
         find_candidate,
         search_candidate_positions,
+        get_individual_donors,
         finish_brief,
     ]
     try:
