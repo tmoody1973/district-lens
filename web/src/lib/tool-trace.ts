@@ -21,6 +21,14 @@ const TOOL_META: Record<string, ToolMeta> = {
   finish_brief: { icon: "✅", label: "Finalize brief" },
 };
 
+// CopilotKit-internal frontend actions that surface as tool calls but carry
+// no user-meaningful trace (and never reach "complete", so they spin forever).
+const HIDDEN_TOOLS = new Set(["confirm_changes"]);
+
+export function isHiddenTool(name: string): boolean {
+  return HIDDEN_TOOLS.has(name);
+}
+
 export function toolMeta(name: string): ToolMeta {
   const known = TOOL_META[name];
   if (known) return known;

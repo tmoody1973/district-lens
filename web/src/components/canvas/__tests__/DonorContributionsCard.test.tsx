@@ -80,3 +80,10 @@ test("source footer shows retrieved date", () => {
   );
   expect(screen.getByText(/Source: FEC API · retrieved 2026-06-10/i)).toBeInTheDocument();
 });
+
+test("literal N/A employer from FEC raw data is not rendered", () => {
+  const na: DonorRow = { ...klein, name: "Faulkner, Gordon", employer: "N/A", occupation: "RETIRED" };
+  render(<DonorContributionsCard donors={[na]} />);
+  expect(screen.queryByText(/N\/A/)).not.toBeInTheDocument();
+  expect(screen.getByText(/RETIRED/)).toBeInTheDocument();
+});

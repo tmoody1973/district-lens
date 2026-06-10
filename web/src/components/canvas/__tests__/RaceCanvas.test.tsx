@@ -43,7 +43,18 @@ test("U1: evidence-first ordering — issue positions before campaign finance, e
     finance: [{ candidateId: "1", name: "Gwen Moore", party: "DEM", receipts: 500000, disbursements: null, cashOnHand: null, individualContributions: null, pacContributions: null, coverageEndDate: null }],
   })} />);
   const money = screen.getByText("Campaign finance · FEC");
-  const positions = screen.getByText("Issue positions · Perplexity");
+  const positions = screen.getByText("Issue positions · Grounded web search");
   // money must appear AFTER positions in document order (one evidence-first layout)
   expect(positions.compareDocumentPosition(money) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+test("duplicate issue variants merge into a single accordion", () => {
+  vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+  render(<RaceCanvas state={state({
+    positions: [
+      { candidateName: "A", issue: "HOUSING", answer: "a", sources: [] },
+      { candidateName: "B", issue: "Housing and Homelessness", answer: "b", sources: [] },
+    ],
+  })} />);
+  expect(screen.getAllByText(/HOUSING/i)).toHaveLength(1);
 });

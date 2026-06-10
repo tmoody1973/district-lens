@@ -93,3 +93,15 @@ test("D2/C4: focused snapshot mid-build shows the pill but not the receipt strip
   expect(screen.getByText("building…")).toBeInTheDocument();
   expect(screen.queryByText(/Finance pulled/i)).not.toBeInTheDocument();
 });
+
+test("stale draft (started >10min ago, stream likely dead) hides the building badge", () => {
+  render(
+    <ArtifactPanel
+      state={state({ stage: "candidates", briefStartedAt: Date.now() - 11 * 60_000 })}
+      title="U.S. House · WI-04"
+      isDrafting
+      emptyState={<p>start here</p>}
+    />,
+  );
+  expect(screen.queryByText("building…")).not.toBeInTheDocument();
+});

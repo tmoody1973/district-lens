@@ -54,7 +54,7 @@ const STEP_SOURCE: Record<string, string> = {
   "Verified via MongoDB MCP": "MongoDB MCP",
   "Finance pulled": "FEC",
   "Legislation loaded": "Congress.gov",
-  "Positions searched": "Perplexity",
+  "Positions searched": "Google Search grounding",
   "Sources archived": "Firecrawl",
 };
 

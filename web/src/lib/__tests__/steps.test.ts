@@ -123,3 +123,11 @@ test("annotateSteps shows source but no count for not-yet-done steps", () => {
   expect(mcp.source).toBe("MongoDB MCP"); // source always shown
   expect(mcp.detail).toBeUndefined();      // pending → no count yet
 });
+
+test("positions step credits Google Search grounding, not Perplexity", async () => {
+  const { annotateSteps, stepsFromStage } = await import("../steps");
+  const { DEFAULT_STATE } = await import("@/types/agent-state");
+  const steps = annotateSteps(stepsFromStage("positions"), DEFAULT_STATE);
+  const positions = steps.find((s) => s.label === "Positions searched")!;
+  expect(positions.source).toBe("Google Search grounding");
+});

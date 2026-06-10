@@ -35,3 +35,14 @@ test("summarizeArgs handles object values and empty input", () => {
   expect(summarizeArgs(undefined)).toBe("");
   expect(summarizeArgs({ collection: "candidates" })).toBe("collection: candidates");
 });
+
+test("confirm_changes (CopilotKit-internal) is hidden from the trace", async () => {
+  const { isHiddenTool } = await import("../tool-trace");
+  expect(isHiddenTool("confirm_changes")).toBe(true);
+});
+
+test("real backend tools are never hidden", async () => {
+  const { isHiddenTool } = await import("../tool-trace");
+  expect(isHiddenTool("get_individual_donors")).toBe(false);
+  expect(isHiddenTool("lookup_district")).toBe(false);
+});

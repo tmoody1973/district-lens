@@ -2,7 +2,7 @@
 
 import type { ComponentType } from "react";
 import { useDefaultTool, useRenderToolCall } from "@copilotkit/react-core";
-import { summarizeArgs, toolMeta } from "@/lib/tool-trace";
+import { isHiddenTool, summarizeArgs, toolMeta } from "@/lib/tool-trace";
 import { unwrapMcpResult } from "@/lib/mcp-result";
 import { TraceCard } from "../TraceCard";
 import { DonorContributionsCard, type DonorRow } from "./DonorContributionsCard";
@@ -155,6 +155,7 @@ export function AgentToolTrace() {
   useDefaultTool({
     render: (props) => {
       const { name, status, args } = props;
+      if (isHiddenTool(name)) return <></>;
       const meta = toolMeta(name);
       const detail = summarizeArgs(args as Record<string, unknown> | undefined) || meta.source || "";
       const result = status === "complete" ? props.result : undefined;

@@ -35,7 +35,9 @@ export async function GET(req: NextRequest) {
     );
 
     if (!status) {
-      return NextResponse.json({ error: `No status for ${raceKey}` }, { status: 404 });
+      // Unresolved is the normal pre-election state — return 200 so the
+      // browser console stays clean for every not-yet-called race.
+      return NextResponse.json({ status: "unresolved" });
     }
 
     let citation: { url: string; publisher: string } | null = null;

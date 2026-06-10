@@ -7,6 +7,10 @@ import { isDraftingStage } from "@/lib/workspace/derivePanelView";
 import { annotateSteps, stepsFromStage } from "@/lib/steps";
 import type { DistrictLensState } from "@/types/agent-state";
 
+// Builds normally complete in 1-4 min even on cold races; past this the SSE
+// stream is dead and the receipt would otherwise spin forever.
+const STALE_DRAFT_MS = 10 * 60_000;
+
 interface ArtifactPanelProps {
   /** Brief being displayed — live draft or reopened snapshot. Null = nothing open. */
   state: DistrictLensState | null;
@@ -32,7 +36,12 @@ export function ArtifactPanel({
   // The receipt strip annotates LIVE build steps — it renders only when the
   // displayed state is itself mid-draft, never over a focused snapshot whose
   // stage is already "complete" (the pill alone signals the background build).
-  const draftState = isDrafting && state && isDraftingStage(state.stage) ? state : null;
+  // A draft whose stream died (no completion after 10 min) reads as stale —
+  // hide the building chrome instead of spinning forever.
+  const staleDraft =
+    state?.briefStartedAt != null && Date.now() - state.briefStartedAt > STALE_DRAFT_MS;
+  const drafting = isDrafting && !staleDraft;
+  const draftState = drafting && state && isDraftingStage(state.stage) ? state : null;
   const steps = draftState ? annotateSteps(stepsFromStage(draftState.stage), draftState) : [];
   const hasBrief = Boolean(state?.currentRaceKey);
 
@@ -54,7 +63,7 @@ export function ArtifactPanel({
           <span className="truncate text-sm font-medium text-zinc-200">
             {title ?? "No artifact open"}
           </span>
-          {isDrafting && (
+          {drafting && (
             <span className="shrink-0 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
               building…
             </span>

@@ -14,7 +14,7 @@ export function useRaceStatus(raceKey: string | null): RaceStatus | null {
     fetch(`/api/race/status?race_key=${encodeURIComponent(raceKey)}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
-        if (!cancelled && json && !json.error) {
+        if (!cancelled && json && !json.error && json.status !== "unresolved") {
           setData({ ...(json as RaceStatus), forKey: raceKey });
         }
       })

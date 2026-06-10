@@ -331,7 +331,26 @@ async def test_positions_lazy_fill_timeout_returns_empty_and_completes(monkeypat
     complete = next(d for d in deltas if d.get("stage") == "complete")
     assert complete["briefReady"] is True
     assert complete["positions"] == []  # nothing yet; fills on next view
-    assert handles.upserts == []  # timed-out research is not written through
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_positions_lazy_fill_overrun_still_warms_cache_in_background(monkeypatch):
+    """A timeout must NOT cancel the broad research — cancelling meant a cold
+    race could never self-warm (AZ-02, 2026-06-11: every build re-cancelled at
+    30s, positions stayed empty forever). The overrun finishes detached and
+    writes through, so the NEXT view is a cache hit."""
+    handles = _patch_fetchers(monkeypatch, cache_miss=True, fill_sleep=0.1)
+    monkeypatch.setattr(brief_pipeline, "_LAZY_POSITIONS_TIMEOUT", 0.02)
+    pipeline = VoterBriefPipeline(name="voter_brief_pipeline")
+    ctx = _make_ctx("Build a complete voter brief for: 123 Oak St, Racine WI")
+
+    deltas = await _collect_deltas(pipeline, ctx)
+
+    complete = next(d for d in deltas if d.get("stage") == "complete")
+    assert complete["positions"] == []  # this view returned before research finished
+    await asyncio.sleep(0.3)  # let the detached warm task land
+    assert len(handles.upserts) == 1  # background write-through warmed the cache
 
 
 # ---------------------------------------------------------------------------

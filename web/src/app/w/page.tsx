@@ -6,6 +6,7 @@ import { CopilotChat } from "@copilotkit/react-ui";
 import { Show, useUser } from "@clerk/nextjs";
 import { AgentToolTrace } from "@/components/canvas/AgentToolTrace";
 import { ArtifactChip } from "@/components/workspace/ArtifactChip";
+import { ArtifactActions } from "@/components/workspace/ArtifactActions";
 import { ArtifactPanel } from "@/components/workspace/ArtifactPanel";
 import { ArtifactListPanel } from "@/components/workspace/ArtifactListPanel";
 import { ExploreSurface } from "@/components/workspace/ExploreSurface";
@@ -114,14 +115,18 @@ function WorkspaceInner() {
     if (kickedOff.current) return;
     const addr = params.get("addr");
     const stateCode = params.get("state");
+    const raceKey = params.get("race");
     if (addr) {
       kickedOff.current = true;
       submitAddress(addr);
+    } else if (raceKey) {
+      kickedOff.current = true;
+      openRace(raceKey);
     } else if (stateCode) {
       kickedOff.current = true;
       exploreState(stateCode);
     }
-  }, [isAgentReady, agentState.stage, params, submitAddress, exploreState]);
+  }, [isAgentReady, agentState.stage, params, submitAddress, exploreState, openRace]);
 
   const { savedItems, loadBallot } = useMyBallot(isSignedIn, store);
 
@@ -340,6 +345,7 @@ function WorkspaceInner() {
             onBack={view === "focused" ? backToList : undefined}
             headerActions={
               <>
+                <ArtifactActions state={panelState} />
                 {justSaved && (
                   <span className="rounded bg-emerald-900/40 px-1.5 py-0.5 text-[10px] text-emerald-400">
                     Saved ✓

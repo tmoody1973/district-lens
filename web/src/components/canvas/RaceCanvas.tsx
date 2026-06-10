@@ -17,6 +17,7 @@ import { sortByEvidenceStrength } from "@/lib/evidence-strength";
 import { useRaceStatus } from "@/lib/useRaceStatus";
 import { useElectionDates } from "@/lib/useElectionDates";
 import { deriveKeyDates } from "@/lib/election-dates";
+import { canonicalizeIssue } from "@/lib/issues";
 import { stateCodeFromRaceKey } from "@/lib/states";
 
 interface Props {
@@ -26,7 +27,8 @@ interface Props {
 function groupByIssue(positions: EvidenceCard[]): Array<[string, EvidenceCard[]]> {
   const groups = new Map<string, EvidenceCard[]>();
   for (const position of positions) {
-    groups.set(position.issue, [...(groups.get(position.issue) ?? []), position]);
+    const issue = canonicalizeIssue(position.issue);
+    groups.set(issue, [...(groups.get(issue) ?? []), position]);
   }
   return Array.from(groups.entries());
 }
@@ -84,7 +86,7 @@ export function RaceCanvas({ state }: Props) {
             !namesWithPositions.has(candidate.name),
         );
         return (
-          <CollapsibleSection key="positions" title="Issue positions · Perplexity" defaultOpen={plan.defaultOpen}>
+          <CollapsibleSection key="positions" title="Issue positions · Grounded web search" defaultOpen={plan.defaultOpen}>
             {state.positions.length > 0 && (
               <div className="space-y-2">
                 {groupByIssue(state.positions).map(([issue, cards], index) => (

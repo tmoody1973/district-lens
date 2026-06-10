@@ -49,9 +49,13 @@ _ARCHIVE_TIMEOUT_SECONDS = 10.0
 # Cache-miss lazy fill: a shallow per-issue research pass, awaited only briefly so
 # a long-tail candidate never stalls the brief — if it overruns we return what we
 # have and fill on the next view (the scheduled deep job covers the priority set).
-# 30s fits the broad tier (one grounded search + structuring); the positions
-# stage already shows a live "Searching candidate positions…" receipt.
-_LAZY_POSITIONS_TIMEOUT = 30.0
+# 75s fits the broad tier (one grounded search + structuring, p95); the
+# positions stage shows a live "Searching candidate positions…" receipt while
+# it runs. Overruns keep researching detached (see _lazy_fill).
+_LAZY_POSITIONS_TIMEOUT = 75.0
+
+# Detached overrun warms — strong references so the tasks aren't GC'd mid-run.
+_DETACHED_FILLS: set[asyncio.Task] = set()
 
 
 def extract_brief_address(message_text: str) -> str | None:
@@ -302,20 +306,34 @@ class VoterBriefPipeline(BaseAgent):
         that finds low-profile candidates (the shallow Perplexity fan-out left
         whole states honest-empty, e.g. WY 2026-06-10). First view of a cold
         race self-warms the cache; every later view is a fast hit.
+
+        The timeout bounds how long THIS brief waits — it must not cancel the
+        research. Cancelling meant a cold race re-cancelled at the same point
+        on every rebuild and never self-warmed (AZ-02, 2026-06-11). An overrun
+        finishes detached and writes through for the next view.
         """
         candidate = self._research_candidate(card, race_key)
+        task = asyncio.create_task(self._research_and_store(card, candidate))
+        _DETACHED_FILLS.add(task)
+        task.add_done_callback(_DETACHED_FILLS.discard)
         try:
-            doc = await asyncio.wait_for(
-                research_candidate_positions(candidate, tier="broad"),
-                timeout=_LAZY_POSITIONS_TIMEOUT,
+            return await asyncio.wait_for(asyncio.shield(task), _LAZY_POSITIONS_TIMEOUT)
+        except TimeoutError:
+            logger.warning(
+                "voter_brief positions lazy fill overran for %s; warming detached",
+                card.get("candidateId", "?"),
             )
-        except Exception as exc:  # timeout or any failure → fill on next view
+            return None
+        except Exception as exc:  # research failure → fill on next view
             logger.warning(
                 "voter_brief positions lazy fill skipped for %s: %s",
                 card.get("candidateId", "?"),
                 exc,
             )
             return None
+
+    async def _research_and_store(self, card: dict, candidate: dict) -> dict | None:
+        doc = await research_candidate_positions(candidate, tier="broad")
         try:
             await upsert_positions(doc)  # write-through so the next view is a hit
         except Exception as exc:  # a failed write must not drop the result

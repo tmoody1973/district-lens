@@ -24,3 +24,10 @@ test("returns null on a 404 / error body", async () => {
   const { result } = renderHook(() => useRaceStatus("2026-H-WI-99"));
   await waitFor(() => expect(result.current).toBeNull());
 });
+
+test("returns null for a 200 unresolved payload (no console-error 404s)", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ status: "unresolved" }) })));
+  const { result } = renderHook(() => useRaceStatus("2026-H-WI-04"));
+  await new Promise((r) => setTimeout(r, 50));
+  expect(result.current).toBeNull();
+});

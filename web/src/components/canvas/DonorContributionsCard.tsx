@@ -32,6 +32,15 @@ interface DonorContributionsCardProps {
 const GUARDRAIL =
   "Public FEC record. Contributions provide context — they do not establish a candidate's policy positions.";
 
+// FEC raw data uses literal placeholders for unreported employer/occupation.
+const FEC_PLACEHOLDERS = new Set(["N/A", "NA", "NONE", "NOT EMPLOYED"]);
+
+function meaningfulFacts(donor: DonorRow): string[] {
+  return [donor.employer, donor.occupation].filter(
+    (fact): fact is string => Boolean(fact) && !FEC_PLACEHOLDERS.has(fact!.trim().toUpperCase()),
+  );
+}
+
 export function DonorContributionsCard({
   candidate,
   donors,
@@ -86,10 +95,8 @@ export function DonorContributionsCard({
               />
             </div>
             <div className="flex flex-wrap gap-x-3 text-[10px] text-ink-faint">
-              {(donor.employer || donor.occupation) && (
-                <span>
-                  {[donor.employer, donor.occupation].filter(Boolean).join(" · ")}
-                </span>
+              {meaningfulFacts(donor).length > 0 && (
+                <span>{meaningfulFacts(donor).join(" · ")}</span>
               )}
               {donor.city_state && <span>{donor.city_state}</span>}
               {donor.transactions > 1 && <span>{donor.transactions} contributions</span>}
