@@ -103,6 +103,40 @@ test("ISC-41: switching to a thread with no messages clears the chat", async () 
   expect(last).toEqual([]);
 });
 
+test("C8: switching threads replaces the chat with the new thread's messages", async () => {
+  const { agent, setMessagesCalls } = makeFakeAgent();
+  const conversations: Record<string, typeof THREAD_MESSAGES> = {
+    t1: THREAD_MESSAGES,
+    t2: [{ role: "user", content: "Now compare MT-Sen" }],
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      if (url === "/api/threads") return { ok: true, json: async () => ({ threads: [] }) };
+      const id = url.split("/").pop()!;
+      return {
+        ok: true,
+        json: async () => ({
+          thread: { thread_id: id, title: id, notes: "", messages: conversations[id] ?? [] },
+          briefs: [],
+        }),
+      };
+    }),
+  );
+  const apiRef: { current: ThreadsApi | null } = { current: null };
+  render(<Harness agent={agent} apiRef={apiRef} />);
+
+  await act(async () => {
+    await apiRef.current!.openThread("t1");
+  });
+  await act(async () => {
+    await apiRef.current!.openThread("t2");
+  });
+
+  const last = setMessagesCalls[setMessagesCalls.length - 1];
+  expect(last.map((m) => ({ role: m.role, content: m.content }))).toEqual(conversations.t2);
+});
+
 test("D3: opening a thread lands on the list — no auto-open of its latest brief", async () => {
   const { agent } = makeFakeAgent();
   stubThreadApi(THREAD_MESSAGES, [
