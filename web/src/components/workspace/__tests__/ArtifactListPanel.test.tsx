@@ -27,6 +27,26 @@ test("shows the count and renders children (persona explore surface) beneath", (
   expect(screen.getByText("explore surface")).toBeInTheDocument();
 });
 
+test("C6: caps at 8 cards with a Show all expander", () => {
+  const many = Array.from({ length: 12 }, (_, i) => ({
+    id: `b-${i}`,
+    name: `Brief ${i}`,
+    kindLabel: "Brief",
+  }));
+  render(<ArtifactListPanel items={many} onOpen={vi.fn()} />);
+  expect(screen.getByText("Brief 7")).toBeInTheDocument();
+  expect(screen.queryByText("Brief 8")).not.toBeInTheDocument();
+  expect(screen.getByText("12")).toBeInTheDocument(); // count badge shows the real total
+  fireEvent.click(screen.getByRole("button", { name: "Show all (12)" }));
+  expect(screen.getByText("Brief 11")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Show all/ })).not.toBeInTheDocument();
+});
+
+test("no Show all expander at 8 items or fewer", () => {
+  render(<ArtifactListPanel items={items} onOpen={vi.fn()} />);
+  expect(screen.queryByRole("button", { name: /Show all/ })).not.toBeInTheDocument();
+});
+
 test("empty list hides the list chrome but keeps children", () => {
   render(
     <ArtifactListPanel items={[]} onOpen={vi.fn()}>

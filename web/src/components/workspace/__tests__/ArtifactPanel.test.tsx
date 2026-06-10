@@ -49,3 +49,47 @@ test("complete brief renders title and RaceCanvas without the building badge", (
   expect(screen.queryByText("building…")).not.toBeInTheDocument();
   expect(screen.getByTestId("race-canvas")).toHaveTextContent("2026-H-WI-04");
 });
+
+test("onBack renders the back-to-artifacts control and fires on click", () => {
+  const onBack = vi.fn();
+  render(
+    <ArtifactPanel
+      state={state({ stage: "complete" })}
+      title="U.S. House · WI-04"
+      isDrafting={false}
+      emptyState={<p>start here</p>}
+      onBack={onBack}
+    />,
+  );
+  const back = screen.getByRole("button", { name: /artifacts/i });
+  back.click();
+  expect(onBack).toHaveBeenCalledTimes(1);
+});
+
+test("no back control without onBack", () => {
+  render(
+    <ArtifactPanel
+      state={state({ stage: "complete" })}
+      title="U.S. House · WI-04"
+      isDrafting={false}
+      emptyState={<p>start here</p>}
+    />,
+  );
+  expect(screen.queryByRole("button", { name: /artifacts/i })).not.toBeInTheDocument();
+});
+
+test("D2/C4: focused snapshot mid-build shows the pill but not the receipt strip", () => {
+  // The live build runs (isDrafting) while the user views a completed
+  // snapshot — the pill keeps the build visible; the receipt strip (live
+  // step annotations) must not render over the snapshot.
+  render(
+    <ArtifactPanel
+      state={state({ stage: "complete" })}
+      title="U.S. House · WI-04"
+      isDrafting
+      emptyState={<p>start here</p>}
+    />,
+  );
+  expect(screen.getByText("building…")).toBeInTheDocument();
+  expect(screen.queryByText(/Finance pulled/i)).not.toBeInTheDocument();
+});

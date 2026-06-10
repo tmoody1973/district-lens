@@ -1,28 +1,28 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CopilotChat } from "@copilotkit/react-ui";
 import { Show, useUser } from "@clerk/nextjs";
 import { AgentToolTrace } from "@/components/canvas/AgentToolTrace";
-import { CanvasEmptyState } from "@/components/canvas/CanvasEmptyState";
-import { RaceTable } from "@/components/canvas/RaceTable";
-import { USMap } from "@/components/map/USMap";
 import { ArtifactPanel } from "@/components/workspace/ArtifactPanel";
-import { ArtifactSwitcher } from "@/components/workspace/ArtifactSwitcher";
+import { ArtifactListPanel } from "@/components/workspace/ArtifactListPanel";
+import { ExploreSurface } from "@/components/workspace/ExploreSurface";
 import { ThreadSection } from "@/components/workspace/ThreadSection";
 import { ArtifactProvider, useArtifacts } from "@/components/workspace/ArtifactProvider";
 import { ChatPane } from "@/components/workspace/ChatPane";
 import { DeadLinkState } from "@/components/workspace/DeadLinkState";
-import { LibrarySections } from "@/components/workspace/LibrarySections";
 import { LibrarySidebar } from "@/components/workspace/LibrarySidebar";
 import { MyBallotSection } from "@/components/workspace/MyBallotSection";
 import { WorkspaceShell } from "@/components/workspace/WorkspaceShell";
-import {
-  WorkspaceLayoutProvider,
-  useWorkspaceLayout,
-} from "@/components/workspace/WorkspaceLayoutContext";
+import { WorkspaceLayoutProvider } from "@/components/workspace/WorkspaceLayoutContext";
 import { CHAT_LABELS, SYSTEM_PROMPT } from "@/lib/workspace/chat-config";
+import {
+  applyFocusIntent,
+  derivePanelView,
+  shouldAutoFocus,
+  type FocusIntent,
+} from "@/lib/workspace/derivePanelView";
 import { useAutoSnapshot } from "@/lib/workspace/useAutoSnapshot";
 import { useBuildStart } from "@/lib/workspace/useBuildStart";
 import { useMyBallot } from "@/lib/workspace/useMyBallot";
@@ -31,29 +31,28 @@ import { useThreads } from "@/lib/workspace/useThreads";
 import { deriveLabel } from "@/lib/saved-briefs/schema";
 import { saveBriefSnapshot } from "@/lib/artifacts/sync";
 import { fmtDate } from "@/lib/format";
-import type { Persona } from "@/lib/workspace/layout";
 import type { DistrictLensState } from "@/types/agent-state";
 
 function WorkspaceInner() {
   const params = useSearchParams();
   const router = useRouter();
-  const { layout, setPersona } = useWorkspaceLayout();
   const { isSignedIn } = useUser();
 
   // beginNewBriefRef holds the panel-clear callback. Declared before the
   // agent hook so we can pass onRunStart; assigned after useArtifacts is
   // available (ordering constraint: closeArtifact defined after agent hook).
   const beginNewBriefRef = useRef<() => void>(() => {});
+  // Polite auto-focus (D2/C4): set on any manual focus/navigation, re-armed
+  // at every run start. While true, a completing build must not steal the panel.
+  const userNavigatedRef = useRef(false);
 
   const {
     agent,
     agentState,
-    displayed,
     isAgentReady,
     submitAddress,
     exploreState,
     openRace,
-    setMode,
     clearBrief,
   } = useWorkspaceAgent({ onRunStart: () => beginNewBriefRef.current() });
 
@@ -68,11 +67,27 @@ function WorkspaceInner() {
     store,
   } = useArtifacts();
 
-  // Reopened-saved-brief display slot (mirrors old `openedBrief`).
+  // Reopened-saved-brief focus slot (Mongo snapshots restored via threads/ballot).
   const [reopenedSaved, setReopenedSaved] = useState<DistrictLensState | null>(null);
 
+  // One focus concept (C3): every focus change goes through the pure intent
+  // helper, so a focused saved brief and a focused local artifact can never coexist.
+  const enactFocus = useCallback(
+    (intent: FocusIntent<DistrictLensState>) => {
+      const slots = applyFocusIntent(intent);
+      setReopenedSaved(slots.savedBrief);
+      if (slots.localArtifactId) openArtifact(slots.localArtifactId);
+      else closeArtifact();
+    },
+    [openArtifact, closeArtifact],
+  );
+
   // Assign the callback now that closeArtifact is available.
-  beginNewBriefRef.current = () => { setReopenedSaved(null); closeArtifact(); };
+  beginNewBriefRef.current = () => {
+    setReopenedSaved(null);
+    closeArtifact();
+    userNavigatedRef.current = false; // new run → polite auto-focus re-armed
+  };
 
   // DRAFT source of truth (C2): the coagent stage transition covers typed-chat
   // builds that never call onRunStart; onRunStart stays as an immediate-clear
@@ -82,32 +97,13 @@ function WorkspaceInner() {
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const kickedOff = useRef(false);
 
-  // On reload the coagent mode resets to "voter" while the persisted layout
-  // persona may say "journalist" — the chip looks selected but the Threads
-  // section and map view vanish. Sync mode from the persona once the coagent
-  // state has hydrated.
-  const personaSyncedRef = useRef(false);
-  useEffect(() => {
-    if (personaSyncedRef.current || agentState.stage == null) return;
-    personaSyncedRef.current = true;
-    if (layout.persona !== agentState.mode) setMode(layout.persona);
-  }, [agentState.stage, agentState.mode, layout.persona, setMode]);
-
-  const isJournalist = agentState.mode === "journalist";
-  const showBrief = displayed
-    ? isJournalist
-      ? displayed.mode === "journalist"
-      : displayed.mode === "voter"
-    : false;
-  const briefState = showBrief && displayed ? displayed.state : null;
-  const isDrafting = agentState.stage !== "idle" && agentState.stage !== "complete";
-
-  // Landing handoff: /w?addr=… starts a voter brief; /w?state=XX opens the
-  // journalist state view. Waits for the CopilotKit runtime to signal Connected
-  // before submitting — the runtime must be established or the agent run is
-  // silently dropped with "Running an agent requires either a new_message or an
-  // invocation_id" at the backend. kickedOff prevents double-fire on re-renders
-  // once isAgentReady flips.
+  // Landing handoff: /w?addr=… starts a brief; /w?state=XX explores that
+  // state's races (stage stays idle — the list + race table update in place).
+  // Waits for the CopilotKit runtime to signal Connected before submitting —
+  // the runtime must be established or the agent run is silently dropped with
+  // "Running an agent requires either a new_message or an invocation_id" at
+  // the backend. kickedOff prevents double-fire on re-renders once
+  // isAgentReady flips.
   useEffect(() => {
     if (!isAgentReady) return;
     // useCoAgent's state hydrates (and its connect cycle settles) slightly
@@ -122,11 +118,9 @@ function WorkspaceInner() {
       submitAddress(addr);
     } else if (stateCode) {
       kickedOff.current = true;
-      setPersona("journalist");
-      setMode("journalist");
       exploreState(stateCode);
     }
-  }, [isAgentReady, agentState.stage, params, submitAddress, exploreState, setMode, setPersona]);
+  }, [isAgentReady, agentState.stage, params, submitAddress, exploreState]);
 
   const { savedItems, loadBallot } = useMyBallot(isSignedIn, store);
 
@@ -134,28 +128,37 @@ function WorkspaceInner() {
     agentState,
     agent,
     isSignedIn,
-    onRestoreBrief: (state) => setReopenedSaved(state),
+    onRestoreBrief: (state) => enactFocus({ kind: "saved", state }),
     onClearBrief: () => {
-      setReopenedSaved(null);
-      clearBrief(); // resets snapshot + coagent state, keeps persona
+      enactFocus({ kind: "clear" });
+      clearBrief(); // resets snapshot + coagent state
     },
     onBallotChanged: loadBallot,
   });
 
-  // Auto-snapshot completed drafts into the library, then mark "Saved ✓".
+  // Auto-snapshot completed drafts into the library, then mark "Saved ✓" and
+  // auto-focus the new artifact unless the user navigated mid-run (D2/C4).
   // Signed-in users also mirror the snapshot to Mongo so My Ballot stays the
-  // cross-device source of truth (spec §Data flow: "library write — localStorage
-  // anon, Mongo signed in"). Skip when a journalist thread is open: useThreads'
+  // cross-device source of truth — skipped when a thread is open: useThreads'
   // auto-capture already posts that brief with its threadId.
   const [justSaved, setJustSaved] = useState(false);
   useAutoSnapshot(agentState, (state) => {
     const record = recordSnapshot(state);
     if (record) setJustSaved(true);
+    if (
+      record &&
+      shouldAutoFocus({
+        snapshotRecorded: true,
+        userNavigatedSinceRunStart: userNavigatedRef.current,
+      })
+    ) {
+      enactFocus({ kind: "local", artifactId: record.artifactId });
+    }
     // Known narrow race: if a thread opens in the same frame a build completes,
     // both this mirror and useThreads' auto-capture may POST. /api/saved/brief
     // appends a new snapshot doc each time (append-only by design) but upserts
     // the one-per-race saved_districts bookmark, so My Ballot never duplicates.
-    if (isSignedIn && !(isJournalist && threadsApi.activeThread)) {
+    if (isSignedIn && !threadsApi.activeThread) {
       saveBriefSnapshot(state).then((ok) => { if (ok) loadBallot(); });
     }
   });
@@ -168,62 +171,84 @@ function WorkspaceInner() {
   // Deep link: /w?a=<artifactId>. Unknown id → "not in your library" (spec §Error handling).
   const requestedArtifactId = params.get("a");
   useEffect(() => {
-    if (requestedArtifactId) openArtifact(requestedArtifactId);
-  }, [requestedArtifactId, openArtifact]);
+    if (requestedArtifactId) enactFocus({ kind: "local", artifactId: requestedArtifactId });
+  }, [requestedArtifactId, enactFocus]);
   const deadLink = Boolean(
     requestedArtifactId && !library.some((r) => r.artifactId === requestedArtifactId),
   );
 
-  // Display priority — a reopened saved brief (Mongo) wins over a local artifact,
-  // which wins over the live brief.
-  const reopenedState = active ? active.versions[activeVersionIndex]?.snapshot ?? null : null;
-  const panelState = reopenedSaved ?? reopenedState ?? briefState ?? (isDrafting ? agentState : null);
+  // Manual focus paths — mark navigation so a completing build stays polite.
+  const openListItem = useCallback(
+    (id: string) => {
+      userNavigatedRef.current = true;
+      if (threadsApi.activeThread) threadsApi.openSavedBrief(id);
+      else enactFocus({ kind: "local", artifactId: id });
+    },
+    [threadsApi, enactFocus],
+  );
+  const openBallotBrief = useCallback(
+    (briefId: string) => {
+      userNavigatedRef.current = true;
+      threadsApi.openSavedBrief(briefId);
+    },
+    [threadsApi],
+  );
+  const backToList = useCallback(() => {
+    userNavigatedRef.current = true;
+    enactFocus({ kind: "clear" });
+    // Drop the deep link so it doesn't immediately re-focus what we just closed.
+    if (params.get("a")) router.replace("/w");
+  }, [enactFocus, params, router]);
+
+  // Panel state machine (U2): focused > draft > list. The live coagent brief
+  // renders ONLY during DRAFT — at rest the panel is the artifact list, which
+  // makes a stale live brief structurally unable to squat in the panel (D1).
+  const { view, showBuildPill } = derivePanelView({
+    hasFocusedSavedBrief: reopenedSaved != null,
+    hasFocusedLocalArtifact: active != null,
+    stage: agentState.stage,
+  });
+  const activeSnapshot = active
+    ? active.versions[activeVersionIndex]?.snapshot ?? null
+    : null;
+  const panelState =
+    view === "focused"
+      ? reopenedSaved ?? activeSnapshot
+      : view === "draft"
+        ? agentState
+        : null;
   const title = active
     ? active.name
     : panelState?.currentRaceKey
       ? deriveLabel(panelState.currentRaceKey)
       : null;
 
-  // Deep-Cuts switcher source: the active thread's artifacts, else recent
-  // local-library artifacts (spec addendum A3).
-  const switcherItems = threadsApi.activeThread
+  // Rest state: the artifact LIST — active thread's briefs, else the local
+  // library — with the explore surface always beneath (U1/U2).
+  const listItems = threadsApi.activeThread
     ? threadsApi.activeThread.briefs.map((b) => ({
         id: b.brief_id,
         name: deriveLabel(b.race_key),
         savedAt: b.created_at,
       }))
-    : library.slice(0, 5).map((r) => ({
+    : library.map((r) => ({
         id: r.artifactId,
         name: r.name,
         savedAt: r.updatedAt,
       }));
 
-  const deadLinkState = deadLink ? (
+  const restState = deadLink ? (
     <DeadLinkState onReset={() => router.replace("/w")} />
-  ) : null;
-
-  const emptyState = isJournalist ? (
-    <div className="flex h-full flex-col overflow-y-auto">
-      <div className="shrink-0 p-4">
-        <USMap
-          focusedState={agentState.mapFocus}
-          onStateClick={exploreState}
-          mode={agentState.mode}
-          heatmapData={agentState.stateRaces}
-        />
-      </div>
-      {agentState.stateRaces.length > 0 ? (
-        <RaceTable races={agentState.stateRaces} onRaceClick={openRace} />
-      ) : (
-        <p className="px-4 text-sm text-ink-faint">
-          Click a state on the map to explore its 2026 races.
-        </p>
-      )}
-    </div>
   ) : (
-    <div className="h-full">
-      <CanvasEmptyState onSubmit={submitAddress} />
-    </div>
+    <ArtifactListPanel items={listItems} onOpen={openListItem}>
+      <ExploreSurface
+        onSubmitAddress={submitAddress}
+        onStateClick={exploreState}
+        onRaceClick={openRace}
+        mapFocus={agentState.mapFocus}
+        stateRaces={agentState.stateRaces}
+      />
+    </ArtifactListPanel>
   );
 
   return (
@@ -232,13 +257,11 @@ function WorkspaceInner() {
       <AgentToolTrace />
       <WorkspaceShell
         library={
-          <LibrarySidebar onPersonaChange={setMode}>
-            {/* Threads are session containers for BOTH personas (signed-in).
-                Persona decides section ORDER only: voter leads with My Ballot,
-                journalist leads with Threads (spec addendum A1/A6). */}
+          <LibrarySidebar>
+            {/* One workspace (U1): My Ballot + Threads for the signed-in. */}
             <Show when="signed-in">
-              {!isJournalist && savedItems.length > 0 && (
-                <MyBallotSection items={savedItems} onOpen={threadsApi.openSavedBrief} />
+              {savedItems.length > 0 && (
+                <MyBallotSection items={savedItems} onOpen={openBallotBrief} />
               )}
               <ThreadSection
                 threads={threadsApi.threads}
@@ -250,11 +273,7 @@ function WorkspaceInner() {
                 onDelete={threadsApi.deleteThread}
                 onSaveNotes={threadsApi.saveThreadNotes}
               />
-              {isJournalist && savedItems.length > 0 && (
-                <MyBallotSection items={savedItems} onOpen={threadsApi.openSavedBrief} />
-              )}
             </Show>
-            <LibrarySections />
           </LibrarySidebar>
         }
         chat={
@@ -267,17 +286,9 @@ function WorkspaceInner() {
           <ArtifactPanel
             state={panelState}
             title={title}
-            titleSlot={
-              <ArtifactSwitcher
-                title={title ?? "No artifact open"}
-                items={switcherItems}
-                onSelect={
-                  threadsApi.activeThread ? threadsApi.openSavedBrief : openArtifact
-                }
-              />
-            }
-            isDrafting={isDrafting && !reopenedState && !reopenedSaved}
-            emptyState={deadLinkState ?? emptyState}
+            isDrafting={showBuildPill}
+            emptyState={restState}
+            onBack={view === "focused" ? backToList : undefined}
             headerActions={
               <>
                 {justSaved && (
@@ -299,16 +310,6 @@ function WorkspaceInner() {
                       </option>
                     ))}
                   </select>
-                )}
-                {active && (
-                  <button
-                    type="button"
-                    onClick={closeArtifact}
-                    aria-label="Close artifact"
-                    className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-white"
-                  >
-                    ✕
-                  </button>
                 )}
               </>
             }
@@ -354,10 +355,8 @@ function WorkspaceInner() {
 }
 
 function WorkspacePage() {
-  const params = useSearchParams();
-  const initialPersona: Persona = params.get("state") ? "journalist" : "voter";
   return (
-    <WorkspaceLayoutProvider initialPersona={initialPersona}>
+    <WorkspaceLayoutProvider>
       <ArtifactProvider>
         <WorkspaceInner />
       </ArtifactProvider>

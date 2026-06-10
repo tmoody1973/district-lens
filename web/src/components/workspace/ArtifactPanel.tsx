@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { RaceCanvas } from "@/components/canvas/RaceCanvas";
 import { ReceiptProgress } from "@/components/canvas/ReceiptProgress";
+import { isDraftingStage } from "@/lib/workspace/derivePanelView";
 import { annotateSteps, stepsFromStage } from "@/lib/steps";
 import type { DistrictLensState } from "@/types/agent-state";
 
@@ -10,29 +11,49 @@ interface ArtifactPanelProps {
   /** Brief being displayed — live draft or reopened snapshot. Null = nothing open. */
   state: DistrictLensState | null;
   title: string | null;
+  /** A build is running somewhere — shows the slim header pill (D2/C4). */
   isDrafting: boolean;
-  /** What to show when no artifact is open (persona-specific, supplied by the page). */
+  /** What to show when no artifact is open (the artifact list + explore surface). */
   emptyState: ReactNode;
   /** Extra header actions (history ▾, share — arrive in later phases). */
   headerActions?: ReactNode;
-  /** Replaces the static title (e.g. the thread artifact switcher dropdown). */
-  titleSlot?: ReactNode;
+  /** Back to the artifact list — rendered when a focused artifact can be dismissed. */
+  onBack?: () => void;
 }
 
-export function ArtifactPanel({ state, title, isDrafting, emptyState, headerActions, titleSlot }: ArtifactPanelProps) {
-  const steps = isDrafting && state ? annotateSteps(stepsFromStage(state.stage), state) : [];
+export function ArtifactPanel({
+  state,
+  title,
+  isDrafting,
+  emptyState,
+  headerActions,
+  onBack,
+}: ArtifactPanelProps) {
+  // The receipt strip annotates LIVE build steps — it renders only when the
+  // displayed state is itself mid-draft, never over a focused snapshot whose
+  // stage is already "complete" (the pill alone signals the background build).
+  const showReceipt = isDrafting && state != null && isDraftingStage(state.stage);
+  const steps = showReceipt && state ? annotateSteps(stepsFromStage(state.stage), state) : [];
   const hasBrief = Boolean(state?.currentRaceKey);
 
   return (
     <section aria-label="Artifact" className="flex h-full min-w-0 flex-col bg-zinc-900">
       <header className="shrink-0 border-b border-zinc-800 px-4 py-2.5">
         <div className="flex items-center gap-2">
-          <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" aria-hidden />
-          {titleSlot ?? (
-            <span className="truncate text-sm font-medium text-zinc-200">
-              {title ?? "No artifact open"}
-            </span>
+          {onBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+            >
+              <span aria-hidden>←</span> Artifacts
+            </button>
+          ) : (
+            <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" aria-hidden />
           )}
+          <span className="truncate text-sm font-medium text-zinc-200">
+            {title ?? "No artifact open"}
+          </span>
           {isDrafting && (
             <span className="shrink-0 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
               building…
@@ -40,7 +61,7 @@ export function ArtifactPanel({ state, title, isDrafting, emptyState, headerActi
           )}
           <span className="ml-auto flex items-center gap-1">{headerActions}</span>
         </div>
-        {isDrafting && steps.length > 0 && state && (
+        {showReceipt && steps.length > 0 && state && (
           // Receipt strip across the artifact top while drafting (spec §Artifact state).
           <div className="mt-2 rounded-md bg-surface-raised px-3 py-2">
             <ReceiptProgress

@@ -1,7 +1,10 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { fmtDate } from "@/lib/format";
+
+/** Latest cards shown before the "Show all" expander (C6) — keeps the explore surface reachable. */
+const LIST_CAP = 8;
 
 export interface ArtifactListItem {
   id: string;
@@ -28,6 +31,8 @@ export function ArtifactListPanel({
   onOpen: (id: string) => void;
   children?: ReactNode;
 }) {
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? items : items.slice(0, LIST_CAP);
   return (
     <div className="flex h-full min-w-0 flex-col overflow-y-auto">
       {items.length > 0 && (
@@ -39,7 +44,7 @@ export function ArtifactListPanel({
             </span>
           </div>
           <ul className="space-y-2">
-            {items.map((item) => (
+            {visible.map((item) => (
               <li key={item.id}>
                 <button
                   type="button"
@@ -78,6 +83,15 @@ export function ArtifactListPanel({
               </li>
             ))}
           </ul>
+          {!showAll && items.length > LIST_CAP && (
+            <button
+              type="button"
+              onClick={() => setShowAll(true)}
+              className="mt-2 w-full rounded-md py-1.5 text-center text-xs font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+            >
+              Show all ({items.length})
+            </button>
+          )}
         </div>
       )}
       <div className="min-h-0 flex-1">{children}</div>

@@ -252,11 +252,12 @@ export function useThreads({
   useEffect(() => {
     // Thread docs store {role, content}; AG-UI messages need ids.
     const restored: Message[] = (activeThread?.thread.messages ?? []).map(
-      (m: { role: string; content: string }) => ({
-        id: crypto.randomUUID(),
-        role: m.role as Message["role"],
-        content: m.content,
-      }),
+      (m: { role: string; content: string }) =>
+        ({
+          id: crypto.randomUUID(),
+          role: m.role,
+          content: m.content,
+        }) as Message,
     );
     agent.setMessages(restored);
     // Seed the transcript signature so the capture effect doesn't
