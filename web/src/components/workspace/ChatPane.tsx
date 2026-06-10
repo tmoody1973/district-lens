@@ -55,7 +55,7 @@ export function ChatPane({ statusMessage }: { statusMessage?: string | null }) {
           </svg>
         </button>
       </div>
-      <div className="min-h-0 flex-1">
+      <div className="dark min-h-0 flex-1">
         <CopilotChat instructions={SYSTEM_PROMPT} labels={CHAT_LABELS} className="h-full" />
       </div>
     </div>
