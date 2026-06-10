@@ -22,18 +22,20 @@ export function ExploreSurface({
   onStateClick: (stateCode: string) => void;
   onRaceClick: (raceKey: string) => void;
   mapFocus: string | null;
-  stateRaces: RaceRow[];
+  /** Optional: pre-hydration the coagent state can be missing fields entirely. */
+  stateRaces?: RaceRow[];
 }) {
+  const races = stateRaces ?? [];
   return (
     <div className="flex h-full flex-col">
       <div className="shrink-0 px-4 pt-4">
         <AddressSuggestInput onSubmit={onSubmitAddress} compact />
       </div>
       <div className="shrink-0 p-4">
-        <USMap focusedState={mapFocus} onStateClick={onStateClick} heatmapData={stateRaces} />
+        <USMap focusedState={mapFocus} onStateClick={onStateClick} heatmapData={races} />
       </div>
-      {stateRaces.length > 0 ? (
-        <RaceTable races={stateRaces} onRaceClick={onRaceClick} />
+      {races.length > 0 ? (
+        <RaceTable races={races} onRaceClick={onRaceClick} />
       ) : (
         <p className="px-4 pb-4 text-sm text-ink-faint">
           Click a state on the map to explore its 2026 races.

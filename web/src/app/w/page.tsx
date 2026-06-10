@@ -248,7 +248,7 @@ function WorkspaceInner() {
         onSubmitAddress={submitAddress}
         onStateClick={exploreState}
         onRaceClick={openRace}
-        mapFocus={agentState.mapFocus}
+        mapFocus={agentState.mapFocus ?? null}
         stateRaces={agentState.stateRaces}
       />
     </ArtifactListPanel>

@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -52,7 +53,13 @@ export function ArtifactProvider({
   store?: ArtifactStore;
 }) {
   const [artifactStore] = useState<ArtifactStore>(() => store ?? defaultStore());
-  const [library, setLibrary] = useState<ArtifactRecord[]>(() => artifactStore.list());
+  // Server render sees an empty library; localStorage loads after mount so the
+  // server and client first paint match (no hydration mismatch — the artifact
+  // rail renders library cards at rest now).
+  const [library, setLibrary] = useState<ArtifactRecord[]>([]);
+  useEffect(() => {
+    setLibrary(artifactStore.list());
+  }, [artifactStore]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeVersionIndex, setActiveVersionIndex] = useState(0);
 

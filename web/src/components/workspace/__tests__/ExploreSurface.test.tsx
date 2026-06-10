@@ -67,6 +67,23 @@ test("renders the race table once state races exist", () => {
   expect(screen.queryByText(/click a state on the map/i)).toBeNull();
 });
 
+test("renders before the coagent state hydrates (stateRaces undefined)", () => {
+  // Pre-hydration, useCoAgent can hand out a state whose fields are missing.
+  // The old voter empty-state never read stateRaces; ExploreSurface renders
+  // at rest for everyone, so it must tolerate the gap — reading .length on
+  // undefined here crashed /w outright (rev 00070).
+  render(
+    <ExploreSurface
+      onSubmitAddress={() => {}}
+      onStateClick={() => {}}
+      onRaceClick={() => {}}
+      mapFocus={null}
+      stateRaces={undefined}
+    />,
+  );
+  expect(screen.getByText(/click a state on the map/i)).toBeDefined();
+});
+
 test("map state clicks propagate", () => {
   const onStateClick = vi.fn();
   render(
