@@ -17,29 +17,29 @@ export function CanvasEmptyState({ onSubmit }: Props) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center p-10 text-center gap-6">
       <div className="max-w-md space-y-3">
-        <h1 className="text-2xl font-bold text-slate-900 leading-tight">
+        <h1 className="text-2xl font-bold text-ink leading-tight">
           What congressional race do you need to understand?
         </h1>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-ink-muted">
           The nonpartisan voter brief for every 2026 congressional race.
         </p>
       </div>
 
-      <ul className="text-left space-y-2 text-sm text-slate-600 max-w-xs">
+      <ul className="text-left space-y-2 text-sm text-ink-muted max-w-xs">
         <li className="flex items-start gap-2">
-          <span className="text-blue-600 font-bold shrink-0">✓</span>
+          <span className="text-blue-400 font-bold shrink-0">✓</span>
           Direct candidate quotes on issues you care about
         </li>
         <li className="flex items-start gap-2">
-          <span className="text-blue-600 font-bold shrink-0">✓</span>
+          <span className="text-blue-400 font-bold shrink-0">✓</span>
           FEC fundraising — who funds whom
         </li>
         <li className="flex items-start gap-2">
-          <span className="text-blue-600 font-bold shrink-0">✓</span>
+          <span className="text-blue-400 font-bold shrink-0">✓</span>
           {"Incumbent's actual voting record"}
         </li>
         <li className="flex items-start gap-2">
-          <span className="text-blue-600 font-bold shrink-0">✓</span>
+          <span className="text-blue-400 font-bold shrink-0">✓</span>
           Every claim cited
         </li>
       </ul>
@@ -51,18 +51,18 @@ export function CanvasEmptyState({ onSubmit }: Props) {
           onChange={(e) => setAddress(e.target.value)}
           placeholder="Your street address or ZIP code"
           aria-label="Your street address or ZIP code"
-          className="min-w-0 flex-1 rounded-[2px] border-2 border-slate-900 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-700"
+          className="min-w-0 flex-1 rounded-[2px] border-2 border-edge bg-surface-raised px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <button
           type="submit"
           disabled={!address.trim()}
-          className="rounded-[2px] border-2 border-slate-900 bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40 hover:bg-slate-700 transition-colors whitespace-nowrap"
+          className="rounded-[2px] border-2 border-zinc-100 bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-900 disabled:opacity-40 hover:bg-white transition-colors whitespace-nowrap"
         >
           Find My Race →
         </button>
       </form>
 
-      <p className="text-xs text-slate-400">or ask anything in the chat →</p>
+      <p className="text-xs text-ink-faint">or ask anything in the chat →</p>
     </div>
   );
 }

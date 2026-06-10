@@ -53,7 +53,7 @@ export function BallotMeasuresCard({ data }: { data: BallotMeasuresData | null }
     <BallotpediaCardShell title={title} subtitle={subtitle}>
       {groups.map(([subject, items]) => (
         <div key={subject} className="space-y-1.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-evidence-reported">
             {subject}
           </p>
           {items.map((measure) => (
@@ -61,18 +61,18 @@ export function BallotMeasuresCard({ data }: { data: BallotMeasuresData | null }
               <div className="flex items-baseline justify-between gap-2">
                 <LinkOrSpan
                   href={measure.url}
-                  className="truncate text-sm font-medium text-slate-900 underline-offset-2 hover:underline"
+                  className="truncate text-sm font-medium text-ink underline-offset-2 hover:underline"
                 >
                   {measure.title}
                 </LinkOrSpan>
                 {measure.type && (
-                  <span className="shrink-0 rounded-[2px] border border-slate-300 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-slate-600">
+                  <span className="shrink-0 rounded-[2px] border border-edge px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-ink-muted">
                     {measure.type}
                   </span>
                 )}
               </div>
               {measure.description && (
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-ink-muted">
                   {truncate(measure.description, 140)}
                 </p>
               )}

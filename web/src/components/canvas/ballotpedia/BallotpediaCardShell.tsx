@@ -36,20 +36,20 @@ export function BallotpediaCardShell({
     governanceStrength === "strong" ? GOVERNANCE_STRONG : GOVERNANCE_STANDARD;
 
   return (
-    <div className="my-2 space-y-3 rounded-[2px] border-2 border-dashed border-amber-500 bg-amber-50/40 p-3">
+    <div className="my-2 space-y-3 rounded-[2px] border-2 border-dashed border-amber-500/40 bg-surface-raised p-3">
       <div className="flex items-baseline justify-between gap-2">
-        <p className="text-xs font-medium uppercase tracking-widest text-slate-600">
+        <p className="text-xs font-medium uppercase tracking-widest text-ink-muted">
           {title}
         </p>
-        <span className="shrink-0 rounded-[2px] bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">
+        <span className="shrink-0 rounded-[2px] bg-amber-900/30 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-400">
           Ballotpedia · discovery
         </span>
       </div>
-      {subtitle && <p className="text-[11px] text-slate-500">{subtitle}</p>}
+      {subtitle && <p className="text-[11px] text-ink-muted">{subtitle}</p>}
 
       {children}
 
-      <p className="border-t border-amber-200 pt-2 text-[10px] italic text-amber-700">
+      <p className="border-t border-amber-500/40 pt-2 text-[10px] italic text-evidence-reported">
         {governance}
       </p>
     </div>
@@ -64,7 +64,7 @@ interface BallotpediaSkeletonProps {
 export function BallotpediaSkeleton({ title, message }: BallotpediaSkeletonProps) {
   return (
     <BallotpediaCardShell title={title}>
-      <p className="flex items-center gap-2 text-xs text-slate-500">
+      <p className="flex items-center gap-2 text-xs text-ink-muted">
         <span className="animate-spin">⟳</span> {message}
       </p>
     </BallotpediaCardShell>
@@ -79,20 +79,20 @@ interface BallotpediaEmptyProps {
 export function BallotpediaEmpty({ title, governanceStrength }: BallotpediaEmptyProps) {
   return (
     <BallotpediaCardShell title={title} governanceStrength={governanceStrength}>
-      <p className="text-xs italic text-slate-500">Ballotpedia returned no results.</p>
+      <p className="text-xs italic text-ink-muted">Ballotpedia returned no results.</p>
     </BallotpediaCardShell>
   );
 }
 
 /** DEM/REP/IND → a colored dot, matching FinanceToolCard's party language. */
 const PARTY_DOT: Record<string, string> = {
-  DEM: "bg-blue-600",
-  REP: "bg-red-700",
-  IND: "bg-slate-500",
+  DEM: "bg-party-dem",
+  REP: "bg-party-rep",
+  IND: "bg-zinc-500",
 };
 
 export function partyDot(party: string | undefined): string {
-  return PARTY_DOT[(party ?? "").toUpperCase()] ?? "bg-slate-500";
+  return PARTY_DOT[(party ?? "").toUpperCase()] ?? "bg-zinc-500";
 }
 
 export function truncate(text: string | undefined, max: number): string {
@@ -133,7 +133,7 @@ export function CardSection({
   if (!show) return null;
   return (
     <div>
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">{title}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-evidence-reported">{title}</p>
       {children}
     </div>
   );

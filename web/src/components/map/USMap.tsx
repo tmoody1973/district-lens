@@ -22,7 +22,7 @@ const FIPS_TO_STATE: Record<string, string> = {
 const SMALL_GAP_MAX = 1.5; // within ~1.5x receipts = roughly even money
 const MEDIUM_GAP_MAX = 3; // up to 3x = moderate gap
 
-const COLOR_NO_DATA = "#e2e8f0"; // slate-200
+const COLOR_NO_DATA = "#52525b"; // zinc-600 — dimmed for dark background (was slate-200 glare)
 const COLOR_GAP_SMALL = "#ddd6fe"; // violet-200 — fundraising near parity
 const COLOR_GAP_MEDIUM = "#a78bfa"; // violet-400
 const COLOR_GAP_LARGE = "#6d28d9"; // violet-700 — one candidate far out-raises the other
@@ -74,7 +74,7 @@ export function USMap({
   const isHeatmap = mode === "journalist" && heatmapData.length > 0;
 
   return (
-    <div className="w-full border-2 border-slate-900 rounded-[2px] bg-slate-50 overflow-hidden">
+    <div className="w-full border-2 border-edge-strong rounded-[2px] bg-surface-raised overflow-hidden">
       <ComposableMap
         projection="geoAlbersUsa"
         projectionConfig={{ scale: 1000 }}
@@ -98,14 +98,14 @@ export function USMap({
                   style={{
                     default: {
                       fill,
-                      stroke: "#94a3b8",
+                      stroke: "#52525b",
                       strokeWidth: 0.5,
                       outline: "none",
                       cursor: stateCode ? "pointer" : "default",
                     },
                     hover: {
-                      fill: isFocused ? "#1e40af" : "#94a3b8",
-                      stroke: "#64748b",
+                      fill: isFocused ? "#1e40af" : "#3f3f46",
+                      stroke: "#52525b",
                       strokeWidth: 0.5,
                       outline: "none",
                     },
@@ -122,17 +122,17 @@ export function USMap({
       </ComposableMap>
       {isHeatmap && (
         <div className="space-y-1 px-3 pb-2">
-          <p className="text-center text-xs font-medium uppercase tracking-widest text-slate-500">
+          <p className="text-center text-xs font-medium uppercase tracking-widest text-ink-muted">
             Fundraising Advantage
           </p>
-          <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+          <div className="flex items-center justify-center gap-2 text-xs text-ink-muted">
             <span>Smaller gap</span>
             <span className="inline-block h-3 w-4 rounded-sm" style={{ background: COLOR_GAP_SMALL }} />
             <span className="inline-block h-3 w-4 rounded-sm" style={{ background: COLOR_GAP_MEDIUM }} />
             <span className="inline-block h-3 w-4 rounded-sm" style={{ background: COLOR_GAP_LARGE }} />
             <span>Larger gap</span>
           </div>
-          <p className="text-center text-[11px] text-slate-400">
+          <p className="text-center text-[11px] text-ink-faint">
             Fundraising, not a prediction. Most seats are safe regardless of money.
           </p>
         </div>

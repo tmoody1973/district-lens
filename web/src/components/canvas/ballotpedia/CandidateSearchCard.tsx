@@ -35,15 +35,15 @@ export function CandidateSearchCard({ data }: { data: CandidateSearchData | null
         const where = [candidate.office, candidate.state].filter(Boolean).join(" · ");
         return (
           <div key={candidate.name + (candidate.url ?? "")} className="space-y-0.5">
-            <span className="flex items-center gap-1.5 text-sm text-slate-900">
+            <span className="flex items-center gap-1.5 text-sm text-ink">
               <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${partyDot(candidate.party)}`} />
               <LinkOrSpan href={candidate.url} className="truncate font-medium underline-offset-2 hover:underline">
                 {candidate.name}
               </LinkOrSpan>
             </span>
-            {where && <p className="text-[11px] text-slate-500">{where}</p>}
+            {where && <p className="text-[11px] text-ink-muted">{where}</p>}
             {candidate.snippet && (
-              <p className="text-[11px] text-slate-600">{truncate(candidate.snippet, 160)}</p>
+              <p className="text-[11px] text-ink-muted">{truncate(candidate.snippet, 160)}</p>
             )}
           </div>
         );

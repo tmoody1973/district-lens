@@ -49,14 +49,14 @@ export function RaceTable({ races, onRaceClick }: Props) {
 
   return (
     <div className="flex flex-col shrink-0 p-4">
-      <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-3">
+      <p className="text-xs font-semibold uppercase tracking-widest text-ink-muted mb-3">
         {races.length} races · click to build brief
       </p>
       <table className="w-full text-sm border-collapse">
         <thead>
-          <tr className="border-b-2 border-slate-900 text-xs font-semibold uppercase tracking-widest text-slate-500">
+          <tr className="border-b-2 border-edge-strong text-xs font-semibold uppercase tracking-widest text-ink-muted">
             <th
-              className="text-left py-2 pr-3 cursor-pointer hover:text-slate-900"
+              className="text-left py-2 pr-3 cursor-pointer hover:text-ink"
               onClick={() => toggleSort("state")}
             >
               Race{arrow("state")}
@@ -65,13 +65,13 @@ export function RaceTable({ races, onRaceClick }: Props) {
             <th className="text-right py-2 pr-3">Incumbent $</th>
             <th className="text-right py-2 pr-3">Challenger $</th>
             <th
-              className="text-right py-2 pr-3 cursor-pointer hover:text-slate-900"
+              className="text-right py-2 pr-3 cursor-pointer hover:text-ink"
               onClick={() => toggleSort("financeGap")}
             >
               Gap{arrow("financeGap")}
             </th>
             <th
-              className="text-right py-2 cursor-pointer hover:text-slate-900"
+              className="text-right py-2 cursor-pointer hover:text-ink"
               onClick={() => toggleSort("pacPct")}
             >
               PAC%{arrow("pacPct")}
@@ -83,39 +83,39 @@ export function RaceTable({ races, onRaceClick }: Props) {
             <tr
               key={race.raceKey}
               onClick={() => onRaceClick(race.raceKey)}
-              className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
+              className="border-b border-edge hover:bg-surface-hover cursor-pointer transition-colors"
             >
-              <td className="py-2 pr-3 font-mono font-medium text-slate-900">
+              <td className="py-2 pr-3 font-mono font-medium text-ink">
                 {race.state}-{race.district}
               </td>
-              <td className="py-2 pr-3 text-slate-700">
-                <span className="font-medium text-slate-900">{lastName(race.incumbentName)}</span>
+              <td className="py-2 pr-3 text-ink-muted">
+                <span className="font-medium text-ink">{lastName(race.incumbentName)}</span>
                 {race.incumbentParty && (
-                  <span className="text-slate-400"> ({race.incumbentParty})</span>
+                  <span className="text-ink-faint"> ({race.incumbentParty})</span>
                 )}
                 {race.topChallengerName ? (
                   <>
-                    <span className="text-slate-400"> vs </span>
-                    <span className="font-medium text-slate-900">{lastName(race.topChallengerName)}</span>
+                    <span className="text-ink-faint"> vs </span>
+                    <span className="font-medium text-ink">{lastName(race.topChallengerName)}</span>
                   </>
                 ) : (
-                  <span className="text-slate-400"> · no challenger filed</span>
+                  <span className="text-ink-faint"> · no challenger filed</span>
                 )}
               </td>
-              <td className="py-2 pr-3 text-right font-mono text-slate-700">
+              <td className="py-2 pr-3 text-right font-mono text-ink-muted">
                 {fmtMoney(race.incumbentReceipts)}
               </td>
-              <td className="py-2 pr-3 text-right font-mono text-slate-700">
+              <td className="py-2 pr-3 text-right font-mono text-ink-muted">
                 {fmtMoney(race.topChallengerReceipts)}
               </td>
-              <td className="py-2 pr-3 text-right font-mono text-slate-700">
+              <td className="py-2 pr-3 text-right font-mono text-ink-muted">
                 {fmtMoney(race.financeGap)}
               </td>
               <td
                 className={`py-2 text-right font-mono ${
                   (race.pacPct ?? 0) > 60
-                    ? "text-amber-600 font-semibold"
-                    : "text-slate-500"
+                    ? "text-evidence-reported font-semibold"
+                    : "text-ink-faint"
                 }`}
               >
                 {race.pacPct != null ? `${race.pacPct}%` : "—"}

@@ -64,23 +64,23 @@ export function ElectionsCard({ data }: { data: ElectionsData | null }) {
       {races.map((race) => {
         const previews = race.candidates_preview ?? [];
         return (
-          <div key={race.title} className="space-y-1 border-t border-amber-100 pt-2 first:border-t-0 first:pt-0">
+          <div key={race.title} className="space-y-1 border-t border-amber-500/40 pt-2 first:border-t-0 first:pt-0">
             <div className="flex items-baseline justify-between gap-2">
               <LinkOrSpan
                 href={race.url}
-                className="truncate text-sm font-medium text-slate-900 underline-offset-2 hover:underline"
+                className="truncate text-sm font-medium text-ink underline-offset-2 hover:underline"
               >
                 {race.title}
               </LinkOrSpan>
               {race.office_type && (
-                <span className="shrink-0 rounded-[2px] border border-slate-300 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-slate-600">
+                <span className="shrink-0 rounded-[2px] border border-edge px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-ink-muted">
                   {race.office_type}
                 </span>
               )}
             </div>
-            {race.date && <p className="text-[10px] text-slate-500">{race.date}</p>}
+            {race.date && <p className="text-[10px] text-ink-muted">{race.date}</p>}
             {previews.length > 0 && (
-              <p className="text-[11px] text-slate-600">
+              <p className="text-[11px] text-ink-muted">
                 {previews.map((c) => c.name).join(" · ")}
               </p>
             )}

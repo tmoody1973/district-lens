@@ -13,10 +13,10 @@ interface Props {
 }
 
 function StepIcon({ status }: { status: StepStatus }) {
-  if (status === "done") return <span className="text-green-600 text-xs w-4 shrink-0">✓</span>;
+  if (status === "done") return <span className="text-evidence-direct text-xs w-4 shrink-0">✓</span>;
   if (status === "running")
-    return <span className="text-amber-500 text-xs w-4 shrink-0 animate-spin">⟳</span>;
-  return <span className="text-slate-300 text-xs w-4 shrink-0">○</span>;
+    return <span className="text-evidence-reported text-xs w-4 shrink-0 animate-spin">⟳</span>;
+  return <span className="text-ink-faint text-xs w-4 shrink-0">○</span>;
 }
 
 export function ReceiptProgress({ steps, briefStartedAt, statusMessage, compact, horizontal }: Props) {
@@ -51,13 +51,13 @@ export function ReceiptProgress({ steps, briefStartedAt, statusMessage, compact,
           <span
             className={[
               "inline-block h-2 w-2 rounded-full",
-              isComplete ? "bg-green-500" : "bg-blue-500 animate-pulse",
+              isComplete ? "bg-evidence-direct" : "bg-blue-500 animate-pulse",
             ].join(" ")}
           />
           <span
             className={[
               "text-xs font-semibold uppercase tracking-widest",
-              isComplete ? "text-green-700" : "text-blue-700",
+              isComplete ? "text-evidence-direct" : "text-blue-400",
             ].join(" ")}
           >
             {isComplete ? "Complete" : "Building"}
@@ -69,9 +69,9 @@ export function ReceiptProgress({ steps, briefStartedAt, statusMessage, compact,
             <span
               className={[
                 "text-xs",
-                step.status === "done" && "text-slate-400",
-                step.status === "running" && "text-amber-600 font-medium",
-                step.status === "pending" && "text-slate-400",
+                step.status === "done" && "text-ink-faint",
+                step.status === "running" && "text-evidence-reported font-medium",
+                step.status === "pending" && "text-ink-faint",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -81,7 +81,7 @@ export function ReceiptProgress({ steps, briefStartedAt, statusMessage, compact,
           </span>
         ))}
         {secsLeft !== null && secsLeft > 0 && (
-          <span className="shrink-0 text-xs text-slate-400">~{secsLeft}s</span>
+          <span className="shrink-0 text-xs text-ink-faint">~{secsLeft}s</span>
         )}
       </div>
     );
@@ -95,15 +95,15 @@ export function ReceiptProgress({ steps, briefStartedAt, statusMessage, compact,
           <div className="flex items-center gap-2">
             {isComplete ? (
               <>
-                <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
-                <span className="text-xs font-semibold text-green-700 uppercase tracking-widest">
+                <span className="inline-block w-2 h-2 rounded-full bg-evidence-direct" />
+                <span className="text-xs font-semibold text-evidence-direct uppercase tracking-widest">
                   Brief complete
                 </span>
               </>
             ) : (
               <>
                 <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                <span className="text-xs font-semibold text-blue-700 uppercase tracking-widest">
+                <span className="text-xs font-semibold text-blue-400 uppercase tracking-widest">
                   Building brief
                 </span>
               </>
@@ -111,12 +111,12 @@ export function ReceiptProgress({ steps, briefStartedAt, statusMessage, compact,
           </div>
           <div className="flex items-center gap-3">
             {secsLeft !== null && secsLeft > 0 && (
-              <span className="text-xs text-slate-400">~{secsLeft} sec left</span>
+              <span className="text-xs text-ink-faint">~{secsLeft} sec left</span>
             )}
             {secsLeft === 0 && !isComplete && (
-              <span className="text-xs text-slate-400">still working…</span>
+              <span className="text-xs text-ink-faint">still working…</span>
             )}
-            <span className="text-xs font-medium text-green-600">● MongoDB</span>
+            <span className="text-xs font-medium text-evidence-direct">● MongoDB</span>
           </div>
         </div>
       )}
@@ -129,9 +129,9 @@ export function ReceiptProgress({ steps, briefStartedAt, statusMessage, compact,
             <span
               className={[
                 "text-xs",
-                step.status === "done" && "text-slate-400 line-through",
-                step.status === "running" && "text-amber-600 font-medium",
-                step.status === "pending" && "text-slate-400",
+                step.status === "done" && "text-ink-faint line-through",
+                step.status === "running" && "text-evidence-reported font-medium",
+                step.status === "pending" && "text-ink-faint",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -139,7 +139,7 @@ export function ReceiptProgress({ steps, briefStartedAt, statusMessage, compact,
               {step.label}
             </span>
             {step.source && (
-              <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wide text-slate-400">
+              <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wide text-ink-faint">
                 {step.detail ? `${step.source} · ${step.detail}` : step.source}
               </span>
             )}
@@ -151,7 +151,7 @@ export function ReceiptProgress({ steps, briefStartedAt, statusMessage, compact,
       {statusMessage && (
         <p
           data-testid="status-message"
-          className="text-xs text-slate-500 italic pt-1"
+          className="text-xs text-ink-muted italic pt-1"
         >
           {statusMessage}
         </p>

@@ -124,8 +124,7 @@ export default function LandingPage() {
           <p className="mb-2 text-center text-xs font-semibold uppercase tracking-widest text-zinc-500">
             Or explore a state's races
           </p>
-          {/* USMap is still light-styled until the dark token sweep — render it on a paper plate. */}
-          <div className="rounded-xl bg-white p-4">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
             <USMap
               focusedState={null}
               onStateClick={(stateCode) => router.push(`/w?state=${stateCode}`)}

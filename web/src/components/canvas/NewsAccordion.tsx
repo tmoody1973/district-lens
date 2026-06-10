@@ -34,23 +34,23 @@ export function NewsAccordion({ candidateName }: Props) {
 
   return (
     <details
-      className="group rounded-[2px] border border-slate-200 bg-white"
+      className="group rounded-[2px] border border-edge bg-surface-raised"
       onToggle={(e) => {
         if ((e.currentTarget as HTMLDetailsElement).open) loadNews();
       }}
     >
       <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 select-none">
-        <span className="text-sm font-medium text-slate-700">Recent news · {candidateName}</span>
-        <span className="text-slate-400 transition-transform group-open:rotate-180">⌄</span>
+        <span className="text-sm font-medium text-ink">Recent news · {candidateName}</span>
+        <span className="text-ink-faint transition-transform group-open:rotate-180">⌄</span>
       </summary>
 
-      <div className="border-t border-slate-100 p-4">
-        {loading && <p className="text-sm text-slate-400">Loading recent coverage…</p>}
+      <div className="border-t border-edge p-4">
+        {loading && <p className="text-sm text-ink-faint">Loading recent coverage…</p>}
 
-        {error && !loading && <p className="text-sm text-amber-700">{error}</p>}
+        {error && !loading && <p className="text-sm text-evidence-reported">{error}</p>}
 
         {items !== null && !loading && items.length === 0 && (
-          <p className="text-sm text-slate-400">No recent coverage found in the last week.</p>
+          <p className="text-sm text-ink-faint">No recent coverage found in the last week.</p>
         )}
 
         {items !== null && items.length > 0 && (
@@ -61,12 +61,12 @@ export function NewsAccordion({ candidateName }: Props) {
                   href={item.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-blue-700 hover:underline"
+                  className="text-sm text-blue-400 hover:underline"
                 >
                   {item.title}
                 </a>
-                {item.date && <span className="ml-1 text-xs text-slate-400">· {item.date}</span>}
-                {item.snippet && <p className="text-xs text-slate-500">{item.snippet}</p>}
+                {item.date && <span className="ml-1 text-xs text-ink-faint">· {item.date}</span>}
+                {item.snippet && <p className="text-xs text-ink-muted">{item.snippet}</p>}
               </li>
             ))}
           </ul>

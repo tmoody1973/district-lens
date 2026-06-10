@@ -168,7 +168,7 @@ function WorkspaceInner() {
   ) : null;
 
   const emptyState = isJournalist ? (
-    <div className="flex h-full flex-col overflow-y-auto bg-white">
+    <div className="flex h-full flex-col overflow-y-auto">
       <div className="shrink-0 p-4">
         <USMap
           focusedState={agentState.mapFocus}
@@ -180,13 +180,13 @@ function WorkspaceInner() {
       {agentState.stateRaces.length > 0 ? (
         <RaceTable races={agentState.stateRaces} onRaceClick={openRace} />
       ) : (
-        <p className="px-4 text-sm text-slate-400">
+        <p className="px-4 text-sm text-ink-faint">
           Click a state on the map to explore its 2026 races.
         </p>
       )}
     </div>
   ) : (
-    <div className="h-full bg-white">
+    <div className="h-full">
       <CanvasEmptyState onSubmit={submitAddress} />
     </div>
   );
