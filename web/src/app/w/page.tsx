@@ -54,23 +54,6 @@ function WorkspaceInner() {
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const kickedOff = useRef(false);
 
-  // Landing handoff: /w?addr=… starts a voter brief; /w?state=XX opens the
-  // journalist state view. Runs once.
-  useEffect(() => {
-    if (kickedOff.current) return;
-    const addr = params.get("addr");
-    const stateCode = params.get("state");
-    if (addr) {
-      kickedOff.current = true;
-      submitAddress(addr);
-    } else if (stateCode) {
-      kickedOff.current = true;
-      setPersona("journalist");
-      setMode("journalist");
-      exploreState(stateCode);
-    }
-  }, [params, submitAddress, exploreState, setMode, setPersona]);
-
   const isJournalist = agentState.mode === "journalist";
   const showBrief = displayed
     ? isJournalist
@@ -82,6 +65,34 @@ function WorkspaceInner() {
 
   // Reopened-saved-brief display slot (mirrors old `openedBrief`).
   const [reopenedSaved, setReopenedSaved] = useState<DistrictLensState | null>(null);
+
+  // Starting any new agent run must drop whatever reopened snapshot is covering
+  // the panel, or the stale brief hides the live draft.
+  const beginNewBrief = useCallback(() => {
+    setReopenedSaved(null);
+    closeArtifact();
+  }, [closeArtifact]);
+
+  const handleSubmitAddress = useCallback((addr: string) => { beginNewBrief(); submitAddress(addr); }, [beginNewBrief, submitAddress]);
+  const handleOpenRace = useCallback((raceKey: string) => { beginNewBrief(); openRace(raceKey); }, [beginNewBrief, openRace]);
+  const handleExploreState = useCallback((stateCode: string) => { beginNewBrief(); exploreState(stateCode); }, [beginNewBrief, exploreState]);
+
+  // Landing handoff: /w?addr=… starts a voter brief; /w?state=XX opens the
+  // journalist state view. Runs once.
+  useEffect(() => {
+    if (kickedOff.current) return;
+    const addr = params.get("addr");
+    const stateCode = params.get("state");
+    if (addr) {
+      kickedOff.current = true;
+      handleSubmitAddress(addr);
+    } else if (stateCode) {
+      kickedOff.current = true;
+      setPersona("journalist");
+      setMode("journalist");
+      handleExploreState(stateCode);
+    }
+  }, [params, handleSubmitAddress, handleExploreState, setMode, setPersona]);
 
   // My Ballot (signed-in voters) — refresh after auto-capture or save.
   const [savedItems, setSavedItems] = useState<SavedBallotItem[]>([]);
@@ -116,6 +127,10 @@ function WorkspaceInner() {
   useAutoSnapshot(agentState, (state) => {
     const record = recordSnapshot(state);
     if (record) setJustSaved(true);
+    // Known narrow race: if a thread opens in the same frame a build completes,
+    // both this mirror and useThreads' auto-capture may POST. /api/saved/brief
+    // appends a new snapshot doc each time (append-only by design) but upserts
+    // the one-per-race saved_districts bookmark, so My Ballot never duplicates.
     if (isSignedIn && !(isJournalist && threadsApi.activeThread)) {
       fetch("/api/saved/brief", {
         method: "POST",
@@ -175,13 +190,13 @@ function WorkspaceInner() {
       <div className="shrink-0 p-4">
         <USMap
           focusedState={agentState.mapFocus}
-          onStateClick={exploreState}
+          onStateClick={handleExploreState}
           mode={agentState.mode}
           heatmapData={agentState.stateRaces}
         />
       </div>
       {agentState.stateRaces.length > 0 ? (
-        <RaceTable races={agentState.stateRaces} onRaceClick={openRace} />
+        <RaceTable races={agentState.stateRaces} onRaceClick={handleOpenRace} />
       ) : (
         <p className="px-4 text-sm text-slate-400">
           Click a state on the map to explore its 2026 races.
@@ -190,7 +205,7 @@ function WorkspaceInner() {
     </div>
   ) : (
     <div className="h-full bg-white">
-      <CanvasEmptyState onSubmit={submitAddress} />
+      <CanvasEmptyState onSubmit={handleSubmitAddress} />
     </div>
   );
 
