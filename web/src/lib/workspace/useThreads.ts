@@ -75,30 +75,13 @@ export function useThreads({
       // this fetch was in flight.
       if (openThreadIdRef.current !== threadId) return;
       const data = await res.json();
+      // Chat restore happens in the thread-switch effect below (single owner
+      // of agent messages — C1); this only swaps the active thread.
       setActiveThread({ thread: data.thread, briefs: data.briefs ?? [] });
-      // Restore chat synchronously from the already-loaded thread doc — no
-      // second round-trip needed. We do NOT call setThreadId(): switching
-      // CopilotKit's thread flips it into explicit-threadId mode, which makes
-      // it reconnect the agent and reset coagent state (mode → voter) on every
-      // thread open. ADK is stateless and we own message history here, so the
-      // runtime threadId is not load-bearing. Restore goes through the v2
-      // agent (thread docs store {role, content}; AG-UI messages need ids).
-      const restored: Message[] = (data.thread?.messages ?? []).map(
-        (m: { role: string; content: string }) => ({
-          id: crypto.randomUUID(),
-          role: m.role as Message["role"],
-          content: m.content,
-        }),
-      );
-      agent.setMessages(restored);
-      // Seed the transcript signature so the capture effect doesn't
-      // immediately re-PATCH the content we just restored.
-      lastSavedTranscriptRef.current =
-        threadId + JSON.stringify(restored.map((m) => ({ role: m.role, content: m.content })));
     } catch {
       /* ignore */
     }
-  }, [agent]);
+  }, []);
 
   // Auto-capture: when a brief completes and a thread is open, silently file
   // it as an artifact. Dedup via autoSavedRef prevents re-saving the same
@@ -258,15 +241,32 @@ export function useThreads({
     }
   }, [onRestoreBrief]);
 
-  // On thread switch: wipe ALL state that feeds the artifact panel and chat,
-  // then restore the new thread's brief if it has one.
+  // Thread switch: the SINGLE owner of chat state (C1). Restores the new
+  // thread's conversation into the v2 agent (empty thread → empty chat) and
+  // wipes the brief state feeding the artifact panel. We do NOT call
+  // setThreadId(): switching CopilotKit's thread flips it into
+  // explicit-threadId mode, which reconnects the agent and resets coagent
+  // state on every thread open. ADK is stateless and we own message history
+  // here. Opening a thread lands on the artifact LIST (D3) — no auto-open of
+  // its latest brief.
   useEffect(() => {
-    agent.setMessages([]);
+    // Thread docs store {role, content}; AG-UI messages need ids.
+    const restored: Message[] = (activeThread?.thread.messages ?? []).map(
+      (m: { role: string; content: string }) => ({
+        id: crypto.randomUUID(),
+        role: m.role as Message["role"],
+        content: m.content,
+      }),
+    );
+    agent.setMessages(restored);
+    // Seed the transcript signature so the capture effect doesn't
+    // immediately re-PATCH the content we just restored.
+    lastSavedTranscriptRef.current = activeThread
+      ? activeThread.thread.thread_id +
+        JSON.stringify(restored.map((m) => ({ role: m.role, content: m.content })))
+      : "";
     onClearBrief();
     autoSavedRef.current = null; // reset dedup so new thread can auto-capture
-    if (activeThread && activeThread.briefs.length > 0) {
-      openSavedBrief(activeThread.briefs[0].brief_id);
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeThread?.thread.thread_id]);
 
