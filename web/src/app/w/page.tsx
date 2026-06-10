@@ -24,6 +24,7 @@ import { useAutoSnapshot } from "@/lib/workspace/useAutoSnapshot";
 import { useWorkspaceAgent } from "@/lib/workspace/useWorkspaceAgent";
 import { useThreads } from "@/lib/workspace/useThreads";
 import { deriveLabel } from "@/lib/saved-briefs/schema";
+import { pushLocalArtifacts } from "@/lib/artifacts/sync";
 import type { SavedBallotItem } from "@/lib/saved-briefs/schema";
 import type { Persona } from "@/lib/workspace/layout";
 import type { DistrictLensState } from "@/types/agent-state";
@@ -50,9 +51,11 @@ function WorkspaceInner() {
     closeArtifact,
     selectVersion,
     recordSnapshot,
+    store,
   } = useArtifacts();
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const kickedOff = useRef(false);
+  const syncedRef = useRef(false);
 
   const isJournalist = agentState.mode === "journalist";
   const showBrief = displayed
@@ -107,6 +110,18 @@ function WorkspaceInner() {
     }
   }, []);
   useEffect(() => { loadBallot(); }, [loadBallot]);
+
+  // One-shot push of locally saved artifacts when a signed-in session starts —
+  // Mongo becomes the source of truth, localStorage stays the offline cache.
+  useEffect(() => {
+    if (!isSignedIn || syncedRef.current) return;
+    syncedRef.current = true;
+    pushLocalArtifacts(store)
+      .then((result) => {
+        if (result.pushed > 0) loadBallot();
+      })
+      .catch(() => {});
+  }, [isSignedIn, store, loadBallot]);
 
   const threadsApi = useThreads({
     agentState,
