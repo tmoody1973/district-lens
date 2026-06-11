@@ -18,9 +18,17 @@ submission. Fully regenerable.
 `node capture.js` re-records all six beats from prod (~5 min), then re-run
 the two commands above.
 
+## Current cut (v5)
+
+Motion-graphics intro (intro.html, recorded by intro.js), no burned captions,
+narration on ElevenLabs **eleven_v3** (expressive; reads slow, so compose
+expects MP3s pre-compressed ~12% with `atempo=1.12` — the regen script does
+this). Total must stay under 3:00.
+
 ## Pieces
 
 - `capture.js` — Playwright, one recorded context per beat, injected cursor
+- `intro.html` + `intro.js` — animated opener, recorded headless
 - `narration/script.json` — the words; `cards.js` derives captions from it
 - `cards.js` — browser-renders title/end cards + caption strips (homebrew
   ffmpeg has no drawtext/libass, so text comes in as PNG overlays)

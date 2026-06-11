@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1920px; height: 1080px; background: #18181b; overflow: hidden;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+
+  /* Drifting blueprint grid, barely-there */
+  .grid { position: absolute; inset: -200px;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+    background-size: 96px 96px;
+    animation: drift 14s linear infinite; }
+  @keyframes drift { to { transform: translate(96px, 96px); } }
+
+  .vignette { position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.55) 100%); }
+
+  .stage { position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 38px;
+    animation: exit .7s cubic-bezier(.7,0,.84,0) 6.3s forwards; }
+  @keyframes exit { to { opacity: 0; transform: scale(1.03); } }
+
+  /* Amber pulse → rule */
+  .rule { width: 10px; height: 10px; border-radius: 6px; background: #fbbf24;
+    animation: pulse .55s cubic-bezier(.34,1.56,.64,1) .35s backwards,
+               stretch .7s cubic-bezier(.83,0,.17,1) 1.0s forwards; }
+  @keyframes pulse { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @keyframes stretch { to { width: 420px; height: 4px; } }
+
+  /* Wordmark: staggered letter rise */
+  .wordmark { display: flex; overflow: hidden; }
+  .wordmark span { color: #fff; font-size: 132px; font-weight: 700;
+    letter-spacing: .04em; display: inline-block;
+    transform: translateY(115%);
+    animation: rise .65s cubic-bezier(.22,1,.36,1) forwards; }
+  .wordmark .lens { color: #fbbf24; }
+
+  .tagline { color: #d4d4d8; font-size: 40px; font-weight: 300; letter-spacing: .02em;
+    opacity: 0; animation: fadeUp .7s cubic-bezier(.22,1,.36,1) 3.0s forwards; }
+
+  .chips { display: flex; gap: 22px; }
+  .chip { border: 2px solid #3f3f46; color: #e4e4e7; border-radius: 3px;
+    font-size: 26px; font-weight: 600; letter-spacing: .22em; padding: 13px 30px;
+    opacity: 0; transform: translateY(24px); }
+  .chip.amber { border-color: rgba(251,191,36,.55); color: #fbbf24; }
+  .chip:nth-child(1) { animation: fadeUp .55s cubic-bezier(.22,1,.36,1) 3.7s forwards; }
+  .chip:nth-child(2) { animation: fadeUp .55s cubic-bezier(.22,1,.36,1) 3.95s forwards; }
+  .chip:nth-child(3) { animation: fadeUp .55s cubic-bezier(.22,1,.36,1) 4.2s forwards; }
+
+  .footer { position: absolute; bottom: 84px; width: 100%; text-align: center;
+    color: #71717a; font-size: 27px; letter-spacing: .06em;
+    opacity: 0; animation: fadeUp .8s ease-out 4.9s forwards; }
+
+  @keyframes rise { to { transform: translateY(0); } }
+
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(24px); }
+                      to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+  <div class="grid"></div>
+  <div class="vignette"></div>
+  <div class="stage">
+    <div class="rule"></div>
+    <div class="wordmark" id="wm"></div>
+    <div class="tagline">Evidence-first congressional race intelligence</div>
+    <div class="chips">
+      <div class="chip">CITED</div>
+      <div class="chip">DATED</div>
+      <div class="chip amber">NONPARTISAN</div>
+    </div>
+  </div>
+  <div class="footer">Google Cloud Rapid Agent Hackathon&ensp;·&ensp;MongoDB track</div>
+  <script>
+    const word = "DistrictLens";
+    const wm = document.getElementById("wm");
+    [...word].forEach((ch, i) => {
+      const s = document.createElement("span");
+      s.textContent = ch;
+      if (i >= 8) s.classList.add("lens");
+      s.style.animationDelay = (1.55 + i * 0.055) + "s";
+      wm.appendChild(s);
+    });
+  </script>
+</body>
+</html>

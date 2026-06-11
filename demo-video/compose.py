@@ -92,22 +92,19 @@ def beat_video(beat: dict) -> Path:
         endcard = SEGS / "beat6_card.mp4"
         png_video(ROOT / "assets/endcard.png",
                   duration - BEAT6_FOOTAGE_SECONDS + 0.6, endcard)
-        chain, cap_inputs = caption_chain(beat_id, first_input=2)
         run([
-            "ffmpeg", "-y", "-i", str(footage), "-i", str(endcard), *cap_inputs,
-            "-filter_complex", f"[0:v][1:v]concat=n=2:v=1[base];{chain}",
-            "-map", f"[cap{len(CAPTIONS[beat_id]) - 1}]", "-t", str(duration),
+            "ffmpeg", "-y", "-i", str(footage), "-i", str(endcard),
+            "-filter_complex", "[0:v][1:v]concat=n=2:v=1[out]",
+            "-map", "[out]", "-t", str(duration),
             "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(seg),
         ])
         return seg
 
-    chain, cap_inputs = caption_chain(beat_id, first_input=1)
     run([
-        "ffmpeg", "-y", "-ss", str(offset), "-i", str(clip), *cap_inputs,
-        "-filter_complex",
-        f"[0:v]scale={SIZE},fps={FPS},"
-        f"tpad=stop_mode=clone:stop_duration={duration + 2}[base];{chain}",
-        "-map", f"[cap{len(CAPTIONS[beat_id]) - 1}]", "-t", str(duration),
+        "ffmpeg", "-y", "-ss", str(offset), "-i", str(clip),
+        "-vf", f"scale={SIZE},fps={FPS},"
+        f"tpad=stop_mode=clone:stop_duration={duration + 2}",
+        "-t", str(duration),
         "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(seg),
     ])
     return seg
@@ -122,7 +119,7 @@ def build_audio(video_durations: list[tuple[str, float]]) -> Path:
     labels: list[str] = []
     input_no = 0
     for i, (name, vdur) in enumerate(video_durations):
-        if name == "title":
+        if name in ("title", "intro"):
             filters.append(f"anullsrc=r=44100:cl=stereo,atrim=0:{vdur:.3f}[a{i}]")
         else:
             inputs += ["-i", str(ROOT / f"narration/{name}.mp3")]
@@ -143,10 +140,14 @@ def build_audio(video_durations: list[tuple[str, float]]) -> Path:
 
 def main() -> None:
     SEGS.mkdir(parents=True, exist_ok=True)
-    title = SEGS / "title.mp4"
-    png_video(ROOT / "assets/title.png", TITLE_SECONDS, title)
+    intro = SEGS / "intro.mp4"
+    run([
+        "ffmpeg", "-y", "-i", str(ROOT / "clips/intro.webm"),
+        "-vf", f"scale={SIZE},fps={FPS}", "-an",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", str(intro),
+    ])
 
-    segments: list[tuple[str, Path]] = [("title", title)]
+    segments: list[tuple[str, Path]] = [("intro", intro)]
     for beat in SCRIPT["beats"]:
         segments.append((beat["id"], beat_video(beat)))
 
