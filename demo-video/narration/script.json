@@ -1,29 +1,29 @@
 {
-  "voice_id": "nPczCjzI2devNBz1zQrb",
-  "beats": [
-    {
-      "id": "beat1_problem",
-      "text": "I'm a journalist in Milwaukee. Before I can write about a congressional race, I spend hours stitching together F E C filings, Congress dot gov records, and campaign websites. So I built DistrictLens — a nonpartisan agent that assembles the evidence in seconds, cites every claim, and refuses to do the one thing it never should."
-    },
-    {
-      "id": "beat2_brief",
-      "text": "I give it a Milwaukee address. Watch the receipt — this is a real multi-step plan running live. It resolves my district, loads the candidates, and verifies them through the MongoDB M C P server — that's the partner call, right there in the default path. Everything this agent knows lives in MongoDB: three thousand candidates, four hundred seventy races, campaign finance, voting records, and every archived source it cites. The research it does writes back to the database, so each race it studies makes the next answer faster. Seconds later: candidates, money, the incumbent's record, and issue positions — every stance carries a citation with an archived, dated copy of the source."
-    },
-    {
-      "id": "beat3_donors",
-      "text": "Now a question from my actual job: who are Gwen Moore's largest individual donors? The agent calls the live F E C A P I, deduplicates repeat contributions, and renders the answer as a card — names, employers, amounts, dates. And read the fine print: contributions provide context — they do not establish a candidate's policy positions. The guardrail ships with the data."
-    },
-    {
-      "id": "beat4_refusal",
-      "text": "And the question every civic A I gets wrong: who should I vote for? DistrictLens refuses — and offers to compare the candidates' own words on any issue I choose. That refusal is enforced in three layers: the system prompt, a before-model callback, and an after-model callback. Three layers. Not one."
-    },
-    {
-      "id": "beat5_workflow",
-      "text": "For my newsroom: one click copies the whole brief as cited markdown, one click exports it, and Share gives me a permanent link — paste it anywhere, and the agent rebuilds that race on demand."
-    },
-    {
-      "id": "beat6_close",
-      "text": "DistrictLens is built with the Gemini agent platform developer S D K — a code-first A D K agent running Gemini three point one Pro, with Gemini three point five Flash doing Google-Search-grounded evidence research. MongoDB M C P is the partner integration, it runs on Cloud Run, and civic-safety evals gate every change. Four hundred thirty-five House races today — every Senate and governor's race next. For voters, and for journalists like me. Evidence in. Decision yours."
-    }
-  ]
+ "voice_id": "8dvhVJc85Oy9HBPo11aI",
+ "beats": [
+  {
+   "id": "beat1_problem",
+   "text": "I'm a journalist in Milwaukee. Before I can write about a congressional race, I spend hours stitching together F E C filings, Congress dot gov records, and campaign websites. So I built DistrictLens \u2014 a nonpartisan agent that assembles the evidence in seconds, cites every claim, and refuses to do the one thing it never should."
+  },
+  {
+   "id": "beat2_brief",
+   "text": "I give it a Milwaukee address. Watch the receipt \u2014 this is a real multi-step plan running live. It resolves my district, loads the candidates, and verifies them through the MongoDB M C P server \u2014 that's the partner call, right there in the default path. Everything this agent knows lives in MongoDB: three thousand candidates, four hundred seventy races, campaign finance, voting records, and every archived source it cites. The research it does writes back to the database, so each race it studies makes the next answer faster. Seconds later: candidates, money, the incumbent's record, and issue positions \u2014 every stance carries a citation with an archived, dated copy of the source."
+  },
+  {
+   "id": "beat3_donors",
+   "text": "Now a question from my actual job: who are Gwen Moore's largest individual donors? The agent calls the live F E C A P I, deduplicates repeat contributions, and renders the answer as a card \u2014 names, employers, amounts, dates. And read the fine print: contributions provide context \u2014 they do not establish a candidate's policy positions. The guardrail ships with the data."
+  },
+  {
+   "id": "beat4_refusal",
+   "text": "And the question every civic A I gets wrong: who should I vote for? DistrictLens refuses \u2014 and offers to compare the candidates' own words on any issue I choose. That refusal is enforced in three layers: the system prompt, a before-model callback, and an after-model callback. Three layers. Not one."
+  },
+  {
+   "id": "beat5_workflow",
+   "text": "For my newsroom: one click copies the whole brief as cited markdown, one click exports it, and Share gives me a permanent link \u2014 paste it anywhere, and the agent rebuilds that race on demand."
+  },
+  {
+   "id": "beat6_close",
+   "text": "DistrictLens is built with the Gemini agent platform developer S D K \u2014 a code-first A D K agent running Gemini three point one Pro, with Gemini three point five Flash doing Google-Search-grounded evidence research. MongoDB M C P is the partner integration, it runs on Cloud Run, and civic-safety evals gate every change. Four hundred thirty-five House races today \u2014 every Senate and governor's race next. For voters, and for journalists like me. Evidence in. Decision yours."
+  }
+ ]
 }
