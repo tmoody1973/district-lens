@@ -51,10 +51,25 @@ export function buildPositionPrompt(candidateName: string, issue: string): strin
 /** FEC stores names as "Last, First Middle"; web search matches "First Last" far better. */
 export function normalizeCandidateName(candidateName: string): string {
   if (candidateName.includes(",")) {
-    const [last, first] = candidateName.split(",", 2);
-    return `${first.trim()} ${last.trim()}`.trim();
+    // FEC names can carry doubled commas ("Brink,, Bridget") — drop empties.
+    const [last, ...rest] = candidateName.split(",").map((p) => p.trim()).filter(Boolean);
+    return `${rest.join(" ")} ${last ?? ""}`.trim();
   }
   return candidateName.trim();
+}
+
+/** Keep only sources whose title/snippet mention the candidate's surname —
+ * Perplexity returns every page it browsed, including generic midterms
+ * roundups that have nothing to do with the candidate. */
+export function filterRelevantSources<
+  T extends { title?: string; snippet?: string },
+>(sources: T[], candidateName: string): T[] {
+  const natural = normalizeCandidateName(candidateName);
+  const surname = (natural.split(" ").pop() ?? "").toLowerCase();
+  if (!surname) return sources;
+  return sources.filter((s) =>
+    `${s.title ?? ""} ${s.snippet ?? ""}`.toLowerCase().includes(surname),
+  );
 }
 
 export function buildNewsPrompt(candidateName: string): string {

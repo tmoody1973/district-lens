@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import os
 from typing import Any
 
@@ -124,11 +125,16 @@ _FINANCE_PROJECTION = {
 }
 
 
+def _display_name(name: str) -> str:
+    """Collapse FEC doubled commas ("BRINK,, BRIDGET") for display."""
+    return re.sub(r",\s*,+", ",", name or "")
+
+
 def _to_candidate_card(candidate: dict, race_key: str) -> dict[str, Any]:
     """Build the camelCase CandidateCard shape the frontend canvas reads."""
     card = {
         "candidateId": candidate["candidate_id"],
-        "name": candidate["name"],
+        "name": _display_name(candidate["name"]),
         "party": candidate["party"],
         "status": candidate.get("incumbent_challenge_status", "unknown"),
         "photoUrl": _bioguide_photo_url(candidate.get("bioguide_id", "")),

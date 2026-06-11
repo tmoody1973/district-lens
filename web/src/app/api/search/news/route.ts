@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchPerplexity, buildNewsPrompt } from "@/lib/perplexity";
+import { searchPerplexity, buildNewsPrompt, filterRelevantSources } from "@/lib/perplexity";
 import { getDb } from "@/lib/mongodb";
 
 const NEWS_TTL_MS = 24 * 60 * 60 * 1000;
@@ -26,7 +26,10 @@ export async function POST(req: NextRequest) {
     if (cached) {
       return NextResponse.json({
         answer: cached.answer as string,
-        sources: cached.sources,
+        sources: filterRelevantSources(
+          (cached.sources as { title?: string; snippet?: string }[]) ?? [],
+          candidateName,
+        ),
         relatedQuestions: (cached.related_questions as string[]) ?? [],
         cached: true,
       });
@@ -36,6 +39,9 @@ export async function POST(req: NextRequest) {
       recency: "week",
       searchContextSize: "medium",
     });
+    result.sources = /no recent campaign coverage found/i.test(result.answer)
+      ? []
+      : filterRelevantSources(result.sources, candidateName);
 
     const expiresAt = new Date(now.getTime() + NEWS_TTL_MS);
     await db.collection("evidence_cache").replaceOne(
