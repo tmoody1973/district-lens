@@ -39,6 +39,11 @@ Data sources: FEC, Congress.gov, candidate campaign materials, and archived publ
 #GoogleCloud #Gemini #MongoDB #MCP #AIAgents #CivicTech #Elections2026 #Hackathon
 ```
 
+## Thumbnail
+
+`out/youtube-thumbnail.png` (1280×720) — regenerate with:
+`node -e` snippet in git history, or edit `thumbnail.html` and re-screenshot.
+
 ## Upload settings suggestions
 
 - Category: Science & Technology

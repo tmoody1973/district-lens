@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { width: 1280px; height: 720px; background: #131316; overflow: hidden;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; position: relative; }
+
+  .grid { position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.045) 1px, transparent 1px);
+    background-size: 72px 72px; }
+  .glow { position: absolute; width: 900px; height: 900px; right: -260px; top: -200px;
+    background: radial-gradient(circle, rgba(251,191,36,0.16) 0%, transparent 60%); }
+  .vignette { position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 30% 45%, transparent 40%, rgba(0,0,0,0.5) 100%); }
+
+  /* Real app screenshot, tilted card on the right */
+  .shot { position: absolute; right: -40px; top: 56px; width: 700px;
+    border: 3px solid #3f3f46; border-radius: 10px; overflow: hidden;
+    transform: rotate(4deg);
+    box-shadow: 0 40px 90px rgba(0,0,0,0.75), 0 0 0 1px rgba(251,191,36,0.25); }
+  .shot img { display: block; width: 2300px; margin-left: -160px; margin-top: -10px; }
+
+  .content { position: absolute; left: 56px; top: 60px; width: 640px; z-index: 2; }
+  .brand { display: flex; align-items: center; gap: 14px; margin-bottom: 34px; }
+  .brand .mark { width: 16px; height: 16px; background: #fbbf24; border-radius: 3px; }
+  .brand .name { color: #fff; font-size: 34px; font-weight: 700; letter-spacing: -0.5px; }
+  .brand .name b { color: #fbbf24; font-weight: 700; }
+
+  h1 { color: #fff; font-size: 86px; font-weight: 800; line-height: 1.02;
+    letter-spacing: -3px; text-shadow: 0 6px 30px rgba(0,0,0,0.8); }
+  h1 .amber { color: #fbbf24; }
+
+  .sub { margin-top: 26px; color: #d4d4d8; font-size: 31px; font-weight: 500; }
+
+  .chips { display: flex; gap: 14px; margin-top: 30px; }
+  .chip { border: 2.5px solid #52525b; color: #e4e4e7; border-radius: 6px;
+    font-size: 21px; font-weight: 700; letter-spacing: .14em; padding: 11px 20px;
+    background: rgba(24,24,27,0.85); }
+  .chip.amber { border-color: #fbbf24; color: #18181b; background: #fbbf24; }
+
+  .footer { position: absolute; left: 56px; bottom: 44px; display: flex;
+    align-items: center; gap: 16px; z-index: 2; }
+  .footer .tag { color: #a1a1aa; font-size: 23px; font-weight: 600; letter-spacing: .04em; }
+</style>
+</head>
+<body>
+  <div class="grid"></div>
+  <div class="glow"></div>
+  <div class="shot"><img src="assets/donor_frame.png"></div>
+  <div class="vignette"></div>
+
+  <div class="content">
+    <div class="brand">
+      <div class="mark"></div>
+      <div class="name">District<b>Lens</b></div>
+    </div>
+    <h1>The AI that <span class="amber">refuses</span> to tell you how to vote</h1>
+    <div class="sub">Evidence-first briefs for every 2026 congressional race</div>
+    <div class="chips">
+      <div class="chip">GEMINI 3</div>
+      <div class="chip">MONGODB MCP</div>
+      <div class="chip amber">NONPARTISAN</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="tag">Google Cloud Rapid Agent Hackathon</div>
+  </div>
+</body>
+</html>
