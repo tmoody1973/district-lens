@@ -1,7 +1,3 @@
-# Copyright 2026 Tarik Moody
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# see LICENSE at repo root.
 #
 # Multi-runtime image: Python 3.12 (ADK agent) + Node.js 22 LTS (MongoDB MCP server).
 # Node.js is required to run `npx mongodb-mcp-server` as a stdio child process

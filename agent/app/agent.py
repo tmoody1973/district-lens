@@ -1,10 +1,3 @@
-# Copyright 2026 Tarik Moody
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
 #
 # DistrictLens root agent.
 # Civic-safety system prompt: app/prompts/civic_safety.md (Layer 1).
