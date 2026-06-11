@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 """Composes the final demo MP4 from per-beat clips + ElevenLabs narration.
 
-Homebrew ffmpeg here has no drawtext/libass, so all text (title card, end
-card, captions) comes in as browser-rendered PNGs (cards.js) burned with the
-core `overlay` filter using enable=between(t,..) windows.
+Audio lesson learned (v3): the first composer gave every segment its own AAC
+track (stereo silence cards, mono narration beats) and concatenated them —
+the mid-stream channel-layout flips plus seven sets of AAC priming gaps
+produced audible background stutter. Now segments are VIDEO-ONLY; the audio
+is assembled as ONE continuous track (everything aformat-normalized to
+stereo/44.1k, each piece padded/trimmed to its segment's exact video
+duration) and encoded once, then muxed at the end.
 
-Re-narration swap for Tarik: replace MP3s in narration/, re-run
-`python3 compose.py` (durations are re-probed) — no re-capture needed.
+Text (cards/captions) is browser-rendered PNG burned via core `overlay`
+(this ffmpeg build has no drawtext/libass).
+
+Re-narration swap: replace MP3s in narration/, run
+`node cards.js && python3 compose.py`.
 """
 
 from __future__ import annotations
@@ -42,38 +49,34 @@ def probe_duration(path: Path) -> float:
     return float(out.strip())
 
 
-def png_segment(png: Path, seconds: float, out_path: Path) -> None:
-    """A silent video segment from a still PNG."""
+def png_video(png: Path, seconds: float, out_path: Path) -> None:
     run([
         "ffmpeg", "-y", "-loop", "1", "-t", str(seconds), "-i", str(png),
-        "-f", "lavfi", "-i", f"anullsrc=r=44100:cl=stereo:d={seconds}",
-        "-vf", f"scale={SIZE},fps={FPS}",
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
-        str(out_path),
+        "-vf", f"scale={SIZE},fps={FPS}", "-an",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out_path),
     ])
 
 
-def caption_filter(beat_id: str, base: str = "[base]") -> tuple[str, list[str]]:
-    """Build the overlay chain for a beat's caption PNGs."""
+def caption_chain(beat_id: str, first_input: int) -> tuple[str, list[str]]:
+    """Overlay chain for a beat's caption PNGs starting at input index."""
     inputs: list[str] = []
     chain = ""
-    current = base
+    current = "[base]"
     for i, cap in enumerate(CAPTIONS[beat_id]):
         inputs += ["-i", cap["file"]]
         nxt = f"[cap{i}]"
-        # caption inputs start at index 2 (0=video, 1=audio)
         chain += (
-            f"{current}[{i + 2}:v]overlay=0:0:"
+            f"{current}[{first_input + i}:v]overlay=0:0:"
             f"enable='between(t,{cap['start']},{cap['end']})'{nxt};"
         )
         current = nxt
     return chain.rstrip(";"), inputs
 
 
-def beat_segment(beat: dict) -> Path:
+def beat_video(beat: dict) -> Path:
+    """Video-only segment: trimmed, freeze-padded to narration length, captioned."""
     beat_id = beat["id"]
-    audio = ROOT / f"narration/{beat_id}.mp3"
-    duration = probe_duration(audio)
+    duration = probe_duration(ROOT / f"narration/{beat_id}.mp3")
     offset = OFFSETS.get(beat_id, 0.0)
     clip = ROOT / f"clips/{beat_id}.webm"
     seg = SEGS / f"{beat_id}.mp4"
@@ -83,51 +86,86 @@ def beat_segment(beat: dict) -> Path:
         run([
             "ffmpeg", "-y", "-ss", str(offset), "-i", str(clip),
             "-t", str(BEAT6_FOOTAGE_SECONDS),
-            "-vf", f"scale={SIZE},fps={FPS}",
-            "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(footage),
+            "-vf", f"scale={SIZE},fps={FPS}", "-an",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", str(footage),
         ])
         endcard = SEGS / "beat6_card.mp4"
-        png_segment(ROOT / "assets/endcard.png",
-                    duration - BEAT6_FOOTAGE_SECONDS + 0.6, endcard)
-        chain, cap_inputs = caption_filter(beat_id)
+        png_video(ROOT / "assets/endcard.png",
+                  duration - BEAT6_FOOTAGE_SECONDS + 0.6, endcard)
+        chain, cap_inputs = caption_chain(beat_id, first_input=2)
         run([
             "ffmpeg", "-y", "-i", str(footage), "-i", str(endcard), *cap_inputs,
-            "-i", str(audio),
-            "-filter_complex",
-            f"[0:v][1:v]concat=n=2:v=1[base];" + chain,
-            "-map", f"[cap{len(CAPTIONS[beat_id]) - 1}]",
-            "-map", f"{len(cap_inputs) // 2 + 2}:a",
-            "-t", str(duration),
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(seg),
+            "-filter_complex", f"[0:v][1:v]concat=n=2:v=1[base];{chain}",
+            "-map", f"[cap{len(CAPTIONS[beat_id]) - 1}]", "-t", str(duration),
+            "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(seg),
         ])
         return seg
 
-    chain, cap_inputs = caption_filter(beat_id)
+    chain, cap_inputs = caption_chain(beat_id, first_input=1)
     run([
-        "ffmpeg", "-y", "-ss", str(offset), "-i", str(clip), "-i", str(audio),
-        *cap_inputs,
+        "ffmpeg", "-y", "-ss", str(offset), "-i", str(clip), *cap_inputs,
         "-filter_complex",
         f"[0:v]scale={SIZE},fps={FPS},"
-        f"tpad=stop_mode=clone:stop_duration={duration + 2}[base];" + chain,
-        "-map", f"[cap{len(CAPTIONS[beat_id]) - 1}]", "-map", "1:a",
-        "-t", str(duration),
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(seg),
+        f"tpad=stop_mode=clone:stop_duration={duration + 2}[base];{chain}",
+        "-map", f"[cap{len(CAPTIONS[beat_id]) - 1}]", "-t", str(duration),
+        "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(seg),
     ])
     return seg
+
+
+def build_audio(video_durations: list[tuple[str, float]]) -> Path:
+    """ONE continuous stereo/44.1k track: silence under cards, narration under
+    beats, every piece trimmed/padded to its segment's exact video length."""
+    audio = SEGS / "narration_full.m4a"
+    inputs: list[str] = []
+    filters: list[str] = []
+    labels: list[str] = []
+    input_no = 0
+    for i, (name, vdur) in enumerate(video_durations):
+        if name == "title":
+            filters.append(f"anullsrc=r=44100:cl=stereo,atrim=0:{vdur:.3f}[a{i}]")
+        else:
+            inputs += ["-i", str(ROOT / f"narration/{name}.mp3")]
+            filters.append(
+                f"[{input_no}:a]aformat=sample_rates=44100:channel_layouts=stereo,"
+                f"apad,atrim=0:{vdur:.3f}[a{i}]"
+            )
+            input_no += 1
+        labels.append(f"[a{i}]")
+    graph = ";".join(filters) + ";" + "".join(labels) + \
+        f"concat=n={len(labels)}:v=0:a=1[out]"
+    run([
+        "ffmpeg", "-y", *inputs, "-filter_complex", graph,
+        "-map", "[out]", "-c:a", "aac", "-b:a", "160k", str(audio),
+    ])
+    return audio
 
 
 def main() -> None:
     SEGS.mkdir(parents=True, exist_ok=True)
     title = SEGS / "title.mp4"
-    png_segment(ROOT / "assets/title.png", TITLE_SECONDS, title)
+    png_video(ROOT / "assets/title.png", TITLE_SECONDS, title)
 
-    segments = [title] + [beat_segment(b) for b in SCRIPT["beats"]]
+    segments: list[tuple[str, Path]] = [("title", title)]
+    for beat in SCRIPT["beats"]:
+        segments.append((beat["id"], beat_video(beat)))
+
+    # Concat video-only segments (identical encode params → stream copy).
     concat_list = SEGS / "list.txt"
-    concat_list.write_text("".join(f"file '{s.resolve()}'\n" for s in segments))
-    final = OUT / "districtlens-demo.mp4"
+    concat_list.write_text("".join(f"file '{p.resolve()}'\n" for _, p in segments))
+    video_only = SEGS / "video_full.mp4"
     run([
         "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_list),
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+        "-c", "copy", str(video_only),
+    ])
+
+    durations = [(name, probe_duration(path)) for name, path in segments]
+    audio = build_audio(durations)
+
+    final = OUT / "districtlens-demo.mp4"
+    run([
+        "ffmpeg", "-y", "-i", str(video_only), "-i", str(audio),
+        "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "copy",
         "-movflags", "+faststart", str(final),
     ])
     print("FINAL:", final)
