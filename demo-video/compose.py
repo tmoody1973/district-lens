@@ -32,6 +32,9 @@ OUT = ROOT / "out"
 SEGS = OUT / "segments"
 SCRIPT = json.loads((ROOT / "narration/script.json").read_text())
 OFFSETS = json.loads((ROOT / "clips/offsets.json").read_text())
+
+# Air before a beat's narration starts (video lengthens, voice waits).
+LEAD_IN = {"beat1_problem": 1.2}
 CAPTIONS = json.loads((ROOT / "assets/captions.json").read_text())
 
 
@@ -76,7 +79,7 @@ def caption_chain(beat_id: str, first_input: int) -> tuple[str, list[str]]:
 def beat_video(beat: dict) -> Path:
     """Video-only segment: trimmed, freeze-padded to narration length, captioned."""
     beat_id = beat["id"]
-    duration = probe_duration(ROOT / f"narration/{beat_id}.mp3")
+    duration = probe_duration(ROOT / f"narration/{beat_id}.mp3") + LEAD_IN.get(beat_id, 0)
     offset = OFFSETS.get(beat_id, 0.0)
     clip = ROOT / f"clips/{beat_id}.webm"
     seg = SEGS / f"{beat_id}.mp4"
@@ -123,9 +126,10 @@ def build_audio(video_durations: list[tuple[str, float]]) -> Path:
             filters.append(f"anullsrc=r=44100:cl=stereo,atrim=0:{vdur:.3f}[a{i}]")
         else:
             inputs += ["-i", str(ROOT / f"narration/{name}.mp3")]
+            delay = int(LEAD_IN.get(name, 0) * 1000)
             filters.append(
                 f"[{input_no}:a]aformat=sample_rates=44100:channel_layouts=stereo,"
-                f"apad,atrim=0:{vdur:.3f}[a{i}]"
+                f"adelay={delay}|{delay},apad,atrim=0:{vdur:.3f}[a{i}]"
             )
             input_no += 1
         labels.append(f"[a{i}]")
@@ -157,7 +161,7 @@ def main() -> None:
     video_only = SEGS / "video_full.mp4"
     run([
         "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_list),
-        "-c", "copy", str(video_only),
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(FPS), str(video_only),
     ])
 
     durations = [(name, probe_duration(path)) for name, path in segments]
