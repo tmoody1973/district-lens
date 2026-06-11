@@ -1,144 +1,100 @@
-# DistrictLens — Three-Minute Demo Script
+# DistrictLens — Three-Minute Demo Script (voter cut)
 
-**Hackathon track:** Google Cloud Rapid Agent Hackathon — MongoDB partner track  
-**Scenario:** Voter researching the 2026 Wisconsin 4th Congressional District (WI-04)  
-**Format:** Live agent session with screen share. No slides or architecture diagrams.
+**Hackathon track:** Google Cloud Rapid Agent Hackathon — MongoDB partner track
+**Narrator:** a Milwaukee voter (first person)
+**Format:** live prod footage, captioned, voiceover. The automated pipeline in
+`demo-video/` produces this cut end-to-end; this document is the canonical
+script it reads from (`demo-video/narration/script.json`).
 
----
-
-## Setup (before recording)
-
-1. Open the DistrictLens web app at the hosted Cloud Run URL
-2. Open a second tab with the ADK trace viewer or Cloud Logging to show tool calls
-3. Have this address ready to paste: `2233 N Sherman Ave, Madison WI 53704`
-4. Confirm MongoDB MCP server is running (check agent startup logs show `mongodb-mcp-server` started)
+All six beats were verified working in production before capture
+(web 00075-rpn / agent 00042-9l2, 2026-06-11).
 
 ---
 
-## Beat 1 — Problem (0:00–0:20)
+## Beat 1 — Problem (≈0:04–0:25) · *Impact*
 
-**Narration:**
+**Visual:** landing page, cursor settles on the address box.
 
-> "It's a midterm year. There are 435 House races. The public data exists — on FEC, Congress.gov, and campaign websites — but it's scattered across a dozen sources and takes hours to assemble. DistrictLens is an evidence-grounded agent that does it in seconds."
+> "I'm a voter in Milwaukee. Every election, the information I need is
+> technically public — FEC filings, Congress.gov, campaign websites — but it's
+> scattered across a dozen sites, and I have a life. DistrictLens is a
+> nonpartisan agent that assembles the evidence in seconds, cites every claim,
+> and refuses to do the one thing it never should."
 
-**On screen:** Show the empty DistrictLens interface. No input yet.
+## Beat 2 — The brief builds (≈0:25–1:09) · *Tech + Design*
 
----
+**Visual:** "Milwaukee, WI 53202" typed live → receipt runs (District resolved
+→ Candidates → **Verified via MongoDB MCP** → Finance → Legislation →
+Positions → Archived → Complete) → scroll through the finished brief.
 
-## Beat 2 — Goal (0:20–0:45)
+> "I give it my address. Watch the receipt — this is a real multi-step plan
+> running live. It resolves my district, loads the candidates, and verifies
+> them through the MongoDB MCP server — that's the partner call, right there
+> in the default path. Everything this agent knows lives in MongoDB: three
+> thousand candidates, four hundred seventy races, campaign finance, voting
+> records, and every archived source it cites. The research it does writes
+> back to the database, so each race it studies makes the next answer faster.
+> Seconds later: candidates, money, the incumbent's record, and issue
+> positions — every stance carries a citation with an archived, dated copy of
+> the source."
 
-**Type into the chat:**
+## Beat 3 — Follow the money (≈1:09–1:35) · *Tech + Idea*
 
-> "I live at 2233 N Sherman Ave, Madison WI. Who is running in my congressional district in 2026, and how much has each candidate raised?"
+**Visual:** donor question typed in chat → tool trace → DonorContributionsCard
+renders; hold on the guardrail footer.
 
-**Narration:**
+> "Now the question I always wondered about: who actually funds these
+> campaigns? I ask for Gwen Moore's largest individual donors. The agent calls
+> the live FEC API, merges repeat contributions, and renders the answer as a
+> card — names, employers, amounts, dates. And read the fine print:
+> contributions provide context — they do not establish a candidate's policy
+> positions. The guardrail ships with the data."
 
-> "A real voter goal — address in, race brief out. The agent doesn't guess. It calls tools."
+## Beat 4 — The refusal (≈1:35–1:56) · *Quality of the Idea*
 
-**On screen:** User message appears. Agent starts processing.
+**Visual:** "Who should I vote for in this race?" → the agent declines and
+offers cited comparison.
 
----
+> "And the question every civic AI gets wrong: who should I vote for?
+> DistrictLens refuses — and offers to compare the candidates' own words on
+> any issue I choose. That refusal is enforced in three layers: the system
+> prompt, a before-model callback, and an after-model callback. Three layers.
+> Not one."
 
-## Beat 3 — Plan and Context Selection (0:45–1:15)
+## Beat 5 — Take it with you (≈1:56–2:07) · *Design + Impact*
 
-**Narration:**
+**Visual:** Copy brief → "Copied ✓", Share → "Link copied ✓", paste
+`/w?race=2026-H-WI-04` — the race rebuilds from the bare URL.
 
-> "Watch the tool trace. The agent first calls `lookup_district` — a Geocod.io API call that resolves the address to the WI-04 race. Then it calls `get_race_finance_brief`, which queries MongoDB for every candidate in that race and their FEC finance totals. No model memory. No guessing."
+> "When I'm done, one click copies the whole brief as cited markdown, one
+> click exports it, and Share gives me a permanent link — I can send my race
+> to anyone in my district, and the agent rebuilds it on demand."
 
-**On screen:** Show the tool call trace. Key things to point out:
-- `lookup_district("2233 N Sherman Ave, Madison WI")` → returns `2026-H-WI-04`
-- `get_race_finance_brief("2026-H-WI-04")` → returns candidates + finance data
+## Beat 6 — Close (≈2:07–2:36) · *Impact + platform vocabulary*
 
-**Expected agent output includes:**
-- Race key: `2026-H-WI-04`
-- Candidate names, parties, incumbent/challenger status
-- Raised amounts in dollars
-- Source attribution: "FEC bulk data (fec.gov)"
+**Visual:** 6s of the finished brief, then the end card.
 
----
-
-## Beat 4 — Partner MCP Action (1:15–1:55)
-
-**Type into the chat:**
-
-> "Use the database directly to count how many 2026 races you have data for, and then show me the incumbent's recently sponsored bills."
-
-**Narration:**
-
-> "This is the MongoDB MCP integration. The agent spawns `mongodb-mcp-server` as a subprocess and calls `mongodbcount` on the races collection — you can see the exact MCP tool call in the trace. Then it calls `get_incumbent_legislation` to retrieve Congress.gov-sourced bill sponsorships from the 119th Congress."
-
-**On screen:** Show the MCP tool call in the trace:
-- `mongodbcount({ collection: "races" })` → returns the count (e.g. 503)
-- `get_incumbent_legislation("2026-H-WI-04")` → returns bill list with IDs and dates
-
-**Point out:** MongoDB MCP is the partner integration. The tool call is visible. The data in the response came from the database, not from the model's training data.
-
----
-
-## Beat 5 — Approval Checkpoint / Guardrail (1:55–2:25)
-
-**Type into the chat:**
-
-> "Based on everything you've found, who should I vote for?"
-
-**Narration:**
-
-> "Every civic AI product makes the same mistake — it either tells you who to vote for, or hedges with 'I can't say.' DistrictLens does something different. It refuses the recommendation and offers to compare the evidence on any specific issue you care about. The guardrail is layered: system prompt, before-model callback, and after-model callback. Three layers. Not one."
-
-**On screen:** Agent refuses the vote recommendation in plain language and offers to compare specific issues.
-
-**Expected agent response includes:**
-- Explicit refusal to recommend a candidate
-- Offer to compare evidence on a user-chosen issue
-- No partisan framing
+> "DistrictLens is built with the Gemini agent platform developer SDK — a
+> code-first ADK agent running Gemini 3.1 Pro, with Gemini 3.5 Flash doing
+> Google-Search-grounded evidence research. MongoDB MCP is the partner
+> integration, it runs on Cloud Run, and civic-safety evals gate every change.
+> Four hundred thirty-five House races today — every Senate and governor's
+> race next. For voters like me, and for the local journalists who cover these
+> races. Evidence in. Decision yours."
 
 ---
 
-## Beat 6 — Eval Evidence (2:25–2:45)
+## Judging criteria coverage
 
-**Switch to terminal or second tab. Run:**
-
-```bash
-agents-cli eval run \
-  --evalset tests/eval/evalsets/tier1_civic_safety.evalset.json \
-  --config tests/eval/configs/civic_safety_config.json
-```
-
-**Narration:**
-
-> "This isn't a one-off demo. We have five eval sets covering civic safety, the happy path, MCP evidence, and tool failure. The civic safety set runs on every PR and must pass at 95%. Here it is running live."
-
-**On screen:** Show `agents-cli eval run` output with pass/fail results.
-
----
-
-## Beat 7 — Impact (2:45–3:00)
-
-**Narration:**
-
-> "DistrictLens turns 435 fragmented races into structured, cited, nonpartisan briefs — built on Gemini, deployed on Google Cloud, and powered by MongoDB as the civic memory layer. The same agent that just answered a voter's question can generate a journalist's finance brief or a classroom fact sheet. Evidence in, decision yours."
-
-**On screen:** Final agent response visible. Race brief with candidates, finance, and legislation visible.
-
----
-
-## Fallback scenarios
-
-| If... | Then... |
+| Criterion | Where it lands |
 |---|---|
-| Geocod.io times out on the address | Type the race key directly: `"Show me the WI-04 race"` and call `get_race_candidates("2026-H-WI-04")` |
-| MongoDB MCP doesn't start | Point to the tool call in the existing trace log from a previous run |
-| `agents-cli eval run` is slow | Show the pre-recorded eval output screenshot in `docs/eval-screenshot.png` |
-| Agent gives unexpected output | Say "let me show you the eval that catches this" and run `tier1_civic_safety` |
+| Technological Implementation | Beat 2 (MCP in the default path, MongoDB as the agent's memory), Beat 3 (live FEC + generative card), Beat 6 (Gemini 3.1/3.5 + ADK named) |
+| Design | Beat 2 (live receipt, archived citations), Beat 5 (copy/export/share, permalinks) |
+| Potential Impact | Beats 1 and 6 (435 races; voters + local journalists) |
+| Quality of the Idea | Beat 4 (three-layer refusal), Beat 3 (guardrail on the data itself) |
 
----
+## Regenerating the video
 
-## Key phrases to use (and avoid)
-
-| Say this | Not this |
-|---|---|
-| "Evidence-grounded" | "Smart" |
-| "MongoDB MCP tool call visible in the trace" | "It uses a database" |
-| "Refuses the recommendation" | "Can't answer that" |
-| "Cited from FEC / Congress.gov" | "Based on public data" |
-| "Three-layer civic safety architecture" | "It has guardrails" |
+See `demo-video/README.md` — swap narration MP3s or edit
+`demo-video/narration/script.json`, then `node cards.js && python3 compose.py`.
+Re-capture visuals with `node capture.js` only if the app changes.
