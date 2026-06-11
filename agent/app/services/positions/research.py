@@ -166,14 +166,22 @@ def _broad_prompt(candidate: dict[str, Any]) -> str:
     seat = _spelled_seat(state, district, office)
     ballotpedia_url = candidate.get("ballotpedia_url")
     anchor = f" Their Ballotpedia profile is {ballotpedia_url}." if ballotpedia_url else ""
+    # Open-ended issue list on purpose: an enumerated menu acts as a ceiling
+    # (the 7-issue version yielded 6-8 positions; this form yields 13-17 in the
+    # 2026-06-11 bake-off — see docs/handoffs, prompt bench).
     return (
         f"Research {name}, a {CYCLE} candidate for {seat}.{anchor} "
-        "Summarize their stance on the issues (health care, economy and taxes, "
-        "education, public safety, immigration, foreign policy, housing). Draw on "
-        "their campaign website, Ballotpedia Candidate Connection, Vote411 and League "
-        "of Women Voters questionnaires, local news, interviews, and public social "
-        "media. For each issue state the position and cite the source. Only include "
-        "positions supported by public evidence; say so if none exists."
+        "Document their stance on EVERY issue where a position is publicly "
+        "evidenced — including but not limited to: health care, economy, taxes, "
+        "jobs, education, public safety and crime, immigration, foreign policy "
+        "(including Ukraine and Israel), housing, abortion and reproductive "
+        "rights, guns, climate and energy, veterans, Social Security and "
+        "Medicare, marijuana, technology and AI, and election integrity. Do not "
+        "stop at the first few — be exhaustive and cover every issue their "
+        "campaign site, questionnaires (Ballotpedia Candidate Connection, "
+        "Vote411), interviews, local news, or voting record address. For each "
+        "issue state the position and cite the source. Only include positions "
+        "supported by public evidence; note when an issue has none."
     )
 
 
