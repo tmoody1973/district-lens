@@ -87,13 +87,16 @@ export async function searchGeminiNews(candidateName: string): Promise<NewsResul
   const answer = cand?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
   const chunks = cand?.groundingMetadata?.groundingChunks ?? [];
 
+  // Grounding URIs are Vertex redirect URLs — keep all of them (the agent-side
+  // resolver follows redirects, but the web service just surfaces the links).
+  // Don't run filterRelevantSources here since redirect URLs have no readable
+  // domain text to match against the candidate surname; rely on Gemini's
+  // own grounding to select relevant sources.
   const rawSources: NewsSource[] = chunks
     .map((c) => ({ title: c.web?.title ?? "", url: c.web?.uri ?? "", snippet: "", date: null }))
     .filter((s) => s.url);
 
-  const sources = NO_COVERAGE_RE.test(answer)
-    ? []
-    : filterRelevantSources(rawSources, candidateName);
+  const sources = NO_COVERAGE_RE.test(answer) ? [] : rawSources;
 
   return { answer, sources, relatedQuestions: [] };
 }
