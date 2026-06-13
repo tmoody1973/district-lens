@@ -1,13 +1,11 @@
 /**
- * Recent-news search powered by Gemini 2.0 Flash with Google Search grounding.
- * Uses @ai-sdk/google-vertex (already a direct dependency) — no google-auth-library
- * import needed at runtime since the AI SDK handles Vertex auth internally.
+ * Recent-news search powered by Gemini 3.5 Flash with Google Search grounding.
+ * Uses the Vertex AI REST API directly (same approach as the Python agent service)
+ * to avoid AI SDK model-name resolution quirks.
  *
- * Replaces Perplexity so no competing AI service is called at runtime.
+ * Replaces Perplexity — no competing AI service is called at runtime.
  */
 
-import { createVertex } from "@ai-sdk/google-vertex";
-import { generateText } from "ai";
 import { normalizeCandidateName, filterRelevantSources } from "@/lib/perplexity";
 
 export interface NewsSource {
@@ -24,8 +22,9 @@ export interface NewsResult {
 }
 
 const NO_COVERAGE_RE = /no recent (campaign )?coverage found/i;
+const GROUNDING_MODEL = "gemini-3.5-flash";
 
-function buildGeminiNewsPrompt(candidateName: string): string {
+function buildPrompt(candidateName: string): string {
   const name = normalizeCandidateName(candidateName);
   return (
     `Search for recent news coverage of ${name}, a 2026 U.S. congressional candidate, ` +
@@ -34,40 +33,67 @@ function buildGeminiNewsPrompt(candidateName: string): string {
     `polling, endorsements, fundraising, or controversies. ` +
     `Ignore results that merely match the name (films, businesses, other people). ` +
     `If there is no election-related coverage in the last 7 days, reply exactly ` +
-    `"No recent campaign coverage found." Cite each claim with sources.`
+    `"No recent campaign coverage found." Cite each claim.`
   );
+}
+
+async function getAccessToken(): Promise<string> {
+  // Cloud Run provides credentials via the metadata server (no SDK needed).
+  const res = await fetch(
+    "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+    { headers: { "Metadata-Flavor": "Google" } }
+  );
+  if (!res.ok) throw new Error(`Metadata server ${res.status}`);
+  const { access_token } = (await res.json()) as { access_token: string };
+  return access_token;
 }
 
 export async function searchGeminiNews(candidateName: string): Promise<NewsResult> {
   const project = process.env.GOOGLE_CLOUD_PROJECT;
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? "us-central1";
   if (!project) throw new Error("GOOGLE_CLOUD_PROJECT not set");
+  const location = "us-central1"; // grounding only available at a regional endpoint
 
-  // gemini-3.5-flash is the project-approved grounding model (same as agent);
-  // us-central1 required — "global" location doesn't serve this model via Vertex.
-  const vertex = createVertex({ project, location: "us-central1" });
-  const model = vertex("gemini-3.5-flash");
+  const token = await getAccessToken();
+  const endpoint =
+    `https://aiplatform.googleapis.com/v1/projects/${project}` +
+    `/locations/${location}/publishers/google/models/${GROUNDING_MODEL}:generateContent`;
 
-  const { text, sources: sdkSources } = await generateText({
-    model,
-    prompt: buildGeminiNewsPrompt(candidateName),
+  const body = {
+    contents: [{ role: "user", parts: [{ text: buildPrompt(candidateName) }] }],
+    tools: [{ googleSearch: {} }],
+    generationConfig: { temperature: 0.1 },
+  };
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
   });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Gemini news ${res.status}: ${err.slice(0, 200)}`);
+  }
 
-  const rawSources: NewsSource[] = ((sdkSources ?? []) as Array<{
-    url?: string;
-    title?: string;
-  }>)
-    .filter((s) => s.url)
-    .map((s) => ({
-      title: s.title ?? "",
-      url: s.url!,
-      snippet: "",
-      date: null,
-    }));
+  const data = (await res.json()) as {
+    candidates?: Array<{
+      content?: { parts?: Array<{ text?: string }> };
+      groundingMetadata?: {
+        groundingChunks?: Array<{ web?: { uri?: string; title?: string } }>;
+      };
+    }>;
+  };
 
-  const sources = NO_COVERAGE_RE.test(text)
+  const cand = data.candidates?.[0];
+  const answer = cand?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+  const chunks = cand?.groundingMetadata?.groundingChunks ?? [];
+
+  const rawSources: NewsSource[] = chunks
+    .map((c) => ({ title: c.web?.title ?? "", url: c.web?.uri ?? "", snippet: "", date: null }))
+    .filter((s) => s.url);
+
+  const sources = NO_COVERAGE_RE.test(answer)
     ? []
     : filterRelevantSources(rawSources, candidateName);
 
-  return { answer: text, sources, relatedQuestions: [] };
+  return { answer, sources, relatedQuestions: [] };
 }
