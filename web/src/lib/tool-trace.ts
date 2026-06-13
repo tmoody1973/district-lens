@@ -17,7 +17,7 @@ const TOOL_META: Record<string, ToolMeta> = {
   get_incumbent_legislation: { icon: "📜", label: "Legislation", source: "Congress.gov" },
   get_voting_record: { icon: "🗳️", label: "Voting record", source: "Congress.gov" },
   find_candidate: { icon: "🔎", label: "Find candidate", source: "FEC" },
-  search_candidate_positions: { icon: "💬", label: "Issue positions", source: "Perplexity" },
+  search_candidate_positions: { icon: "💬", label: "Issue positions", source: "Google Search grounding" },
   finish_brief: { icon: "✅", label: "Finalize brief" },
 };
 
