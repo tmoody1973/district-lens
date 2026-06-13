@@ -43,8 +43,10 @@ export async function searchGeminiNews(candidateName: string): Promise<NewsResul
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? "us-central1";
   if (!project) throw new Error("GOOGLE_CLOUD_PROJECT not set");
 
-  const vertex = createVertex({ project, location });
-  const model = vertex("gemini-2.0-flash-exp");
+  // gemini-3.5-flash is the project-approved grounding model (same as agent);
+  // us-central1 required — "global" location doesn't serve this model via Vertex.
+  const vertex = createVertex({ project, location: "us-central1" });
+  const model = vertex("gemini-3.5-flash");
 
   const { text, sources: sdkSources } = await generateText({
     model,
