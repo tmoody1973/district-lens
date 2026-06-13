@@ -1,12 +1,13 @@
 /**
- * Recent-news search powered by Gemini 3.5 Flash with Google Search grounding.
- * Replaces the Perplexity news search so no competing AI service is called at runtime.
+ * Recent-news search powered by Gemini 2.0 Flash with Google Search grounding.
+ * Uses @ai-sdk/google-vertex (already a direct dependency) — no google-auth-library
+ * import needed at runtime since the AI SDK handles Vertex auth internally.
  *
- * Uses the Vertex AI REST API directly — the @ai-sdk/google-vertex package handles
- * auth via Application Default Credentials (GOOGLE_APPLICATION_CREDENTIALS or
- * the service account attached to the Cloud Run instance).
+ * Replaces Perplexity so no competing AI service is called at runtime.
  */
 
+import { createVertex } from "@ai-sdk/google-vertex";
+import { generateText } from "ai";
 import { normalizeCandidateName, filterRelevantSources } from "@/lib/perplexity";
 
 export interface NewsSource {
@@ -39,64 +40,32 @@ function buildGeminiNewsPrompt(candidateName: string): string {
 
 export async function searchGeminiNews(candidateName: string): Promise<NewsResult> {
   const project = process.env.GOOGLE_CLOUD_PROJECT;
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? "global";
+  const location = process.env.GOOGLE_CLOUD_LOCATION ?? "us-central1";
   if (!project) throw new Error("GOOGLE_CLOUD_PROJECT not set");
 
-  const { GoogleAuth } = await import("google-auth-library");
-  const auth = new GoogleAuth({
-    scopes: ["https://www.googleapis.com/auth/cloud-platform"],
-  });
-  const client = await auth.getClient();
-  const tokenResponse = await client.getAccessToken();
-  const token = tokenResponse?.token ?? tokenResponse?.res?.data?.access_token;
+  const vertex = createVertex({ project, location });
+  const model = vertex("gemini-2.0-flash-exp");
 
-  const endpoint =
-    `https://${location === "global" ? "aiplatform" : location + "-aiplatform"}.googleapis.com` +
-    `/v1/projects/${project}/locations/${location === "global" ? "us-central1" : location}` +
-    `/publishers/google/models/gemini-2.0-flash-exp:generateContent`;
-
-  const body = {
-    contents: [{ role: "user", parts: [{ text: buildGeminiNewsPrompt(candidateName) }] }],
-    tools: [{ googleSearch: {} }],
-    generationConfig: { temperature: 0.1 },
-  };
-
-  const res = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
+  const { text, sources: sdkSources } = await generateText({
+    model,
+    prompt: buildGeminiNewsPrompt(candidateName),
   });
 
-  if (!res.ok) throw new Error(`Gemini news error ${res.status}: ${await res.text()}`);
-  const data = await res.json() as {
-    candidates?: Array<{
-      content?: { parts?: Array<{ text?: string }> };
-      groundingMetadata?: {
-        groundingChunks?: Array<{ web?: { uri?: string; title?: string } }>;
-        searchEntryPoint?: { renderedContent?: string };
-      };
-    }>;
-  };
-
-  const candidate = data.candidates?.[0];
-  const answer = candidate?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-  const chunks = candidate?.groundingMetadata?.groundingChunks ?? [];
-
-  const rawSources: NewsSource[] = chunks
-    .map((c) => ({
-      title: c.web?.title ?? "",
-      url: c.web?.uri ?? "",
+  const rawSources: NewsSource[] = ((sdkSources ?? []) as Array<{
+    url?: string;
+    title?: string;
+  }>)
+    .filter((s) => s.url)
+    .map((s) => ({
+      title: s.title ?? "",
+      url: s.url!,
       snippet: "",
       date: null,
-    }))
-    .filter((s) => s.url);
+    }));
 
-  const sources = NO_COVERAGE_RE.test(answer)
+  const sources = NO_COVERAGE_RE.test(text)
     ? []
     : filterRelevantSources(rawSources, candidateName);
 
-  return { answer, sources, relatedQuestions: [] };
+  return { answer: text, sources, relatedQuestions: [] };
 }
