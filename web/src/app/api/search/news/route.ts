@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchPerplexity, buildNewsPrompt, filterRelevantSources } from "@/lib/perplexity";
+import { filterRelevantSources } from "@/lib/perplexity";
+import { searchGeminiNews } from "@/lib/gemini-news";
 import { getDb } from "@/lib/mongodb";
 
 const NEWS_TTL_MS = 24 * 60 * 60 * 1000;
@@ -35,13 +36,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const result = await searchPerplexity(buildNewsPrompt(candidateName), {
-      recency: "week",
-      searchContextSize: "medium",
-    });
-    result.sources = /no recent campaign coverage found/i.test(result.answer)
-      ? []
-      : filterRelevantSources(result.sources, candidateName);
+    const result = await searchGeminiNews(candidateName);
 
     const expiresAt = new Date(now.getTime() + NEWS_TTL_MS);
     await db.collection("evidence_cache").replaceOne(

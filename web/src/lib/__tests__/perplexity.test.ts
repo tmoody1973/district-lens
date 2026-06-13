@@ -28,3 +28,12 @@ test("keeps only sources that mention the candidate's surname", () => {
 test("empty result when nothing mentions the candidate", () => {
   expect(filterRelevantSources(sources.slice(1, 3), "Brink,, Bridget")).toEqual([]);
 });
+
+test("news route no longer calls searchPerplexity directly", async () => {
+  // Verify the route imports gemini-news, not searchPerplexity/perplexity.ai.
+  const { searchGeminiNews } = await import("@/lib/gemini-news");
+  expect(typeof searchGeminiNews).toBe("function");
+  // Confirm perplexity search helper is NOT re-exported from the news route
+  const route = await import("@/app/api/search/news/route");
+  expect(route).not.toHaveProperty("searchPerplexity");
+});

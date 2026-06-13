@@ -19,6 +19,8 @@ import time
 import httpx
 from google.adk.tools import ToolContext
 
+from app.services.positions.gemini_ground import gemini_grounded_search as _grounded_search
+
 logger = logging.getLogger(__name__)
 
 _ENDPOINT = "https://api.perplexity.ai/chat/completions"
@@ -327,7 +329,7 @@ async def search_candidate_positions(
 ) -> str:
     """Search for a congressional candidate's direct public statements on a policy issue.
 
-    Uses Perplexity sonar-pro with civic domain filtering to find evidence from
+    Uses Gemini 3.5 Flash with Google Search grounding to find evidence from
     campaign websites, press releases, interviews, and legislative records.
 
     Args:
@@ -340,20 +342,16 @@ async def search_candidate_positions(
         including source count, latency, and cited URLs.
     """
     tool_context.state["status_message"] = (
-        f"Searching {candidate_name}'s {issue} position via Perplexity…"
+        f"Searching {candidate_name}'s {issue} position via Google Search grounding…"
     )
 
     prompt = _build_prompt(candidate_name, state, issue)
 
     t0 = time.monotonic()
     try:
-        answer, sources = await _perplexity_search(prompt)
-    except (httpx.TimeoutException, httpx.HTTPStatusError) as exc:
-        logger.warning("search_candidate_positions failed: %s", exc)
-        tool_context.state["status_message"] = "Position search unavailable"
-        return "NO DIRECT STATEMENT FOUND (search unavailable)"
+        answer, sources = await _grounded_search(prompt)
     except Exception as exc:
-        logger.error("search_candidate_positions unexpected error: %s", exc)
+        logger.error("search_candidate_positions error: %s", exc)
         tool_context.state["status_message"] = ""
         return "NO DIRECT STATEMENT FOUND (search error)"
     elapsed = time.monotonic() - t0
