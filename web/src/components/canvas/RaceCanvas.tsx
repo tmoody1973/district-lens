@@ -110,7 +110,7 @@ export function RaceCanvas({ state }: Props) {
         );
       case "news":
         return (
-          <CollapsibleSection key="news" title="Recent news · Perplexity" defaultOpen={plan.defaultOpen}>
+          <CollapsibleSection key="news" title="Recent news" defaultOpen={plan.defaultOpen}>
             {state.news.length > 0 && <NewsCard news={state.news} />}
             <div className="mt-2 space-y-2">
               {state.candidates.map((c) => (
